@@ -1,0 +1,36 @@
+# IDE
+.idea
+.vscode
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+out/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Database
+main/db/*.db
+main/db/*.db-*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
