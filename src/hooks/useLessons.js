@@ -28,27 +28,36 @@ function useLessons() {
      * @param {Date} date - Date to filter
      * @returns {Array} - Lessons for this date
      */
-    const getLessonsForDate = useCallback((date) => {
-        return lessons
-            .filter((lesson) => isSameDayAs(lesson.datetime, date))
-            .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
-    }, [lessons]);
+    const getLessonsForDate = useCallback(
+        (date) => {
+            return lessons
+                .filter((lesson) => isSameDayAs(lesson.datetime, date))
+                .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+        },
+        [lessons],
+    );
 
     /**
      * Get lessons for specific student
      * @param {number} studentId - Student ID
      * @returns {Array} - Student's lessons
      */
-    const getLessonsForStudent = useCallback((studentId) => {
-        return lessons.filter((lesson) => lesson.student_id === studentId);
-    }, [lessons]);
+    const getLessonsForStudent = useCallback(
+        (studentId) => {
+            return lessons.filter((lesson) => lesson.student_id === studentId);
+        },
+        [lessons],
+    );
 
     /**
      * Get lesson by ID
      */
-    const getLessonById = useCallback((lessonId) => {
-        return lessons.find((l) => l.id === lessonId);
-    }, [lessons]);
+    const getLessonById = useCallback(
+        (lessonId) => {
+            return lessons.find((l) => l.id === lessonId);
+        },
+        [lessons],
+    );
 
     /**
      * Get lessons grouped by status
@@ -57,7 +66,7 @@ function useLessons() {
         const grouped = {
             [LESSON_STATUS.PAID]: [],
             [LESSON_STATUS.PENDING]: [],
-            [LESSON_STATUS.OVERDUE]: []
+            [LESSON_STATUS.OVERDUE]: [],
         };
 
         lessons.forEach((lesson) => {
@@ -84,41 +93,47 @@ function useLessons() {
             pending,
             overdue,
             completed,
-            notCompleted: total - completed
+            notCompleted: total - completed,
         };
     }, [lessons, lessonsByStatus]);
 
     /**
      * Check if there are lessons on specific date
      */
-    const hasLessonsOnDate = useCallback((date) => {
-        return lessons.some((lesson) => isSameDayAs(lesson.datetime, date));
-    }, [lessons]);
+    const hasLessonsOnDate = useCallback(
+        (date) => {
+            return lessons.some((lesson) => isSameDayAs(lesson.datetime, date));
+        },
+        [lessons],
+    );
 
     /**
      * Get next available time slot for a date
      * Returns suggested time (e.g., last lesson time + 1 hour)
      */
-    const getNextTimeSlot = useCallback((date) => {
-        const dayLessons = getLessonsForDate(date);
+    const getNextTimeSlot = useCallback(
+        (date) => {
+            const dayLessons = getLessonsForDate(date);
 
-        if (dayLessons.length === 0) {
-            // No lessons - suggest 10:00
-            return '10:00';
-        }
+            if (dayLessons.length === 0) {
+                // No lessons - suggest 10:00
+                return '10:00';
+            }
 
-        // Get last lesson time
-        const lastLesson = dayLessons[dayLessons.length - 1];
-        const lastTime = new Date(lastLesson.datetime);
+            // Get last lesson time
+            const lastLesson = dayLessons[dayLessons.length - 1];
+            const lastTime = new Date(lastLesson.datetime);
 
-        // Add 1 hour
-        lastTime.setHours(lastTime.getHours() + 1);
+            // Add 1 hour
+            lastTime.setHours(lastTime.getHours() + 1);
 
-        const hours = String(lastTime.getHours()).padStart(2, '0');
-        const minutes = String(lastTime.getMinutes()).padStart(2, '0');
+            const hours = String(lastTime.getHours()).padStart(2, '0');
+            const minutes = String(lastTime.getMinutes()).padStart(2, '0');
 
-        return `${hours}:${minutes}`;
-    }, [getLessonsForDate]);
+            return `${hours}:${minutes}`;
+        },
+        [getLessonsForDate],
+    );
 
     return {
         // State
@@ -143,7 +158,7 @@ function useLessons() {
         getLessonsForStudent,
         getLessonById,
         hasLessonsOnDate,
-        getNextTimeSlot
+        getNextTimeSlot,
     };
 }
 

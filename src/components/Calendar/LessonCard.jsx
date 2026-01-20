@@ -41,25 +41,17 @@ function LessonCard({ lesson }) {
         >
             {/* Time and status */}
             <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-gray-800">
-                  {formatTime(lesson.datetime)}
-                </span>
-                        <span className="text-lg" title={status}>
-                  {emoji}
+                <span className="font-bold text-gray-800">{formatTime(lesson.datetime)}</span>
+                <span className="text-lg" title={status}>
+                    {emoji}
                 </span>
             </div>
 
             {/* Student name */}
-            <div className="text-sm text-gray-700 font-medium">
-                {lesson.student_name}
-            </div>
+            <div className="text-sm text-gray-700 font-medium">{lesson.student_name}</div>
 
             {/* Completed badge */}
-            {!!lesson.is_completed && (
-                <div className="mt-1 text-xs text-gray-500">
-                    ✓ Проведено
-                </div>
-            )}
+            {!!lesson.is_completed && <div className="mt-1 text-xs text-gray-500">✓ Проведено</div>}
         </div>
     );
 }

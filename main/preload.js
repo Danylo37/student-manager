@@ -4,7 +4,8 @@ contextBridge.exposeInMainWorld('electron', {
     // Students
     getStudents: () => ipcRenderer.invoke('db:get-students'),
     addStudent: (name) => ipcRenderer.invoke('db:add-student', name),
-    updateBalance: (studentId, amount) => ipcRenderer.invoke('db:update-balance', studentId, amount),
+    updateBalance: (studentId, amount) =>
+        ipcRenderer.invoke('db:update-balance', studentId, amount),
     deleteStudent: (studentId) => ipcRenderer.invoke('db:delete-student', studentId),
 
     // Lessons
@@ -14,5 +15,5 @@ contextBridge.exposeInMainWorld('electron', {
     deleteLesson: (id) => ipcRenderer.invoke('db:delete-lesson', id),
 
     // Sync
-    syncLessons: () => ipcRenderer.invoke('db:sync-lessons')
+    syncLessons: () => ipcRenderer.invoke('db:sync-lessons'),
 });

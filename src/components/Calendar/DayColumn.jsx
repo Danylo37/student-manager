@@ -54,13 +54,9 @@ function DayColumn({ date }) {
             {/* Lessons list */}
             <div className="flex-1 p-2 overflow-y-auto">
                 {dayLessons.length === 0 ? (
-                    <div className="text-center text-gray-400 text-sm mt-8">
-                        Немає уроків
-                    </div>
+                    <div className="text-center text-gray-400 text-sm mt-8">Немає уроків</div>
                 ) : (
-                    dayLessons.map((lesson) => (
-                        <LessonCard key={lesson.id} lesson={lesson} />
-                    ))
+                    dayLessons.map((lesson) => <LessonCard key={lesson.id} lesson={lesson} />)
                 )}
             </div>
 

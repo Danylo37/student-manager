@@ -1,10 +1,4 @@
-import {
-    startOfWeek,
-    addDays,
-    format,
-    isSameDay,
-    parseISO
-} from 'date-fns';
+import { startOfWeek, addDays, format, isSameDay, parseISO } from 'date-fns';
 import { uk } from 'date-fns/locale'; // Ukrainian locale
 
 /**
@@ -105,6 +99,6 @@ export function getWeekRange(weekStart) {
 
     return {
         start: start.toISOString(),
-        end: end.toISOString()
+        end: end.toISOString(),
     };
 }

@@ -20,7 +20,7 @@ function AddStudentModal() {
         e.preventDefault();
 
         if (!name.trim()) {
-            setError('Введіть ім\'я студента');
+            setError("Введіть ім'я студента");
             return;
         }
 
@@ -87,9 +87,7 @@ function AddStudentModal() {
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="0"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                        Кількість оплачених уроків
-                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Кількість оплачених уроків</p>
                 </div>
 
                 {/* Error message */}

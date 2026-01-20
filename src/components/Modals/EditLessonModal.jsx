@@ -50,7 +50,7 @@ function EditLessonModal() {
             await updateLesson(selectedLesson.id, {
                 datetime,
                 is_paid: isPaid,
-                is_completed: isCompleted
+                is_completed: isCompleted,
             });
 
             closeModal('editLesson');
@@ -92,7 +92,9 @@ function EditLessonModal() {
                 {/* Student info (read-only) */}
                 <div className="bg-gray-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Студент</div>
-                    <div className="text-lg font-bold text-gray-800">{selectedLesson.student_name}</div>
+                    <div className="text-lg font-bold text-gray-800">
+                        {selectedLesson.student_name}
+                    </div>
                     <div className="text-sm text-gray-600 mt-1">
                         Баланс: {selectedLesson.balance} | Статус: {statusLabel}
                     </div>
@@ -135,7 +137,10 @@ function EditLessonModal() {
                             onChange={(e) => setIsPaid(e.target.checked)}
                             className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
-                        <label htmlFor="isPaidEdit" className="text-sm font-medium text-gray-700 cursor-pointer">
+                        <label
+                            htmlFor="isPaidEdit"
+                            className="text-sm font-medium text-gray-700 cursor-pointer"
+                        >
                             Урок оплачено
                         </label>
                     </div>
@@ -148,7 +153,10 @@ function EditLessonModal() {
                             onChange={(e) => setIsCompleted(e.target.checked)}
                             className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
-                        <label htmlFor="isCompletedEdit" className="text-sm font-medium text-gray-700 cursor-pointer">
+                        <label
+                            htmlFor="isCompletedEdit"
+                            className="text-sm font-medium text-gray-700 cursor-pointer"
+                        >
                             Урок проведено
                         </label>
                     </div>

@@ -103,23 +103,27 @@ function StudentsListModal() {
                                 <div className="flex items-center justify-between">
                                     {/* Student info */}
                                     <div className="flex-1">
-                                        <h3 className="text-lg font-bold text-gray-800">{student.name}</h3>
+                                        <h3 className="text-lg font-bold text-gray-800">
+                                            {student.name}
+                                        </h3>
                                         <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-                      <span>
-                        Баланс:{' '}
-                          <span
-                              className={`font-bold ${
-                                  student.balance < 0
-                                      ? 'text-red-600'
-                                      : student.balance < 3
-                                          ? 'text-yellow-600'
-                                          : 'text-green-600'
-                              }`}
-                          >
-                          {student.balance}
-                        </span>
-                      </span>
-                                            <span>Проведено: {student.completed_lessons_count || 0}</span>
+                                            <span>
+                                                Баланс:{' '}
+                                                <span
+                                                    className={`font-bold ${
+                                                        student.balance < 0
+                                                            ? 'text-red-600'
+                                                            : student.balance < 3
+                                                              ? 'text-yellow-600'
+                                                              : 'text-green-600'
+                                                    }`}
+                                                >
+                                                    {student.balance}
+                                                </span>
+                                            </span>
+                                            <span>
+                                                Проведено: {student.completed_lessons_count || 0}
+                                            </span>
                                         </div>
                                     </div>
 
@@ -130,7 +134,11 @@ function StudentsListModal() {
                                                 <input
                                                     type="number"
                                                     value={balanceAmount}
-                                                    onChange={(e) => setBalanceAmount(parseInt(e.target.value) || 0)}
+                                                    onChange={(e) =>
+                                                        setBalanceAmount(
+                                                            parseInt(e.target.value) || 0,
+                                                        )
+                                                    }
                                                     className="w-20 px-2 py-1 border border-gray-300 rounded"
                                                     placeholder="±0"
                                                 />
@@ -156,7 +164,9 @@ function StudentsListModal() {
                                                     Баланс
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDelete(student.id, student.name)}
+                                                    onClick={() =>
+                                                        handleDelete(student.id, student.name)
+                                                    }
                                                     className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-sm font-medium"
                                                 >
                                                     Видалити

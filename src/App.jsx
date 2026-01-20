@@ -32,9 +32,9 @@ function App() {
             {/* Error messages */}
             {(studentsError || lessonsError) && (
                 <div className="bg-red-50 border-b border-red-200 p-3 text-center">
-          <span className="text-red-700 text-sm font-medium">
-            ⚠️ {studentsError || lessonsError}
-          </span>
+                    <span className="text-red-700 text-sm font-medium">
+                        ⚠️ {studentsError || lessonsError}
+                    </span>
                 </div>
             )}
 

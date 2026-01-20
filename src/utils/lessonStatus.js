@@ -4,7 +4,7 @@
 export const LESSON_STATUS = {
     PAID: 'PAID',
     PENDING: 'PENDING',
-    OVERDUE: 'OVERDUE'
+    OVERDUE: 'OVERDUE',
 };
 
 /**
@@ -37,7 +37,7 @@ export function getStatusBorderColor(status) {
     const colors = {
         [LESSON_STATUS.PAID]: 'border-green-500',
         [LESSON_STATUS.PENDING]: 'border-yellow-500',
-        [LESSON_STATUS.OVERDUE]: 'border-red-500'
+        [LESSON_STATUS.OVERDUE]: 'border-red-500',
     };
     return colors[status] || 'border-gray-500';
 }
@@ -51,7 +51,7 @@ export function getStatusBgLight(status) {
     const colors = {
         [LESSON_STATUS.PAID]: 'bg-green-50',
         [LESSON_STATUS.PENDING]: 'bg-yellow-50',
-        [LESSON_STATUS.OVERDUE]: 'bg-red-50'
+        [LESSON_STATUS.OVERDUE]: 'bg-red-50',
     };
     return colors[status] || 'bg-gray-50';
 }
@@ -65,7 +65,7 @@ export function getStatusLabel(status) {
     const labels = {
         [LESSON_STATUS.PAID]: 'Оплачено',
         [LESSON_STATUS.PENDING]: 'Очікує оплати',
-        [LESSON_STATUS.OVERDUE]: 'Прострочено'
+        [LESSON_STATUS.OVERDUE]: 'Прострочено',
     };
     return labels[status] || 'Невідомо';
 }
@@ -79,7 +79,7 @@ export function getStatusEmoji(status) {
     const emojis = {
         [LESSON_STATUS.PAID]: '🟢',
         [LESSON_STATUS.PENDING]: '🟡',
-        [LESSON_STATUS.OVERDUE]: '🔴'
+        [LESSON_STATUS.OVERDUE]: '🔴',
     };
     return emojis[status] || '⚪';
 }
@@ -104,7 +104,9 @@ export function isToday(datetime) {
     const now = new Date();
     const lessonDate = new Date(datetime);
 
-    return now.getDate() === lessonDate.getDate() &&
+    return (
+        now.getDate() === lessonDate.getDate() &&
         now.getMonth() === lessonDate.getMonth() &&
-        now.getFullYear() === lessonDate.getFullYear();
+        now.getFullYear() === lessonDate.getFullYear()
+    );
 }

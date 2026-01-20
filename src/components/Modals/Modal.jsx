@@ -24,7 +24,7 @@ function Modal({ isOpen, onClose, title, children, size = 'md' }) {
         sm: 'max-w-md',
         md: 'max-w-2xl',
         lg: 'max-w-4xl',
-        xl: 'max-w-6xl'
+        xl: 'max-w-6xl',
     };
 
     return (
@@ -48,9 +48,7 @@ function Modal({ isOpen, onClose, title, children, size = 'md' }) {
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6">
-                    {children}
-                </div>
+                <div className="flex-1 overflow-y-auto p-6">{children}</div>
             </div>
         </div>
     );

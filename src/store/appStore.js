@@ -25,12 +25,11 @@ const useAppStore = create((set, get) => ({
         addStudent: false,
         addLesson: false,
         studentsList: false,
-        editLesson: false
+        editLesson: false,
     },
 
     // Selected lesson for editing
     selectedLesson: null,
-
 
     // ========== ACTIONS ==========
 
@@ -226,7 +225,7 @@ const useAppStore = create((set, get) => ({
      */
     openModal: (modalName) => {
         set((state) => ({
-            modals: { ...state.modals, [modalName]: true }
+            modals: { ...state.modals, [modalName]: true },
         }));
     },
 
@@ -236,7 +235,7 @@ const useAppStore = create((set, get) => ({
      */
     closeModal: (modalName) => {
         set((state) => ({
-            modals: { ...state.modals, [modalName]: false }
+            modals: { ...state.modals, [modalName]: false },
         }));
 
         // Clear selected lesson when closing edit modal
@@ -261,11 +260,8 @@ const useAppStore = create((set, get) => ({
         // Sync lessons first (mark completed lessons)
         await get().syncLessons();
         // Load students and lessons
-        await Promise.all([
-            get().loadStudents(),
-            get().loadLessons()
-        ]);
-    }
+        await Promise.all([get().loadStudents(), get().loadLessons()]);
+    },
 }));
 
 export default useAppStore;

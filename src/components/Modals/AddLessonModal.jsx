@@ -60,7 +60,7 @@ function AddLessonModal() {
             await addLesson({
                 studentId: parseInt(studentId),
                 datetime,
-                isPaid
+                isPaid,
             });
 
             // Reset form and close
@@ -145,7 +145,10 @@ function AddLessonModal() {
                         onChange={(e) => setIsPaid(e.target.checked)}
                         className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
-                    <label htmlFor="isPaid" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    <label
+                        htmlFor="isPaid"
+                        className="text-sm font-medium text-gray-700 cursor-pointer"
+                    >
                         Урок оплачено
                     </label>
                 </div>

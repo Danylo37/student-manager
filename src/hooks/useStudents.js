@@ -20,25 +20,29 @@ function useStudents() {
     /**
      * Get student by ID
      */
-    const getStudentById = useCallback((studentId) => {
-        return students.find((s) => s.id === studentId);
-    }, [students]);
+    const getStudentById = useCallback(
+        (studentId) => {
+            return students.find((s) => s.id === studentId);
+        },
+        [students],
+    );
 
     /**
      * Search students by name
      * @param {string} query - Search query
      * @returns {Array} - Filtered students
      */
-    const searchStudents = useCallback((query) => {
-        if (!query || query.trim() === '') {
-            return students;
-        }
+    const searchStudents = useCallback(
+        (query) => {
+            if (!query || query.trim() === '') {
+                return students;
+            }
 
-        const lowerQuery = query.toLowerCase().trim();
-        return students.filter((student) =>
-            student.name.toLowerCase().includes(lowerQuery)
-        );
-    }, [students]);
+            const lowerQuery = query.toLowerCase().trim();
+            return students.filter((student) => student.name.toLowerCase().includes(lowerQuery));
+        },
+        [students],
+    );
 
     /**
      * Get students sorted by name
@@ -74,7 +78,7 @@ function useStudents() {
             total: students.length,
             lowBalance: studentsLowBalance.length,
             negativeBalance: studentsNegativeBalance.length,
-            totalBalance: students.reduce((sum, s) => sum + s.balance, 0)
+            totalBalance: students.reduce((sum, s) => sum + s.balance, 0),
         };
     }, [students, studentsLowBalance, studentsNegativeBalance]);
 
@@ -97,7 +101,7 @@ function useStudents() {
 
         // Helpers
         getStudentById,
-        searchStudents
+        searchStudents,
     };
 }
 
