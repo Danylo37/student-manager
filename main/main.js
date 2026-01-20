@@ -15,6 +15,8 @@ function createWindow() {
     }
   });
 
+  mainWindow.maximize();
+
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();

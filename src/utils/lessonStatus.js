@@ -29,34 +29,6 @@ export function getLessonStatus(lesson) {
 }
 
 /**
- * Get status color (Tailwind class)
- * @param {string} status - Status from getLessonStatus()
- * @returns {string} - Tailwind color class
- */
-export function getStatusColor(status) {
-    const colors = {
-        [LESSON_STATUS.PAID]: 'bg-green-500',
-        [LESSON_STATUS.PENDING]: 'bg-yellow-500',
-        [LESSON_STATUS.OVERDUE]: 'bg-red-500'
-    };
-    return colors[status] || 'bg-gray-500';
-}
-
-/**
- * Get status text color (Tailwind class)
- * @param {string} status - Status from getLessonStatus()
- * @returns {string} - Tailwind text color class
- */
-export function getStatusTextColor(status) {
-    const colors = {
-        [LESSON_STATUS.PAID]: 'text-green-700',
-        [LESSON_STATUS.PENDING]: 'text-yellow-700',
-        [LESSON_STATUS.OVERDUE]: 'text-red-700'
-    };
-    return colors[status] || 'text-gray-700';
-}
-
-/**
  * Get status border color (Tailwind class)
  * @param {string} status - Status from getLessonStatus()
  * @returns {string} - Tailwind border color class

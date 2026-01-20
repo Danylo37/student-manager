@@ -30,7 +30,7 @@ function StudentsListModal() {
         }
     };
 
-    const handleBalanceEdit = (studentId, currentBalance) => {
+    const handleBalanceEdit = (studentId) => {
         setEditingBalance(studentId);
         setBalanceAmount(0);
     };
@@ -150,7 +150,7 @@ function StudentsListModal() {
                                         ) : (
                                             <>
                                                 <button
-                                                    onClick={() => handleBalanceEdit(student.id, student.balance)}
+                                                    onClick={() => handleBalanceEdit(student.id)}
                                                     className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-sm font-medium"
                                                 >
                                                     Баланс

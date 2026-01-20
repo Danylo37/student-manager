@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import useAppStore from '../../store/appStore';
-import useStudents from '../../hooks/useStudents';
 import useLessons from '../../hooks/useLessons';
 import { formatTime, formatDate, createDateTime } from '../../utils/dateHelpers';
 import { getLessonStatus, getStatusLabel } from '../../utils/lessonStatus';
@@ -13,7 +12,6 @@ function EditLessonModal() {
     const isOpen = useAppStore((state) => state.modals.editLesson);
     const closeModal = useAppStore((state) => state.closeModal);
     const selectedLesson = useAppStore((state) => state.selectedLesson);
-    const { students } = useStudents();
     const { updateLesson, deleteLesson } = useLessons();
 
     const [date, setDate] = useState('');
@@ -155,13 +153,6 @@ function EditLessonModal() {
                         </label>
                     </div>
                 </div>
-
-                {/* Warning */}
-                {isCompleted && !selectedLesson.is_completed && (
-                    <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded text-sm">
-                        ⚠️ При позначенні уроку як проведеного баланс студента буде зменшено на 1
-                    </div>
-                )}
 
                 {/* Error message */}
                 {error && (

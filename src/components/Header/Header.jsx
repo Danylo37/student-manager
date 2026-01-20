@@ -7,7 +7,7 @@ import useAppStore from '../../store/appStore';
  * Application header with action buttons and week navigation
  */
 function Header() {
-    const { currentWeek, nextWeek, prevWeek, goToToday, lessonsLoading } = useLessons();
+    const { nextWeek, prevWeek, goToToday, lessonsLoading } = useLessons();
     const openModal = useAppStore((state) => state.openModal);
 
     const weekDays = useLessons().currentWeek;

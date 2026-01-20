@@ -1,8 +1,6 @@
 import {
     startOfWeek,
-    endOfWeek,
     addDays,
-    addWeeks,
     format,
     isSameDay,
     parseISO
@@ -17,16 +15,6 @@ import { uk } from 'date-fns/locale'; // Ukrainian locale
 export function getWeekStart(date) {
     return startOfWeek(date, { weekStartsOn: 1 });
 }
-
-/**
- * Get the end of the week (Sunday)
- * @param {Date} date - Any date
- * @returns {Date} - Sunday of this week
- */
-export function getWeekEnd(date) {
-    return endOfWeek(date, { weekStartsOn: 1 });
-}
-
 /**
  * Get array of 7 days of the week
  * @param {Date} weekStart - Monday
@@ -39,25 +27,6 @@ export function getWeekDays(weekStart) {
     }
     return days;
 }
-
-/**
- * Move to the next week
- * @param {Date} currentWeek - Current week
- * @returns {Date} - Monday of next week
- */
-export function nextWeek(currentWeek) {
-    return addWeeks(currentWeek, 1);
-}
-
-/**
- * Move to the previous week
- * @param {Date} currentWeek - Current week
- * @returns {Date} - Monday of previous week
- */
-export function prevWeek(currentWeek) {
-    return addWeeks(currentWeek, -1);
-}
-
 /**
  * Format date for display in DD.MM.YYYY format (Ukrainian standard)
  * @param {Date} date - Date object
@@ -76,16 +45,6 @@ export function formatDate(date, formatStr = 'dd.MM.yyyy') {
 export function formatDateWithMonth(date) {
     return format(date, 'dd MMMM', { locale: uk });
 }
-
-/**
- * Format day of week in Ukrainian
- * @param {Date} date - Date object
- * @returns {string} - Day name like "Понеділок"
- */
-export function formatDayOfWeek(date) {
-    return format(date, 'EEEE', { locale: uk });
-}
-
 /**
  * Format day of week short (first 2 letters)
  * @param {Date} date - Date object
@@ -148,14 +107,4 @@ export function getWeekRange(weekStart) {
         start: start.toISOString(),
         end: end.toISOString()
     };
-}
-
-/**
- * Parse DD.MM.YYYY string to Date object
- * @param {string} dateString - Date string in "31.01.2026" format
- * @returns {Date} - Date object
- */
-export function parseDate(dateString) {
-    const [day, month, year] = dateString.split('.');
-    return new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
 }

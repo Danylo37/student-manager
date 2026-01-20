@@ -5,7 +5,6 @@ import {
     getStatusBorderColor,
     getStatusBgLight,
     getStatusEmoji,
-    isToday
 } from '../../utils/lessonStatus';
 import useAppStore from '../../store/appStore';
 
@@ -20,7 +19,6 @@ function LessonCard({ lesson }) {
     const borderColor = getStatusBorderColor(status);
     const bgColor = getStatusBgLight(status);
     const emoji = getStatusEmoji(status);
-    const isTodayLesson = isToday(lesson.datetime);
 
     const handleClick = () => {
         selectLesson(lesson);
@@ -32,14 +30,13 @@ function LessonCard({ lesson }) {
             className={`
         ${bgColor} 
         ${borderColor}
-        border-l-4 
-        p-3 
-        rounded 
+        border-2
+        p-3
+        rounded-2xl
         mb-2 
         cursor-pointer 
         hover:shadow-md 
         transition-shadow
-        ${isTodayLesson ? 'ring-2 ring-blue-400' : ''}
       `}
         >
             {/* Time and status */}
@@ -57,20 +54,8 @@ function LessonCard({ lesson }) {
                 {lesson.student_name}
             </div>
 
-            {/* Balance indicator */}
-            <div className="text-xs text-gray-500 mt-1">
-                Баланс: {lesson.balance}
-            </div>
-
-            {/* Today badge */}
-            {isTodayLesson && (
-                <div className="mt-2 text-xs text-blue-600 font-bold">
-                    📅 Сьогодні
-                </div>
-            )}
-
             {/* Completed badge */}
-            {lesson.is_completed && (
+            {!!lesson.is_completed && (
                 <div className="mt-1 text-xs text-gray-500">
                     ✓ Проведено
                 </div>

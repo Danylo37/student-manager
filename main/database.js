@@ -14,19 +14,11 @@ function initDatabase() {
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
 
-  // Выполнить SQL схему
   const schemaPath = path.join(__dirname, 'db', 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
   db.exec(schema);
 
   console.log('Database initialized');
-  return db;
-}
-
-function getDatabase() {
-  if (!db) {
-    throw new Error('Database not initialized');
-  }
   return db;
 }
 
@@ -114,7 +106,6 @@ function deleteLesson(lessonId) {
 function syncCompletedLessons() {
   const now = new Date().toISOString();
 
-  // Найти прошедшие незавершенные уроки
   const stmt = db.prepare(`
     SELECT id, student_id FROM lessons
     WHERE datetime < ? AND is_completed = 0
@@ -122,13 +113,12 @@ function syncCompletedLessons() {
 
   const lessons = stmt.all(now);
 
-  // Пометить как завершенные и списать баланс
   const updateStmt = db.prepare('UPDATE lessons SET is_completed = 1 WHERE id = ?');
   const balanceStmt = db.prepare('UPDATE students SET balance = balance - 1 WHERE id = ?');
 
-  for (const lesson of lessons) {
-    updateStmt.run(lesson.id);
-    balanceStmt.run(lesson.student_id);
+  for (const { id, student_id } of lessons) {
+    updateStmt.run(id);
+    balanceStmt.run(student_id);
   }
 
   return lessons.length;
@@ -136,7 +126,6 @@ function syncCompletedLessons() {
 
 module.exports = {
   initDatabase,
-  getDatabase,
   getStudents,
   addStudent,
   updateStudentBalance,

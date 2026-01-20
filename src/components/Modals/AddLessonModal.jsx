@@ -150,13 +150,6 @@ function AddLessonModal() {
                     </label>
                 </div>
 
-                {/* Warning for unpaid lessons */}
-                {!isPaid && (
-                    <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded text-sm">
-                        ⚠️ Після проведення уроку баланс студента буде зменшено на 1
-                    </div>
-                )}
-
                 {/* Error message */}
                 {error && (
                     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
