@@ -15,7 +15,10 @@
         "rebuild": "electron-rebuild -f -w better-sqlite3"
     },
     "keywords": [],
-    "author": "",
+    "author": {
+        "name": "Danylo Lopatin",
+        "email": "danilofokinn@gmail.com"
+    },
     "license": "ISC",
     "type": "commonjs",
     "devDependencies": {
@@ -25,6 +28,7 @@
         "cross-env": "^10.1.0",
         "electron": "^40.0.0",
         "electron-builder": "^26.4.0",
+        "electron-icon-builder": "^2.0.1",
         "electron-rebuild": "^3.2.9",
         "postcss": "^8.5.6",
         "prettier": "^3.8.0",
@@ -40,5 +44,37 @@
         "react-datepicker": "^9.1.0",
         "react-dom": "^19.2.3",
         "zustand": "^5.0.10"
+    },
+    "build": {
+        "appId": "com.studentmanager.app",
+        "productName": "Student Manager",
+        "directories": {
+            "output": "release"
+        },
+        "files": [
+            "dist/**/*",
+            "main/**/*",
+            "package.json"
+        ],
+        "win": {
+            "icon": "build/icon.ico",
+            "target": [
+                "nsis"
+            ]
+        },
+        "mac": {
+            "icon": "build/icon.icns",
+            "target": [
+                "dmg"
+            ]
+        },
+        "linux": {
+            "icon": "build/icon.png",
+            "target": [
+                "AppImage",
+                "deb"
+            ],
+            "category": "Education"
+        }
     }
 }
