@@ -5,14 +5,38 @@ import useLessons from '../../hooks/useLessons';
 import LessonCard from './LessonCard';
 
 /**
- * Day column component for calendar
- * Displays all lessons for a specific day
+ * Day column component for calendar with time grid
  */
-function DayColumn({ date }) {
+function DayColumn({ date, timeSlots }) {
     const { getLessonsForDate } = useLessons();
-
     const dayLessons = getLessonsForDate(date);
     const isTodayDate = isToday(date.toISOString());
+
+    /**
+     * Get the hour from a datetime string
+     */
+    const getLessonHour = (datetime) => {
+        const lessonDate = new Date(datetime);
+        return lessonDate.getHours();
+    };
+
+    /**
+     * Get the minute offset for positioning within the hour slot
+     */
+    const getLessonMinuteOffset = (datetime) => {
+        const lessonDate = new Date(datetime);
+        return lessonDate.getMinutes();
+    };
+
+    /**
+     * Get lessons for a specific hour
+     */
+    const getLessonsForHour = (hour) => {
+        return dayLessons.filter((lesson) => {
+            const lessonHour = getLessonHour(lesson.datetime);
+            return lessonHour === hour;
+        });
+    };
 
     return (
         <div className="flex flex-col h-full border-r border-gray-200 last:border-r-0">
@@ -20,9 +44,13 @@ function DayColumn({ date }) {
             <div
                 className={`
                     p-3
+                    h-20
                     border-b
                     border-gray-200 
                     text-center
+                    flex
+                    flex-col
+                    justify-center
                     ${isTodayDate ? 'bg-blue-50 border-blue-300' : 'bg-gray-50'}
                 `}
             >
@@ -51,21 +79,33 @@ function DayColumn({ date }) {
                 </div>
             </div>
 
-            {/* Lessons list */}
-            <div className="flex-1 p-2 overflow-y-auto">
-                {dayLessons.length === 0 ? (
-                    <div className="text-center text-gray-400 text-sm mt-8">Немає уроків</div>
-                ) : (
-                    dayLessons.map((lesson) => <LessonCard key={lesson.id} lesson={lesson} />)
-                )}
-            </div>
+            {/* Time grid */}
+            <div className="flex-1 relative">
+                {timeSlots.map((hour) => {
+                    const hourLessons = getLessonsForHour(hour);
 
-            {/* Lessons count */}
-            {dayLessons.length > 0 && (
-                <div className="p-2 border-t border-gray-200 text-center text-xs text-gray-500">
-                    Всього: {dayLessons.length}
-                </div>
-            )}
+                    return (
+                        <div key={hour} className="h-20 border-b border-gray-200 relative p-2">
+                            {/* Lessons in this hour */}
+                            {hourLessons.map((lesson) => {
+                                const minuteOffset = getLessonMinuteOffset(lesson.datetime);
+                                // Calculate top position based on minutes (0-60 minutes = 0-80px)
+                                const topPosition = (minuteOffset / 60) * 80;
+
+                                return (
+                                    <div
+                                        key={lesson.id}
+                                        className="absolute left-1 right-3"
+                                        style={{ top: `${topPosition}px` }}
+                                    >
+                                        <LessonCard lesson={lesson} />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }

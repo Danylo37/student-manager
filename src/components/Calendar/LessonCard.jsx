@@ -28,16 +28,16 @@ function LessonCard({ lesson }) {
         <div
             onClick={handleClick}
             className={`
-        ${bgColor} 
-        ${borderColor}
-        border-2
-        p-3
-        rounded-2xl
-        mb-2 
-        cursor-pointer 
-        hover:shadow-md 
-        transition-shadow
-      `}
+                ${bgColor} 
+                ${borderColor}
+                border-2
+                p-3
+                rounded-2xl
+                mb-2 
+                cursor-pointer 
+                hover:shadow-md 
+                transition-shadow
+            `}
         >
             {/* Time and status */}
             <div className="flex items-center justify-between mb-1">
