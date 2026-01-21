@@ -3,6 +3,7 @@ import useAppStore from '../../store/appStore';
 import useStudents from '../../hooks/useStudents';
 import useLessons from '../../hooks/useLessons';
 import { createDateTime, formatDate } from '../../utils/dateHelpers';
+import { shouldBeCompleted } from '../../utils/lessonStatus';
 import Modal from './Modal';
 
 /**
@@ -60,10 +61,14 @@ function AddLessonModal() {
             const student = students.find((s) => s.id === parseInt(studentId));
             const isPaid = student && student.balance > 0;
 
+            // Auto-mark as completed if time has passed
+            const isCompleted = shouldBeCompleted(datetime);
+
             await addLesson({
                 studentId: parseInt(studentId),
                 datetime,
                 isPaid,
+                isCompleted,
             });
 
             // Reset form and close
@@ -89,6 +94,10 @@ function AddLessonModal() {
 
     // Get selected student
     const selectedStudent = students.find((s) => s.id === parseInt(studentId));
+
+    // Check if selected time is in the past
+    const datetime = date && time ? createDateTime(new Date(date), time) : null;
+    const isPastTime = datetime ? shouldBeCompleted(datetime) : false;
 
     return (
         <Modal isOpen={isOpen} onClose={handleClose} title="Додати урок" size="md">
@@ -139,6 +148,13 @@ function AddLessonModal() {
                         />
                     </div>
                 </div>
+
+                {/* Past time warning */}
+                {isPastTime && (
+                    <div className="bg-orange-50 border border-orange-200 text-orange-800 px-4 py-3 rounded text-sm">
+                        ⚠️ Час уже минув. Урок буде автоматично позначено як проведений
+                    </div>
+                )}
 
                 {/* Payment info */}
                 {selectedStudent && (
