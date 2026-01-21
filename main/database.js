@@ -96,6 +96,13 @@ function updateLesson(lessonId, updates) {
         values.push(updates.is_paid ? 1 : 0);
     }
     if (updates.datetime !== undefined) {
+        // Get current datetime before updating
+        const currentLesson = db.prepare('SELECT datetime FROM lessons WHERE id = ?').get(lessonId);
+
+        // Store old datetime as previous_datetime
+        fields.push('previous_datetime = ?');
+        values.push(currentLesson.datetime);
+
         fields.push('datetime = ?');
         values.push(updates.datetime);
     }
@@ -210,14 +217,15 @@ function autoCreateLessons(studentId) {
 
             if (lessonDate <= now) continue;
 
+            // Check if lesson already exists at this datetime or if this datetime was a previous datetime
             const existing = db
                 .prepare(
                     `
                 SELECT id FROM lessons 
-                WHERE student_id = ? AND datetime = ?
+                WHERE student_id = ? AND (datetime = ? OR previous_datetime = ?)
             `,
                 )
-                .get(studentId, lessonDate.toISOString());
+                .get(studentId, lessonDate.toISOString(), lessonDate.toISOString());
 
             if (existing) {
                 remainingBalance--;

@@ -8,12 +8,13 @@ CREATE TABLE IF NOT EXISTS students
 
 CREATE TABLE IF NOT EXISTS lessons
 (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    student_id   INTEGER NOT NULL,
-    datetime     TEXT    NOT NULL,
-    is_completed BOOLEAN  DEFAULT 0,
-    is_paid      BOOLEAN  DEFAULT 0,
-    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id        INTEGER NOT NULL,
+    datetime          TEXT    NOT NULL,
+    previous_datetime TEXT,
+    is_completed      BOOLEAN  DEFAULT 0,
+    is_paid           BOOLEAN  DEFAULT 0,
+    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
 );
 
