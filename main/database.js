@@ -98,8 +98,19 @@ function updateLesson(lessonId, updates) {
 }
 
 function deleteLesson(lessonId) {
-    const stmt = db.prepare('DELETE FROM lessons WHERE id = ?');
-    stmt.run(lessonId);
+    // Get lesson data before deleting
+    const lessonStmt = db.prepare('SELECT * FROM lessons WHERE id = ?');
+    const lesson = lessonStmt.get(lessonId);
+
+    // Delete lesson
+    const deleteStmt = db.prepare('DELETE FROM lessons WHERE id = ?');
+    deleteStmt.run(lessonId);
+
+    // If lesson was paid and completed, return 1 to balance
+    if (lesson && lesson.is_paid && lesson.is_completed) {
+        const balanceStmt = db.prepare('UPDATE students SET balance = balance + 1 WHERE id = ?');
+        balanceStmt.run(lesson.student_id);
+    }
 }
 
 // === AUTO SYNC ===

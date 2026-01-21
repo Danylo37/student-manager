@@ -17,7 +17,6 @@ function AddLessonModal() {
     const [studentId, setStudentId] = useState('');
     const [date, setDate] = useState('');
     const [time, setTime] = useState('10:00');
-    const [isPaid, setIsPaid] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -57,6 +56,10 @@ function AddLessonModal() {
             const dateObj = new Date(date);
             const datetime = createDateTime(dateObj, time);
 
+            // Determine if paid based on student balance
+            const student = students.find((s) => s.id === parseInt(studentId));
+            const isPaid = student && student.balance > 0;
+
             await addLesson({
                 studentId: parseInt(studentId),
                 datetime,
@@ -67,7 +70,6 @@ function AddLessonModal() {
             setStudentId('');
             setDate('');
             setTime('10:00');
-            setIsPaid(false);
             closeModal('addLesson');
         } catch (err) {
             setError('Помилка при додаванні уроку');
@@ -81,10 +83,12 @@ function AddLessonModal() {
         setStudentId('');
         setDate('');
         setTime('10:00');
-        setIsPaid(false);
         setError(null);
         closeModal('addLesson');
     };
+
+    // Get selected student
+    const selectedStudent = students.find((s) => s.id === parseInt(studentId));
 
     return (
         <Modal isOpen={isOpen} onClose={handleClose} title="Додати урок" size="md">
@@ -136,22 +140,28 @@ function AddLessonModal() {
                     </div>
                 </div>
 
-                {/* Payment status */}
-                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-                    <input
-                        type="checkbox"
-                        id="isPaid"
-                        checked={isPaid}
-                        onChange={(e) => setIsPaid(e.target.checked)}
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <label
-                        htmlFor="isPaid"
-                        className="text-sm font-medium text-gray-700 cursor-pointer"
+                {/* Payment info */}
+                {selectedStudent && (
+                    <div
+                        className={`p-4 rounded-lg ${
+                            selectedStudent.balance > 0
+                                ? 'bg-green-50 border border-green-200'
+                                : 'bg-yellow-50 border border-yellow-200'
+                        }`}
                     >
-                        Урок оплачено
-                    </label>
-                </div>
+                        {selectedStudent.balance > 0 ? (
+                            <div className="text-green-800 text-sm">
+                                ✓ Урок буде позначено як оплачений (баланс:{' '}
+                                {selectedStudent.balance})
+                            </div>
+                        ) : (
+                            <div className="text-yellow-800 text-sm">
+                                ⚠️ Недостатньо балансу. Після проведення уроку баланс стане
+                                від'ємним
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Error message */}
                 {error && (

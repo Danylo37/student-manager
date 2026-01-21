@@ -69,23 +69,9 @@ function StudentsListModal() {
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                        <div className="text-2xl font-bold text-blue-700">{students.length}</div>
-                        <div className="text-sm text-blue-600">Всього студентів</div>
-                    </div>
-                    <div className="bg-green-50 p-4 rounded-lg">
-                        <div className="text-2xl font-bold text-green-700">
-                            {students.reduce((sum, s) => sum + s.balance, 0)}
-                        </div>
-                        <div className="text-sm text-green-600">Всього уроків</div>
-                    </div>
-                    <div className="bg-purple-50 p-4 rounded-lg">
-                        <div className="text-2xl font-bold text-purple-700">
-                            {students.reduce((sum, s) => sum + (s.completed_lessons_count || 0), 0)}
-                        </div>
-                        <div className="text-sm text-purple-600">Проведено уроків</div>
-                    </div>
+                <div className="bg-blue-50 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-700">{students.length}</div>
+                    <div className="text-sm text-blue-600">Всього студентів</div>
                 </div>
 
                 {/* Students list */}

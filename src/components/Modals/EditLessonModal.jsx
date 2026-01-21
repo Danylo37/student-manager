@@ -16,7 +16,6 @@ function EditLessonModal() {
 
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
-    const [isPaid, setIsPaid] = useState(false);
     const [isCompleted, setIsCompleted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -27,7 +26,6 @@ function EditLessonModal() {
             const lessonDate = new Date(selectedLesson.datetime);
             setDate(formatDate(lessonDate, 'yyyy-MM-dd'));
             setTime(formatTime(selectedLesson.datetime));
-            setIsPaid(selectedLesson.is_paid);
             setIsCompleted(selectedLesson.is_completed);
         }
     }, [selectedLesson]);
@@ -49,7 +47,6 @@ function EditLessonModal() {
 
             await updateLesson(selectedLesson.id, {
                 datetime,
-                is_paid: isPaid,
                 is_completed: isCompleted,
             });
 
@@ -127,39 +124,21 @@ function EditLessonModal() {
                     </div>
                 </div>
 
-                {/* Status checkboxes */}
-                <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <input
-                            type="checkbox"
-                            id="isPaidEdit"
-                            checked={isPaid}
-                            onChange={(e) => setIsPaid(e.target.checked)}
-                            className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <label
-                            htmlFor="isPaidEdit"
-                            className="text-sm font-medium text-gray-700 cursor-pointer"
-                        >
-                            Урок оплачено
-                        </label>
-                    </div>
-
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <input
-                            type="checkbox"
-                            id="isCompletedEdit"
-                            checked={isCompleted}
-                            onChange={(e) => setIsCompleted(e.target.checked)}
-                            className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <label
-                            htmlFor="isCompletedEdit"
-                            className="text-sm font-medium text-gray-700 cursor-pointer"
-                        >
-                            Урок проведено
-                        </label>
-                    </div>
+                {/* Completion checkbox */}
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <input
+                        type="checkbox"
+                        id="isCompletedEdit"
+                        checked={isCompleted}
+                        onChange={(e) => setIsCompleted(e.target.checked)}
+                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label
+                        htmlFor="isCompletedEdit"
+                        className="text-sm font-medium text-gray-700 cursor-pointer"
+                    >
+                        Урок проведено
+                    </label>
                 </div>
 
                 {/* Error message */}

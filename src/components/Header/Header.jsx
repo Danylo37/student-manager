@@ -7,7 +7,7 @@ import useAppStore from '../../store/appStore';
  * Application header with action buttons and week navigation
  */
 function Header() {
-    const { nextWeek, prevWeek, goToToday, lessonsLoading } = useLessons();
+    const { nextWeek, prevWeek, goToToday, lessonsLoading, lessons } = useLessons();
     const openModal = useAppStore((state) => state.openModal);
 
     const weekDays = useLessons().currentWeek;
@@ -43,10 +43,15 @@ function Header() {
                         </button>
                     </div>
 
-                    {/* Center: Week range */}
+                    {/* Center: Week range and lesson count */}
                     <div className="flex items-center gap-4">
                         <div className="text-xl font-bold text-gray-800">
                             {formatDateWithMonth(weekStart)} - {formatDateWithMonth(weekEnd)}
+                        </div>
+
+                        {/* Lesson count badge */}
+                        <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-semibold">
+                            {lessons.length} {lessons.length === 1 ? 'урок' : 'уроків'}
                         </div>
 
                         {lessonsLoading && (
