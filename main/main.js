@@ -22,8 +22,7 @@ function createWindow() {
         mainWindow.loadURL('http://localhost:5173');
         mainWindow.webContents.openDevTools();
     } else {
-        const indexPath = path.join(__dirname, '../dist/index.html');
-        mainWindow.loadFile(indexPath);
+        mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
     }
 
     mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
