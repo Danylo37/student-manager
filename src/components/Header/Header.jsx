@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Users } from 'lucide-react';
 import { formatDateWithMonth } from '../../utils/dateHelpers';
 import useLessons from '../../hooks/useLessons';
 import useAppStore from '../../store/appStore';
@@ -56,9 +56,10 @@ function Header() {
 
                         <button
                             onClick={() => openModal('studentsList')}
-                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors flex items-center gap-2"
                         >
-                            📋 Студенти
+                            <Users size={18} />
+                            Студенти
                         </button>
 
                         {/* Sync button */}

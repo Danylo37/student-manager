@@ -70,8 +70,9 @@ function StudentsListModal() {
 
                 {/* Stats */}
                 <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-700">{students.length}</div>
-                    <div className="text-sm text-blue-600">Всього студентів</div>
+                    <div className="text-2 font-bold text-blue-700">
+                        Всього студентів: {students.length}
+                    </div>
                 </div>
 
                 {/* Students list */}
@@ -147,7 +148,7 @@ function StudentsListModal() {
                                                     onClick={() => handleBalanceEdit(student.id)}
                                                     className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-sm font-medium"
                                                 >
-                                                    Баланс
+                                                    Додати до балансу
                                                 </button>
                                                 <button
                                                     onClick={() =>
