@@ -11,21 +11,22 @@ export const LESSON_STATUS = {
  * Get lesson status based on payment and time
  * @param {Object} lesson - Lesson object from database
  * @param {boolean} lesson.is_paid - Is lesson paid
- * @param {string} lesson.datetime - Lesson datetime in ISO format
+ * @param {boolean} lesson.is_completed - Is lesson completed
  * @returns {string} - Status: 'PAID' | 'PENDING' | 'OVERDUE'
  */
 export function getLessonStatus(lesson) {
-    // If paid, always green
+    // If not completed yet, always yellow (pending)
+    if (!lesson.is_completed) {
+        return LESSON_STATUS.PENDING;
+    }
+
+    // If completed and paid, green
     if (lesson.is_paid) {
         return LESSON_STATUS.PAID;
     }
 
-    // Use shouldBeCompleted to check if lesson has passed
-    if (shouldBeCompleted(lesson.datetime)) {
-        return LESSON_STATUS.OVERDUE;
-    }
-
-    return LESSON_STATUS.PENDING;
+    // If completed and not paid, red
+    return LESSON_STATUS.OVERDUE;
 }
 
 /**
@@ -63,9 +64,9 @@ export function getStatusBgLight(status) {
  */
 export function getStatusLabel(status) {
     const labels = {
-        [LESSON_STATUS.PAID]: 'Оплачено',
-        [LESSON_STATUS.PENDING]: 'Очікує оплати',
-        [LESSON_STATUS.OVERDUE]: 'Прострочено',
+        [LESSON_STATUS.PAID]: 'Проведено та оплачено',
+        [LESSON_STATUS.PENDING]: 'Заплановано',
+        [LESSON_STATUS.OVERDUE]: 'Проведено, не оплачено',
     };
     return labels[status] || 'Невідомо';
 }
@@ -87,12 +88,16 @@ export function getStatusEmoji(status) {
 /**
  * Check if lesson should be marked as completed
  * @param {string} datetime - Lesson datetime in ISO format
- * @returns {boolean} - true if lesson time has passed
+ * @returns {boolean} - true if lesson time + duration (50 minutes) has passed
  */
 export function shouldBeCompleted(datetime) {
     const now = new Date();
     const lessonDate = new Date(datetime);
-    return lessonDate < now;
+    // Add 50 minutes lesson duration
+    const lessonDurationMinutes = 50;
+
+    const lessonEndTime = new Date(lessonDate.getTime() + lessonDurationMinutes * 60 * 1000);
+    return lessonEndTime < now;
 }
 
 /**
