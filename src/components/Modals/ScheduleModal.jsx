@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import useAppStore from '../../store/appStore';
+import { TimePickerInput } from '../common/DateTimePicker';
 import Modal from './Modal';
 
 const DAYS_OF_WEEK = [
@@ -26,10 +27,19 @@ function ScheduleModal() {
     const schedules = useAppStore((state) => state.schedules);
 
     const [dayOfWeek, setDayOfWeek] = useState(0);
-    const [time, setTime] = useState('14:00');
+    const [time, setTime] = useState(null);
     const [loading, setLoading] = useState(false);
     const [autoCreateLoading, setAutoCreateLoading] = useState(false);
     const [error, setError] = useState(null);
+
+    // Set default time to 14:00
+    useEffect(() => {
+        if (isOpen && !time) {
+            const defaultTime = new Date();
+            defaultTime.setHours(14, 0, 0, 0);
+            setTime(defaultTime);
+        }
+    }, [isOpen, time]);
 
     // Load schedules when modal opens
     useEffect(() => {
@@ -41,11 +51,26 @@ function ScheduleModal() {
     const handleAdd = async (e) => {
         e.preventDefault();
         setError(null);
+
+        if (!time) {
+            setError('Оберіть час');
+            return;
+        }
+
         setLoading(true);
 
         try {
-            await addSchedule(selectedStudent.id, dayOfWeek, time);
-            setTime('14:00');
+            // Convert Date to HH:mm format
+            const hours = String(time.getHours()).padStart(2, '0');
+            const minutes = String(time.getMinutes()).padStart(2, '0');
+            const timeString = `${hours}:${minutes}`;
+
+            await addSchedule(selectedStudent.id, dayOfWeek, timeString);
+
+            // Reset to default time
+            const defaultTime = new Date();
+            defaultTime.setHours(14, 0, 0, 0);
+            setTime(defaultTime);
             setDayOfWeek(0);
         } catch (err) {
             setError('Помилка при додаванні розкладу');
@@ -85,7 +110,9 @@ function ScheduleModal() {
 
     const handleClose = () => {
         setError(null);
-        setTime('14:00');
+        const defaultTime = new Date();
+        defaultTime.setHours(14, 0, 0, 0);
+        setTime(defaultTime);
         setDayOfWeek(0);
         closeModal('schedule');
     };
@@ -124,40 +151,20 @@ function ScheduleModal() {
                             ))}
                         </select>
 
-                        <input
-                            type="time"
-                            value={time}
-                            onChange={(e) => setTime(e.target.value)}
-                            className="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+                        <div className="w-40">
+                            <TimePickerInput value={time} onChange={setTime} />
+                        </div>
 
                         <button
                             type="submit"
                             disabled={loading}
-                            className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                            className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 whitespace-nowrap"
                         >
                             {loading ? '...' : '+ Додати'}
                         </button>
                     </form>
 
                     {error && <div className="mt-3 text-red-600 text-sm">{error}</div>}
-                </div>
-
-                {/* Info */}
-                <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
-                    <div className="text-green-800 text-sm">
-                        ℹ️ <strong>Як це працює:</strong>
-                        <ul className="mt-2 ml-4 space-y-1">
-                            <li>• Уроки створюються при натисканні кнопки нижче</li>
-                            <li>
-                                • Система створює уроки на 12 тижнів вперед (або поки не скінчиться
-                                баланс)
-                            </li>
-                            <li>
-                                • Поточний баланс: <strong>{selectedStudent.balance}</strong>
-                            </li>
-                        </ul>
-                    </div>
                 </div>
 
                 {/* Auto-create button */}

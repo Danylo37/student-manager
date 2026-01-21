@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import useAppStore from '../../store/appStore';
 import useStudents from '../../hooks/useStudents';
 import useLessons from '../../hooks/useLessons';
-import { createDateTime, formatDate } from '../../utils/dateHelpers';
 import { shouldBeCompleted } from '../../utils/lessonStatus';
+import { DatePickerInput, TimePickerInput } from '../common/DateTimePicker';
 import Modal from './Modal';
 
 /**
@@ -16,8 +16,8 @@ function AddLessonModal() {
     const { addLesson, getNextTimeSlot } = useLessons();
 
     const [studentId, setStudentId] = useState('');
-    const [date, setDate] = useState('');
-    const [time, setTime] = useState('14:00');
+    const [date, setDate] = useState(null);
+    const [time, setTime] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -25,18 +25,27 @@ function AddLessonModal() {
     useEffect(() => {
         if (isOpen) {
             const today = new Date();
-            setDate(formatDate(today, 'yyyy-MM-dd'));
+            setDate(today);
+
+            // Set suggested time
             const suggestedTime = getNextTimeSlot(today);
-            setTime(suggestedTime);
+            const [hours, minutes] = suggestedTime.split(':');
+            const timeDate = new Date();
+            timeDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+            setTime(timeDate);
         }
     }, [isOpen, getNextTimeSlot]);
 
     // Update suggested time when date changes
     const handleDateChange = (newDate) => {
         setDate(newDate);
-        const dateObj = new Date(newDate);
-        const suggestedTime = getNextTimeSlot(dateObj);
-        setTime(suggestedTime);
+        if (newDate) {
+            const suggestedTime = getNextTimeSlot(newDate);
+            const [hours, minutes] = suggestedTime.split(':');
+            const timeDate = new Date();
+            timeDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+            setTime(timeDate);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -56,27 +65,28 @@ function AddLessonModal() {
         setError(null);
 
         try {
-            const dateObj = new Date(date);
-            const datetime = createDateTime(dateObj, time);
+            // Combine date and time
+            const datetime = new Date(date);
+            datetime.setHours(time.getHours(), time.getMinutes(), 0, 0);
 
             // Determine if paid based on student balance
             const student = students.find((s) => s.id === parseInt(studentId));
             const isPaid = student && student.balance > 0;
 
             // Auto-mark as completed if time has passed
-            const isCompleted = shouldBeCompleted(datetime);
+            const isCompleted = shouldBeCompleted(datetime.toISOString());
 
             await addLesson({
                 studentId: parseInt(studentId),
-                datetime,
+                datetime: datetime.toISOString(),
                 isPaid,
                 isCompleted,
             });
 
             // Reset form and close
             setStudentId('');
-            setDate('');
-            setTime('14:00');
+            setDate(null);
+            setTime(null);
             closeModal('addLesson');
         } catch (err) {
             setError('Помилка при додаванні уроку');
@@ -88,8 +98,8 @@ function AddLessonModal() {
 
     const handleClose = () => {
         setStudentId('');
-        setDate('');
-        setTime('14:00');
+        setDate(null);
+        setTime(null);
         setError(null);
         closeModal('addLesson');
     };
@@ -98,8 +108,15 @@ function AddLessonModal() {
     const selectedStudent = students.find((s) => s.id === parseInt(studentId));
 
     // Check if selected time is in the past
-    const datetime = date && time ? createDateTime(new Date(date), time) : null;
-    const isPastTime = datetime ? shouldBeCompleted(datetime) : false;
+    const datetime =
+        date && time
+            ? (() => {
+                  const dt = new Date(date);
+                  dt.setHours(time.getHours(), time.getMinutes(), 0, 0);
+                  return dt;
+              })()
+            : null;
+    const isPastTime = datetime ? shouldBeCompleted(datetime.toISOString()) : false;
 
     return (
         <Modal isOpen={isOpen} onClose={handleClose} title="Додати урок" size="md">
@@ -130,24 +147,14 @@ function AddLessonModal() {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Дата *
                         </label>
-                        <input
-                            type="date"
-                            value={date}
-                            onChange={(e) => handleDateChange(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+                        <DatePickerInput value={date} onChange={handleDateChange} />
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Час *
                         </label>
-                        <input
-                            type="time"
-                            value={time}
-                            onChange={(e) => setTime(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+                        <TimePickerInput value={time} onChange={setTime} />
                     </div>
                 </div>
 

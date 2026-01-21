@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import useAppStore from '../../store/appStore';
 import useLessons from '../../hooks/useLessons';
-import { formatTime, formatDate, createDateTime } from '../../utils/dateHelpers';
 import { getLessonStatus, getStatusLabel } from '../../utils/lessonStatus';
+import { DatePickerInput, TimePickerInput } from '../common/DateTimePicker';
 import Modal from './Modal';
 
 /**
@@ -14,8 +14,8 @@ function EditLessonModal() {
     const selectedLesson = useAppStore((state) => state.selectedLesson);
     const { updateLesson, deleteLesson } = useLessons();
 
-    const [date, setDate] = useState('');
-    const [time, setTime] = useState('');
+    const [date, setDate] = useState(null);
+    const [time, setTime] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -23,8 +23,8 @@ function EditLessonModal() {
     useEffect(() => {
         if (selectedLesson) {
             const lessonDate = new Date(selectedLesson.datetime);
-            setDate(formatDate(lessonDate, 'yyyy-MM-dd'));
-            setTime(formatTime(selectedLesson.datetime));
+            setDate(lessonDate);
+            setTime(lessonDate);
         }
     }, [selectedLesson]);
 
@@ -40,11 +40,11 @@ function EditLessonModal() {
         setError(null);
 
         try {
-            const dateObj = new Date(date);
-            const datetime = createDateTime(dateObj, time);
+            const datetime = new Date(date);
+            datetime.setHours(time.getHours(), time.getMinutes(), 0, 0);
 
             await updateLesson(selectedLesson.id, {
-                datetime,
+                datetime: datetime.toISOString(),
             });
 
             closeModal('editLesson');
@@ -100,24 +100,14 @@ function EditLessonModal() {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Дата *
                         </label>
-                        <input
-                            type="date"
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+                        <DatePickerInput value={date} onChange={setDate} />
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Час *
                         </label>
-                        <input
-                            type="time"
-                            value={time}
-                            onChange={(e) => setTime(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+                        <TimePickerInput value={time} onChange={setTime} />
                     </div>
                 </div>
 
