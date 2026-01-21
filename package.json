@@ -54,13 +54,35 @@
         "files": [
             "dist/**/*",
             "main/**/*",
-            "package.json"
+            "package.json",
+            "!main/db/*.db",
+            "!main/db/*.db-*"
+        ],
+        "extraResources": [
+            {
+                "from": "main/db/schema.sql",
+                "to": "main/db/schema.sql"
+            }
+        ],
+        "asarUnpack": [
+            "node_modules/better-sqlite3/**/*"
         ],
         "win": {
             "icon": "build/icon.ico",
             "target": [
-                "nsis"
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
             ]
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true
         },
         "mac": {
             "icon": "build/icon.icns",

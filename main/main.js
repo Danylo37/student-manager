@@ -22,17 +22,30 @@ function createWindow() {
         mainWindow.loadURL('http://localhost:5173');
         mainWindow.webContents.openDevTools();
     } else {
-        mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+        const indexPath = path.join(__dirname, '../dist/index.html');
+        mainWindow.loadFile(indexPath);
     }
+
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        console.error('Failed to load:', errorCode, errorDescription);
+    });
+
+    mainWindow.webContents.on('crashed', () => {
+        console.error('Window crashed');
+    });
 }
 
 app.whenReady().then(() => {
-    db.initDatabase();
-
-    db.syncCompletedLessons();
+    try {
+        db.initDatabase();
+        db.syncCompletedLessons();
+    } catch (error) {
+        console.error('Database initialization failed:', error);
+        const { dialog } = require('electron');
+        dialog.showErrorBox('Database Error', `Failed to initialize database: ${error.message}`);
+    }
 
     registerIpcHandlers();
-
     createWindow();
 
     app.on('activate', () => {
@@ -46,6 +59,12 @@ app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit();
     }
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error);
+    const { dialog } = require('electron');
+    dialog.showErrorBox('Error', `An error occurred: ${error.message}`);
 });
 
 function registerIpcHandlers() {

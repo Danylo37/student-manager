@@ -6,20 +6,42 @@ const { app } = require('electron');
 let db = null;
 
 function initDatabase() {
-    const userDataPath = app.getPath('userData');
-    const dbPath = path.join(userDataPath, 'students.db');
+    try {
+        const userDataPath = app.getPath('userData');
+        const dbPath = path.join(userDataPath, 'students.db');
 
-    console.log('Database path:', dbPath);
+        console.log('Database path:', dbPath);
 
-    db = new Database(dbPath);
-    db.pragma('journal_mode = WAL');
+        if (!fs.existsSync(userDataPath)) {
+            fs.mkdirSync(userDataPath, { recursive: true });
+        }
 
-    const schemaPath = path.join(__dirname, 'db', 'schema.sql');
-    const schema = fs.readFileSync(schemaPath, 'utf8');
-    db.exec(schema);
+        db = new Database(dbPath);
+        db.pragma('journal_mode = WAL');
 
-    console.log('Database initialized');
-    return db;
+        let schemaPath;
+        if (process.env.NODE_ENV === 'development') {
+            schemaPath = path.join(__dirname, 'db', 'schema.sql');
+        } else {
+            schemaPath = path.join(__dirname, 'db', 'schema.sql');
+        }
+
+        console.log('Schema path:', schemaPath);
+
+        if (!fs.existsSync(schemaPath)) {
+            console.error('Schema file not found at:', schemaPath);
+            throw new Error(`Schema file not found: ${schemaPath}`);
+        }
+
+        const schema = fs.readFileSync(schemaPath, 'utf8');
+        db.exec(schema);
+
+        console.log('Database initialized successfully');
+        return db;
+    } catch (error) {
+        console.error('Database initialization error:', error);
+        throw error;
+    }
 }
 
 // === STUDENTS ===
@@ -154,7 +176,7 @@ function syncCompletedLessons() {
 // === SCHEDULES ===
 function getSchedules(studentId) {
     const stmt = db.prepare(`
-        SELECT * FROM schedules 
+        SELECT * FROM schedules
         WHERE student_id = ? AND is_active = 1
         ORDER BY day_of_week, time
     `);
@@ -221,9 +243,9 @@ function autoCreateLessons(studentId) {
             const existing = db
                 .prepare(
                     `
-                SELECT id FROM lessons 
-                WHERE student_id = ? AND (datetime = ? OR previous_datetime = ?)
-            `,
+                        SELECT id FROM lessons
+                        WHERE student_id = ? AND (datetime = ? OR previous_datetime = ?)
+                    `,
                 )
                 .get(studentId, lessonDate.toISOString(), lessonDate.toISOString());
 
