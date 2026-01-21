@@ -49,9 +49,6 @@ function LessonCard({ lesson }) {
 
             {/* Student name */}
             <div className="text-sm text-gray-700 font-medium">{lesson.student_name}</div>
-
-            {/* Completed badge */}
-            {!!lesson.is_completed && <div className="mt-1 text-xs text-gray-500">✓ Проведено</div>}
         </div>
     );
 }
