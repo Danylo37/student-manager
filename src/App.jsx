@@ -7,6 +7,7 @@ import AddStudentModal from './components/Modals/AddStudentModal';
 import AddLessonModal from './components/Modals/AddLessonModal';
 import StudentsListModal from './components/Modals/StudentsListModal';
 import EditLessonModal from './components/Modals/EditLessonModal';
+import ScheduleModal from './components/Modals/ScheduleModal';
 
 /**
  * Main application component
@@ -46,6 +47,7 @@ function App() {
             <AddLessonModal />
             <StudentsListModal />
             <EditLessonModal />
+            <ScheduleModal />
         </div>
     );
 }

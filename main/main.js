@@ -64,6 +64,14 @@ function registerIpcHandlers() {
     ipcMain.handle('db:update-lesson', (_, id, updates) => db.updateLesson(id, updates));
     ipcMain.handle('db:delete-lesson', (_, id) => db.deleteLesson(id));
 
+    // Schedules
+    ipcMain.handle('db:get-schedules', (_, studentId) => db.getSchedules(studentId));
+    ipcMain.handle('db:add-schedule', (_, studentId, dayOfWeek, time) =>
+        db.addSchedule(studentId, dayOfWeek, time),
+    );
+    ipcMain.handle('db:delete-schedule', (_, scheduleId) => db.deleteSchedule(scheduleId));
+    ipcMain.handle('db:auto-create-lessons', (_, studentId) => db.autoCreateLessons(studentId));
+
     // Sync
     ipcMain.handle('db:sync-lessons', () => db.syncCompletedLessons());
 }

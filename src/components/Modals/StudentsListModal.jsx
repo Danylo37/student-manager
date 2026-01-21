@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Calendar } from 'lucide-react';
 import useAppStore from '../../store/appStore';
 import useStudents from '../../hooks/useStudents';
 import Modal from './Modal';
@@ -9,6 +10,8 @@ import Modal from './Modal';
 function StudentsListModal() {
     const isOpen = useAppStore((state) => state.modals.studentsList);
     const closeModal = useAppStore((state) => state.closeModal);
+    const openModal = useAppStore((state) => state.openModal);
+    const selectStudentForSchedule = useAppStore((state) => state.selectStudentForSchedule);
     const { students, searchStudents, deleteStudent, updateBalance } = useStudents();
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -46,6 +49,11 @@ function StudentsListModal() {
         }
     };
 
+    const handleOpenSchedule = (student) => {
+        selectStudentForSchedule(student);
+        openModal('schedule');
+    };
+
     const handleClose = () => {
         setSearchQuery('');
         setEditingBalance(null);
@@ -70,7 +78,7 @@ function StudentsListModal() {
 
                 {/* Stats */}
                 <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="text-2 font-bold text-blue-700">
+                    <div className="text-xl font-bold text-blue-700">
                         Всього студентів: {students.length}
                     </div>
                 </div>
@@ -144,6 +152,14 @@ function StudentsListModal() {
                                             </div>
                                         ) : (
                                             <>
+                                                <button
+                                                    onClick={() => handleOpenSchedule(student)}
+                                                    className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded text-sm font-medium flex items-center gap-1"
+                                                    title="Налаштувати розклад"
+                                                >
+                                                    <Calendar size={16} />
+                                                    Розклад
+                                                </button>
                                                 <button
                                                     onClick={() => handleBalanceEdit(student.id)}
                                                     className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-sm font-medium"

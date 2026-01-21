@@ -14,6 +14,13 @@ contextBridge.exposeInMainWorld('electron', {
     updateLesson: (id, updates) => ipcRenderer.invoke('db:update-lesson', id, updates),
     deleteLesson: (id) => ipcRenderer.invoke('db:delete-lesson', id),
 
+    // Schedules
+    getSchedules: (studentId) => ipcRenderer.invoke('db:get-schedules', studentId),
+    addSchedule: (studentId, dayOfWeek, time) =>
+        ipcRenderer.invoke('db:add-schedule', studentId, dayOfWeek, time),
+    deleteSchedule: (scheduleId) => ipcRenderer.invoke('db:delete-schedule', scheduleId),
+    autoCreateLessons: (studentId) => ipcRenderer.invoke('db:auto-create-lessons', studentId),
+
     // Sync
     syncLessons: () => ipcRenderer.invoke('db:sync-lessons'),
 });

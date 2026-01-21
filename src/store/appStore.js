@@ -17,6 +17,11 @@ const useAppStore = create((set, get) => ({
     lessonsLoading: false,
     lessonsError: null,
 
+    // Schedules data
+    schedules: [],
+    schedulesLoading: false,
+    schedulesError: null,
+
     // Current week (Monday of the week)
     currentWeek: getWeekStart(new Date()),
 
@@ -26,10 +31,14 @@ const useAppStore = create((set, get) => ({
         addLesson: false,
         studentsList: false,
         editLesson: false,
+        schedule: false,
     },
 
     // Selected lesson for editing
     selectedLesson: null,
+
+    // Selected student for schedule management
+    selectedStudentForSchedule: null,
 
     // ========== ACTIONS ==========
 
@@ -88,8 +97,9 @@ const useAppStore = create((set, get) => ({
     updateBalance: async (studentId, amount) => {
         try {
             await window.electron.updateBalance(studentId, amount);
-            // Reload students list
+            // Reload students and lessons (auto-create will happen)
             await get().loadStudents();
+            await get().loadLessons();
         } catch (error) {
             console.error('Failed to update balance:', error);
             throw error;
@@ -117,9 +127,6 @@ const useAppStore = create((set, get) => ({
     /**
      * Add new lesson
      * @param {Object} lessonData - Lesson data
-     * @param {number} lessonData.studentId - Student ID
-     * @param {string} lessonData.datetime - Datetime in ISO format
-     * @param {boolean} lessonData.isPaid - Is lesson paid
      */
     addLesson: async (lessonData) => {
         try {
@@ -170,7 +177,7 @@ const useAppStore = create((set, get) => ({
     },
 
     /**
-     * Sync completed lessons (mark as completed and deduct balance)
+     * Sync completed lessons
      */
     syncLessons: async () => {
         try {
@@ -184,6 +191,80 @@ const useAppStore = create((set, get) => ({
         }
     },
 
+    // ========== SCHEDULES ==========
+
+    /**
+     * Load schedules for a student
+     * @param {number} studentId - Student ID
+     */
+    loadSchedules: async (studentId) => {
+        set({ schedulesLoading: true, schedulesError: null });
+
+        try {
+            const schedules = await window.electron.getSchedules(studentId);
+            set({ schedules, schedulesLoading: false });
+        } catch (error) {
+            console.error('Failed to load schedules:', error);
+            set({ schedulesError: error.message, schedulesLoading: false });
+        }
+    },
+
+    /**
+     * Add schedule
+     * @param {number} studentId - Student ID
+     * @param {number} dayOfWeek - Day of week (0-6)
+     * @param {string} time - Time in HH:MM format
+     */
+    addSchedule: async (studentId, dayOfWeek, time) => {
+        try {
+            await window.electron.addSchedule(studentId, dayOfWeek, time);
+            // Reload schedules and lessons
+            await get().loadSchedules(studentId);
+            await get().loadLessons();
+            await get().loadStudents();
+        } catch (error) {
+            console.error('Failed to add schedule:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Delete schedule
+     * @param {number} scheduleId - Schedule ID
+     */
+    deleteSchedule: async (scheduleId) => {
+        try {
+            const studentId = get().selectedStudentForSchedule?.id;
+            await window.electron.deleteSchedule(scheduleId);
+            // Reload schedules
+            if (studentId) {
+                await get().loadSchedules(studentId);
+            }
+        } catch (error) {
+            console.error('Failed to delete schedule:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Auto-create lessons for a student based on their schedule
+     * @param {number} studentId - Student ID
+     */
+    autoCreateLessons: async (studentId) => {
+        try {
+            const created = await window.electron.autoCreateLessons(studentId);
+            // Reload lessons and students
+            await get().loadLessons();
+            await get().loadStudents();
+            return created;
+        } catch (error) {
+            console.error('Failed to auto-create lessons:', error);
+            throw error;
+        }
+    },
+
+    // ========== NAVIGATION ==========
+
     /**
      * Move to next week
      */
@@ -193,7 +274,6 @@ const useAppStore = create((set, get) => ({
         nextWeek.setDate(nextWeek.getDate() + 7);
 
         set({ currentWeek: getWeekStart(nextWeek) });
-        // Load lessons for new week
         get().loadLessons();
     },
 
@@ -206,7 +286,6 @@ const useAppStore = create((set, get) => ({
         prevWeek.setDate(prevWeek.getDate() - 7);
 
         set({ currentWeek: getWeekStart(prevWeek) });
-        // Load lessons for new week
         get().loadLessons();
     },
 
@@ -215,13 +294,14 @@ const useAppStore = create((set, get) => ({
      */
     goToToday: () => {
         set({ currentWeek: getWeekStart(new Date()) });
-        // Load lessons for current week
         get().loadLessons();
     },
 
+    // ========== MODALS ==========
+
     /**
      * Open modal
-     * @param {string} modalName - Modal name ('addStudent', 'addLesson', etc.)
+     * @param {string} modalName - Modal name
      */
     openModal: (modalName) => {
         set((state) => ({
@@ -242,6 +322,11 @@ const useAppStore = create((set, get) => ({
         if (modalName === 'editLesson') {
             set({ selectedLesson: null });
         }
+
+        // Clear selected student when closing schedule modal
+        if (modalName === 'schedule') {
+            set({ selectedStudentForSchedule: null, schedules: [] });
+        }
     },
 
     /**
@@ -254,12 +339,18 @@ const useAppStore = create((set, get) => ({
     },
 
     /**
-     * Initialize app (load initial data)
+     * Select student for schedule management
+     * @param {Object} student - Student object
+     */
+    selectStudentForSchedule: (student) => {
+        set({ selectedStudentForSchedule: student });
+    },
+
+    /**
+     * Initialize app
      */
     initialize: async () => {
-        // Sync lessons first (mark completed lessons)
         await get().syncLessons();
-        // Load students and lessons
         await Promise.all([get().loadStudents(), get().loadLessons()]);
     },
 }));
