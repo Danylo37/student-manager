@@ -116,8 +116,8 @@ function useLessons() {
             const dayLessons = getLessonsForDate(date);
 
             if (dayLessons.length === 0) {
-                // No lessons - suggest 10:00
-                return '10:00';
+                // No lessons - suggest 14:00
+                return '14:00';
             }
 
             // Get last lesson time

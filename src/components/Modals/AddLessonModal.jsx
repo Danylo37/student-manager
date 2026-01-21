@@ -17,17 +17,19 @@ function AddLessonModal() {
 
     const [studentId, setStudentId] = useState('');
     const [date, setDate] = useState('');
-    const [time, setTime] = useState('10:00');
+    const [time, setTime] = useState('14:00');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // Set default date to today
+    // Set default date to today and suggested time
     useEffect(() => {
         if (isOpen) {
             const today = new Date();
             setDate(formatDate(today, 'yyyy-MM-dd'));
+            const suggestedTime = getNextTimeSlot(today);
+            setTime(suggestedTime);
         }
-    }, [isOpen]);
+    }, [isOpen, getNextTimeSlot]);
 
     // Update suggested time when date changes
     const handleDateChange = (newDate) => {
@@ -74,7 +76,7 @@ function AddLessonModal() {
             // Reset form and close
             setStudentId('');
             setDate('');
-            setTime('10:00');
+            setTime('14:00');
             closeModal('addLesson');
         } catch (err) {
             setError('Помилка при додаванні уроку');
@@ -87,7 +89,7 @@ function AddLessonModal() {
     const handleClose = () => {
         setStudentId('');
         setDate('');
-        setTime('10:00');
+        setTime('14:00');
         setError(null);
         closeModal('addLesson');
     };

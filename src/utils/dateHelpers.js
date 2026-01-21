@@ -51,7 +51,7 @@ export function formatDayOfWeekShort(date) {
 /**
  * Format time
  * @param {Date|string} datetime - Date/time object or ISO string
- * @returns {string} - Time in "10:00" format
+ * @returns {string} - Time in "14:00" format
  */
 export function formatTime(datetime) {
     const date = typeof datetime === 'string' ? parseISO(datetime) : datetime;
@@ -61,8 +61,8 @@ export function formatTime(datetime) {
 /**
  * Create full datetime ISO string for database
  * @param {Date} date - Date object
- * @param {string} time - Time string in "10:00" format
- * @returns {string} - ISO string "2026-01-20T10:00:00.000Z"
+ * @param {string} time - Time string in "14:00" format
+ * @returns {string} - ISO string "2026-01-20T14:00:00.000Z"
  */
 export function createDateTime(date, time) {
     const [hours, minutes] = time.split(':');
