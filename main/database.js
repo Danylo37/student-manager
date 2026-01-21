@@ -64,12 +64,18 @@ function getLessons(startDate, endDate) {
     return stmt.all(startDate, endDate);
 }
 
-function addLesson(studentId, datetime, isPaid) {
+function addLesson(studentId, datetime, isPaid, isCompleted) {
     const stmt = db.prepare(`
-    INSERT INTO lessons (student_id, datetime, is_paid, is_completed)
-    VALUES (?, ?, ?, 0)
-  `);
-    const result = stmt.run(studentId, datetime, isPaid ? 1 : 0);
+        INSERT INTO lessons (student_id, datetime, is_paid, is_completed)
+        VALUES (?, ?, ?, ?)
+    `);
+    const result = stmt.run(studentId, datetime, isPaid ? 1 : 0, isCompleted ? 1 : 0);
+
+    // If lesson was completed, deduct 1 from student balance
+    if (isCompleted) {
+        updateStudentBalance(studentId, -1);
+    }
+
     return { id: result.lastInsertRowid };
 }
 
@@ -106,10 +112,9 @@ function deleteLesson(lessonId) {
     const deleteStmt = db.prepare('DELETE FROM lessons WHERE id = ?');
     deleteStmt.run(lessonId);
 
-    // If lesson was paid and completed, return 1 to balance
-    if (lesson && lesson.is_paid && lesson.is_completed) {
-        const balanceStmt = db.prepare('UPDATE students SET balance = balance + 1 WHERE id = ?');
-        balanceStmt.run(lesson.student_id);
+    // If lesson was completed, return 1 to balance
+    if (lesson && lesson.is_completed) {
+        updateStudentBalance(lesson.student_id, 1);
     }
 }
 

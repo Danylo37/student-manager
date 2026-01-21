@@ -59,7 +59,7 @@ function registerIpcHandlers() {
     // Lessons
     ipcMain.handle('db:get-lessons', (_, startDate, endDate) => db.getLessons(startDate, endDate));
     ipcMain.handle('db:add-lesson', (_, data) =>
-        db.addLesson(data.studentId, data.datetime, data.isPaid),
+        db.addLesson(data.studentId, data.datetime, data.isPaid, data.isCompleted),
     );
     ipcMain.handle('db:update-lesson', (_, id, updates) => db.updateLesson(id, updates));
     ipcMain.handle('db:delete-lesson', (_, id) => db.deleteLesson(id));
