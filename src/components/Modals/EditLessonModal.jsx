@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import useAppStore from '../../store/appStore';
 import useLessons from '../../hooks/useLessons';
-import { getLessonStatus, getStatusLabel } from '../../utils/lessonStatus';
+import useStudents from '../../hooks/useStudents';
+import { getLessonStatus, getStatusLabel, shouldBeCompleted } from '../../utils/lessonStatus';
 import { DatePickerInput, TimePickerInput } from '../common/DateTimePicker';
 import Modal from './Modal';
 
@@ -13,6 +14,7 @@ function EditLessonModal() {
     const closeModal = useAppStore((state) => state.closeModal);
     const selectedLesson = useAppStore((state) => state.selectedLesson);
     const { updateLesson, deleteLesson } = useLessons();
+    const { getStudentById } = useStudents();
 
     const [date, setDate] = useState(null);
     const [time, setTime] = useState(null);
@@ -43,9 +45,21 @@ function EditLessonModal() {
             const datetime = new Date(date);
             datetime.setHours(time.getHours(), time.getMinutes(), 0, 0);
 
-            await updateLesson(selectedLesson.id, {
+            const is_completed = shouldBeCompleted(datetime);
+            const completionStatusChanged = is_completed !== (selectedLesson.is_completed === 1);
+
+            const updateData = {
                 datetime: datetime.toISOString(),
-            });
+            };
+
+            // Recalculate completion and payment status if completion status changed
+            if (completionStatusChanged) {
+                const student = getStudentById(selectedLesson.student_id);
+                updateData.is_completed = is_completed;
+                updateData.is_paid = student && student.balance > 0 && is_completed ? 1 : 0;
+            }
+
+            await updateLesson(selectedLesson.id, updateData);
 
             closeModal('editLesson');
         } catch (err) {

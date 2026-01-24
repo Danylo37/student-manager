@@ -102,6 +102,9 @@ function addLesson(studentId, datetime, isPaid, isCompleted) {
 }
 
 function updateLesson(lessonId, updates) {
+    const currentLesson = db
+        .prepare('SELECT datetime, student_id FROM lessons WHERE id = ?')
+        .get(lessonId);
     const fields = [];
     const values = [];
 
@@ -109,14 +112,19 @@ function updateLesson(lessonId, updates) {
         fields.push('is_completed = ?');
         values.push(updates.is_completed ? 1 : 0);
     }
+
     if (updates.is_paid !== undefined) {
         fields.push('is_paid = ?');
         values.push(updates.is_paid ? 1 : 0);
-    }
-    if (updates.datetime !== undefined) {
-        // Get current datetime before updating
-        const currentLesson = db.prepare('SELECT datetime FROM lessons WHERE id = ?').get(lessonId);
 
+        if (updates.is_paid) {
+            updateStudentBalance(currentLesson.student_id, -1);
+        } else {
+            updateStudentBalance(currentLesson.student_id, 1);
+        }
+    }
+
+    if (updates.datetime !== undefined) {
         // Store old datetime as previous_datetime
         fields.push('previous_datetime = ?');
         values.push(currentLesson.datetime);
@@ -283,7 +291,7 @@ function autoCreateLessons(studentId) {
         db.prepare(
             `
                 INSERT INTO lessons (student_id, datetime, is_paid, is_completed)
-                VALUES (?, ?, 1, 0)
+                VALUES (?, ?, 0, 0)
             `,
         ).run(studentId, lesson.datetime.toISOString());
 

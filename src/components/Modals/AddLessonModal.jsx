@@ -69,12 +69,10 @@ function AddLessonModal() {
             const datetime = new Date(date);
             datetime.setHours(time.getHours(), time.getMinutes(), 0, 0);
 
-            // Determine if paid based on student balance
-            const student = students.find((s) => s.id === parseInt(studentId));
-            const isPaid = student && student.balance > 0;
-
-            // Auto-mark as completed if time has passed
             const isCompleted = shouldBeCompleted(datetime.toISOString());
+
+            const student = students.find((s) => s.id === parseInt(studentId));
+            const isPaid = student && student.balance > 0 && isCompleted;
 
             await addLesson({
                 studentId: parseInt(studentId),
