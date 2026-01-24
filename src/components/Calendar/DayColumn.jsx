@@ -95,7 +95,7 @@ function DayColumn({ date, timeSlots }) {
                                 return (
                                     <div
                                         key={lesson.id}
-                                        className="absolute left-1 right-3"
+                                        className="absolute left-1 right-3 z-10"
                                         style={{ top: `${topPosition}px` }}
                                     >
                                         <LessonCard lesson={lesson} />
