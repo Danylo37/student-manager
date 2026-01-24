@@ -110,13 +110,27 @@ function useLessons() {
     /**
      * Get next available time slot for a date
      * Returns suggested time (e.g., last lesson time + 1 hour)
+     * For today's date, returns the nearest rounded hour
      */
     const getNextTimeSlot = useCallback(
         (date) => {
             const dayLessons = getLessonsForDate(date);
+            const today = new Date();
+            const isToday = isSameDayAs(date, today);
 
             if (dayLessons.length === 0) {
-                // No lessons - suggest 14:00
+                // No lessons - suggest nearest rounded hour if today, otherwise 14:00
+                if (isToday) {
+                    const now = new Date();
+                    const currentHour = now.getHours();
+                    const currentMinutes = now.getMinutes();
+
+                    // Round to next hour
+                    const nextHour = currentMinutes > 0 ? currentHour + 1 : currentHour;
+                    const hours = String(nextHour).padStart(2, '0');
+
+                    return `${hours}:00`;
+                }
                 return '14:00';
             }
 
@@ -126,6 +140,19 @@ function useLessons() {
 
             // Add 1 hour
             lastTime.setHours(lastTime.getHours() + 1);
+
+            // If it's today and the suggested time is in the past, use current time rounded to next hour
+            if (isToday && lastTime < today) {
+                const now = new Date();
+                const currentHour = now.getHours();
+                const currentMinutes = now.getMinutes();
+
+                // Round to next hour
+                const nextHour = currentMinutes > 0 ? currentHour + 1 : currentHour;
+                const hours = String(nextHour).padStart(2, '0');
+
+                return `${hours}:00`;
+            }
 
             const hours = String(lastTime.getHours()).padStart(2, '0');
             const minutes = String(lastTime.getMinutes()).padStart(2, '0');
