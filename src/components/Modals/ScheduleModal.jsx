@@ -97,6 +97,7 @@ function ScheduleModal() {
             const created = await autoCreateLessons(selectedStudent.id);
             if (created > 0) {
                 alert(`Створено ${created} уроків на основі розкладу`);
+                handleClose();
             } else {
                 alert('Не вдалося створити уроки. Перевірте баланс учня та розклад.');
             }
@@ -167,32 +168,6 @@ function ScheduleModal() {
                     {error && <div className="mt-3 text-red-600 text-sm">{error}</div>}
                 </div>
 
-                {/* Auto-create button */}
-                <div className="bg-purple-50 border border-purple-200 p-4 rounded-lg">
-                    <button
-                        onClick={handleAutoCreate}
-                        disabled={
-                            autoCreateLoading ||
-                            schedules.filter((s) => s.is_active).length === 0 ||
-                            selectedStudent.balance <= 0
-                        }
-                        className="w-full px-6 py-3  bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {autoCreateLoading ? '⏳ Створення...' : '✨ Створити уроки по розкладу'}
-                    </button>
-                    {schedules.filter((s) => s.is_active).length === 0 && (
-                        <p className="mt-2 text-sm text-gray-600 text-center">
-                            Спочатку додайте дні уроків до розкладу
-                        </p>
-                    )}
-                    {selectedStudent.balance <= 0 &&
-                        schedules.filter((s) => s.is_active).length > 0 && (
-                            <p className="mt-2 text-sm text-gray-600 text-center">
-                                Недостатньо балансу для створення уроків
-                            </p>
-                        )}
-                </div>
-
                 {/* Current schedule */}
                 <div>
                     <h3 className="font-bold text-gray-800 mb-3">Поточний розклад</h3>
@@ -249,6 +224,32 @@ function ScheduleModal() {
                         </div>
                     </div>
                 )}
+
+                {/* Auto-create button */}
+                <div className="pt-4 border-t border-gray-200">
+                    <button
+                        onClick={handleAutoCreate}
+                        disabled={
+                            autoCreateLoading ||
+                            schedules.filter((s) => s.is_active).length === 0 ||
+                            selectedStudent.balance <= 0
+                        }
+                        className="w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {autoCreateLoading ? '⏳ Створення...' : '✨ Створити уроки по розкладу'}
+                    </button>
+                    {schedules.filter((s) => s.is_active).length === 0 && (
+                        <p className="mt-2 text-sm text-gray-600 text-center">
+                            Спочатку додайте дні уроків до розкладу
+                        </p>
+                    )}
+                    {selectedStudent.balance <= 0 &&
+                        schedules.filter((s) => s.is_active).length > 0 && (
+                            <p className="mt-2 text-sm text-gray-600 text-center">
+                                Недостатньо балансу для створення уроків
+                            </p>
+                        )}
+                </div>
             </div>
         </Modal>
     );

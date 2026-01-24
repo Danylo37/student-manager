@@ -51,6 +51,7 @@ function StudentsListModal() {
 
     const handleOpenSchedule = (student) => {
         selectStudentForSchedule(student);
+        handleClose();
         openModal('schedule');
     };
 
