@@ -29,14 +29,7 @@ function AddStudentModal() {
 
         try {
             // Add student
-            await addStudent(name.trim());
-
-            // Update balance if needed
-            if (balance !== 0) {
-                const students = useAppStore.getState().students;
-                const newStudent = students[students.length - 1];
-                await useAppStore.getState().updateBalance(newStudent.id, balance);
-            }
+            await addStudent(name.trim(), balance);
 
             // Reset form and close
             setName('');

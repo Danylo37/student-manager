@@ -69,7 +69,7 @@ process.on('uncaughtException', (error) => {
 function registerIpcHandlers() {
     // Students
     ipcMain.handle('db:get-students', () => db.getStudents());
-    ipcMain.handle('db:add-student', (_, name) => db.addStudent(name));
+    ipcMain.handle('db:add-student', (_, name, balance) => db.addStudent(name, balance));
     ipcMain.handle('db:update-balance', (_, studentId, amount) =>
         db.updateStudentBalance(studentId, amount),
     );

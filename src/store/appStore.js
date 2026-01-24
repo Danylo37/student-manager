@@ -60,10 +60,11 @@ const useAppStore = create((set, get) => ({
     /**
      * Add new student
      * @param {string} name - Student name
+     * @param {number} balance - Initial balance
      */
-    addStudent: async (name) => {
+    addStudent: async (name, balance) => {
         try {
-            await window.electron.addStudent(name);
+            await window.electron.addStudent(name, balance);
             // Reload students list
             await get().loadStudents();
         } catch (error) {

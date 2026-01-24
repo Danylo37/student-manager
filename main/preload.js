@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electron', {
     // Students
     getStudents: () => ipcRenderer.invoke('db:get-students'),
-    addStudent: (name) => ipcRenderer.invoke('db:add-student', name),
+    addStudent: (name, balance) => ipcRenderer.invoke('db:add-student', name, balance),
     updateBalance: (studentId, amount) =>
         ipcRenderer.invoke('db:update-balance', studentId, amount),
     deleteStudent: (studentId) => ipcRenderer.invoke('db:delete-student', studentId),

@@ -58,10 +58,10 @@ function getStudents() {
     return stmt.all();
 }
 
-function addStudent(name) {
-    const stmt = db.prepare('INSERT INTO students (name, balance) VALUES (?, 0)');
-    const result = stmt.run(name);
-    return { id: result.lastInsertRowid, name, balance: 0 };
+function addStudent(name, balance) {
+    const stmt = db.prepare('INSERT INTO students (name, balance) VALUES (?, ?)');
+    const result = stmt.run(name, balance);
+    return { id: result.lastInsertRowid, name, balance: balance };
 }
 
 function updateStudentBalance(studentId, amount) {
