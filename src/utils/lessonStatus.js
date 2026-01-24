@@ -93,7 +93,6 @@ export function getStatusEmoji(status) {
 export function shouldBeCompleted(datetime) {
     const now = new Date();
     const lessonDate = new Date(datetime);
-    // Add 50 minutes lesson duration
     const lessonDurationMinutes = 50;
 
     const lessonEndTime = new Date(lessonDate.getTime() + lessonDurationMinutes * 60 * 1000);

@@ -151,14 +151,19 @@ function deleteLesson(lessonId) {
 
 // === AUTO SYNC ===
 function syncCompletedLessons() {
-    const now = new Date().toISOString();
+    const now = new Date();
+    const lessonDurationMinutes = 50;
+
+    // Calculate the time threshold: now - lesson duration
+    const thresholdTime = new Date(now.getTime() - lessonDurationMinutes * 60 * 1000);
+    const thresholdISO = thresholdTime.toISOString();
 
     const stmt = db.prepare(`
         SELECT id, student_id FROM lessons
         WHERE datetime < ? AND is_completed = 0
     `);
 
-    const lessons = stmt.all(now);
+    const lessons = stmt.all(thresholdISO);
 
     const updateStmt = db.prepare('UPDATE lessons SET is_completed = 1 WHERE id = ?');
     const balanceStmt = db.prepare('UPDATE students SET balance = balance - 1 WHERE id = ?');
