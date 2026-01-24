@@ -126,11 +126,18 @@ function AddLessonModal() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Учень *</label>
                     <select
                         value={studentId}
-                        onChange={(e) => setStudentId(e.target.value)}
+                        onChange={(e) => {
+                            setStudentId(e.target.value);
+                            if (e.target.value) {
+                                setError(null);
+                            }
+                        }}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         autoFocus
                     >
-                        <option value="">Оберіть учня...</option>
+                        <option value="" disabled={studentId !== ''}>
+                            Оберіть учня...
+                        </option>
                         {students.map((student) => (
                             <option key={student.id} value={student.id}>
                                 {student.name} (Баланс: {student.balance})
