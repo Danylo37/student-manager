@@ -40,6 +40,9 @@ const useAppStore = create((set, get) => ({
     // Selected student for schedule management
     selectedStudentForSchedule: null,
 
+    // Pre-filled date/time for add lesson modal
+    prefilledLessonDateTime: null,
+
     // ========== ACTIONS ==========
 
     /**
@@ -311,6 +314,17 @@ const useAppStore = create((set, get) => ({
     },
 
     /**
+     * Open add lesson modal with pre-filled date/time
+     * @param {Date} datetime - Pre-filled date and time
+     */
+    openAddLessonModal: (datetime) => {
+        set({ prefilledLessonDateTime: datetime });
+        set((state) => ({
+            modals: { ...state.modals, addLesson: true },
+        }));
+    },
+
+    /**
      * Close modal
      * @param {string} modalName - Modal name
      */
@@ -327,6 +341,11 @@ const useAppStore = create((set, get) => ({
         // Clear selected student when closing schedule modal
         if (modalName === 'schedule') {
             set({ selectedStudentForSchedule: null, schedules: [] });
+        }
+
+        // Clear pre-filled date/time when closing add lesson modal
+        if (modalName === 'addLesson') {
+            set({ prefilledLessonDateTime: null });
         }
     },
 

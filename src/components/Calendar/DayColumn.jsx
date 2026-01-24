@@ -2,6 +2,7 @@ import React from 'react';
 import { formatDate, formatDayOfWeekShort } from '../../utils/dateHelpers';
 import { isToday } from '../../utils/lessonStatus';
 import useLessons from '../../hooks/useLessons';
+import useAppStore from '../../store/appStore';
 import LessonCard from './LessonCard';
 
 /**
@@ -9,6 +10,7 @@ import LessonCard from './LessonCard';
  */
 function DayColumn({ date, timeSlots }) {
     const { getLessonsForDate } = useLessons();
+    const openAddLessonModal = useAppStore((state) => state.openAddLessonModal);
     const dayLessons = getLessonsForDate(date);
     const isTodayDate = isToday(date.toISOString());
 
@@ -36,6 +38,15 @@ function DayColumn({ date, timeSlots }) {
             const lessonHour = getLessonHour(lesson.datetime);
             return lessonHour === hour;
         });
+    };
+
+    /**
+     * Handle click on time slot
+     */
+    const handleTimeSlotClick = (hour) => {
+        const datetime = new Date(date);
+        datetime.setHours(hour, 0, 0, 0);
+        openAddLessonModal(datetime);
     };
 
     return (
@@ -85,7 +96,11 @@ function DayColumn({ date, timeSlots }) {
                     const hourLessons = getLessonsForHour(hour);
 
                     return (
-                        <div key={hour} className="h-20 border-b border-gray-200 relative p-2">
+                        <div
+                            key={hour}
+                            className="h-20 border-b border-gray-200 relative p-2 cursor-pointer hover:bg-blue-50 transition-colors"
+                            onClick={() => handleTimeSlotClick(hour)}
+                        >
                             {/* Lessons in this hour */}
                             {hourLessons.map((lesson) => {
                                 const minuteOffset = getLessonMinuteOffset(lesson.datetime);
@@ -97,6 +112,7 @@ function DayColumn({ date, timeSlots }) {
                                         key={lesson.id}
                                         className="absolute left-1 right-3 z-10"
                                         style={{ top: `${topPosition}px` }}
+                                        onClick={(e) => e.stopPropagation()}
                                     >
                                         <LessonCard lesson={lesson} />
                                     </div>

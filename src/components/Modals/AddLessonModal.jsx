@@ -12,6 +12,7 @@ import Modal from './Modal';
 function AddLessonModal() {
     const isOpen = useAppStore((state) => state.modals.addLesson);
     const closeModal = useAppStore((state) => state.closeModal);
+    const prefilledDateTime = useAppStore((state) => state.prefilledLessonDateTime);
     const { students } = useStudents();
     const { addLesson, getNextTimeSlot } = useLessons();
 
@@ -24,18 +25,25 @@ function AddLessonModal() {
     // Set default date to today and suggested time
     useEffect(() => {
         if (isOpen) {
-            const today = new Date();
-            const { time: suggestedTime, date: suggestedDate } = getNextTimeSlot(today);
+            if (prefilledDateTime) {
+                // Use pre-filled date/time from clicking on calendar
+                setDate(prefilledDateTime);
+                setTime(prefilledDateTime);
+            } else {
+                // Use suggested time based on today
+                const today = new Date();
+                const { time: suggestedTime, date: suggestedDate } = getNextTimeSlot(today);
 
-            setDate(suggestedDate);
+                setDate(suggestedDate);
 
-            // Set suggested time
-            const [hours, minutes] = suggestedTime.split(':');
-            const timeDate = new Date();
-            timeDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-            setTime(timeDate);
+                // Set suggested time
+                const [hours, minutes] = suggestedTime.split(':');
+                const timeDate = new Date();
+                timeDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                setTime(timeDate);
+            }
         }
-    }, [isOpen, getNextTimeSlot]);
+    }, [isOpen, getNextTimeSlot, prefilledDateTime]);
 
     // Update suggested time when date changes
     const handleDateChange = (newDate) => {
