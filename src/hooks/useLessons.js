@@ -111,6 +111,8 @@ function useLessons() {
      * Get next available time slot for a date
      * Returns suggested time (e.g., last lesson time + 1 hour)
      * For today's date, returns the nearest rounded hour
+     * Maximum time is 20:00, after that suggests next day at 14:00
+     * Returns object with time and date (date can be next day if after 20:00)
      */
     const getNextTimeSlot = useCallback(
         (date) => {
@@ -127,11 +129,18 @@ function useLessons() {
 
                     // Round to next hour
                     const nextHour = currentMinutes > 0 ? currentHour + 1 : currentHour;
-                    const hours = String(nextHour).padStart(2, '0');
 
-                    return `${hours}:00`;
+                    // If after 20:00, suggest next day at 14:00
+                    if (nextHour > 20) {
+                        const nextDay = new Date(date);
+                        nextDay.setDate(nextDay.getDate() + 1);
+                        return { time: '14:00', date: nextDay };
+                    }
+
+                    const hours = String(nextHour).padStart(2, '0');
+                    return { time: `${hours}:00`, date };
                 }
-                return '14:00';
+                return { time: '14:00', date };
             }
 
             // Get last lesson time
@@ -149,15 +158,32 @@ function useLessons() {
 
                 // Round to next hour
                 const nextHour = currentMinutes > 0 ? currentHour + 1 : currentHour;
-                const hours = String(nextHour).padStart(2, '0');
 
-                return `${hours}:00`;
+                // If after 20:00, suggest next day at 14:00
+                if (nextHour > 20) {
+                    const nextDay = new Date(date);
+                    nextDay.setDate(nextDay.getDate() + 1);
+                    return { time: '14:00', date: nextDay };
+                }
+
+                const hours = String(nextHour).padStart(2, '0');
+                return { time: `${hours}:00`, date };
+            }
+
+            // If suggested time is after 20:00, suggest next day at 14:00
+            if (
+                lastTime.getHours() > 20 ||
+                (lastTime.getHours() === 20 && lastTime.getMinutes() > 0)
+            ) {
+                const nextDay = new Date(date);
+                nextDay.setDate(nextDay.getDate() + 1);
+                return { time: '14:00', date: nextDay };
             }
 
             const hours = String(lastTime.getHours()).padStart(2, '0');
             const minutes = String(lastTime.getMinutes()).padStart(2, '0');
 
-            return `${hours}:${minutes}`;
+            return { time: `${hours}:${minutes}`, date };
         },
         [getLessonsForDate],
     );

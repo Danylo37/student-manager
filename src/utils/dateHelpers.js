@@ -59,22 +59,6 @@ export function formatTime(datetime) {
 }
 
 /**
- * Create full datetime ISO string for database
- * @param {Date} date - Date object
- * @param {string} time - Time string in "14:00" format
- * @returns {string} - ISO string "2026-01-20T14:00:00.000Z"
- */
-export function createDateTime(date, time) {
-    const [hours, minutes] = time.split(':');
-    const datetime = new Date(date);
-    datetime.setHours(parseInt(hours, 10));
-    datetime.setMinutes(parseInt(minutes, 10));
-    datetime.setSeconds(0);
-    datetime.setMilliseconds(0);
-    return datetime.toISOString();
-}
-
-/**
  * Check if two dates are the same day (ignoring time)
  * @param {Date|string} date1 - First date
  * @param {Date|string} date2 - Second date

@@ -25,10 +25,11 @@ function AddLessonModal() {
     useEffect(() => {
         if (isOpen) {
             const today = new Date();
-            setDate(today);
+            const { time: suggestedTime, date: suggestedDate } = getNextTimeSlot(today);
+
+            setDate(suggestedDate);
 
             // Set suggested time
-            const suggestedTime = getNextTimeSlot(today);
             const [hours, minutes] = suggestedTime.split(':');
             const timeDate = new Date();
             timeDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
@@ -40,7 +41,7 @@ function AddLessonModal() {
     const handleDateChange = (newDate) => {
         setDate(newDate);
         if (newDate) {
-            const suggestedTime = getNextTimeSlot(newDate);
+            const { time: suggestedTime } = getNextTimeSlot(newDate);
             const [hours, minutes] = suggestedTime.split(':');
             const timeDate = new Date();
             timeDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
