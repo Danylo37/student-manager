@@ -68,10 +68,7 @@ function updateStudentBalance(studentId, amount) {
     const stmt = db.prepare('UPDATE students SET balance = balance + ? WHERE id = ?');
     stmt.run(amount, studentId);
 
-    if (amount > 0) {
-        // TODO: add check schedule count
-        autoCreateLessons(studentId);
-    }
+    if (amount > 0) autoCreateLessons(studentId);
 }
 
 function deleteStudent(studentId) {
