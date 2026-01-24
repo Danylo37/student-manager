@@ -21,14 +21,14 @@ function StudentsListModal() {
     const filteredStudents = searchStudents(searchQuery);
 
     const handleDelete = async (studentId, studentName) => {
-        if (!confirm(`Видалити студента "${studentName}"? Всі його уроки також будуть видалені.`)) {
+        if (!confirm(`Видалити учня "${studentName}"? Всі його уроки також будуть видалені.`)) {
             return;
         }
 
         try {
             await deleteStudent(studentId);
         } catch (err) {
-            alert('Помилка при видаленні студента');
+            alert('Помилка при видаленні учня');
             console.error(err);
         }
     };
@@ -62,7 +62,7 @@ function StudentsListModal() {
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={handleClose} title="Список студентів" size="lg">
+        <Modal isOpen={isOpen} onClose={handleClose} title="Список учнів" size="lg">
             <div className="space-y-4">
                 {/* Search */}
                 <div>
@@ -70,7 +70,7 @@ function StudentsListModal() {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Пошук студента..."
+                        placeholder="Пошук учня..."
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         autoFocus
                     />
@@ -79,7 +79,7 @@ function StudentsListModal() {
                 {/* Stats */}
                 <div className="bg-blue-50 p-4 rounded-lg">
                     <div className="text-xl font-bold text-blue-700">
-                        Всього студентів: {students.length}
+                        Всього учнів: {students.length}
                     </div>
                 </div>
 
@@ -87,7 +87,7 @@ function StudentsListModal() {
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                     {filteredStudents.length === 0 ? (
                         <div className="text-center text-gray-400 py-8">
-                            {searchQuery ? 'Нічого не знайдено' : 'Немає студентів'}
+                            {searchQuery ? 'Нічого не знайдено' : 'Немає учнів'}
                         </div>
                     ) : (
                         filteredStudents.map((student) => (

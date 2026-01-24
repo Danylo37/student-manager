@@ -52,7 +52,7 @@ function AddLessonModal() {
         e.preventDefault();
 
         if (!studentId) {
-            setError('Оберіть студента');
+            setError('Оберіть учня');
             return;
         }
 
@@ -123,16 +123,14 @@ function AddLessonModal() {
             <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Student select */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Студент *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Учень *</label>
                     <select
                         value={studentId}
                         onChange={(e) => setStudentId(e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         autoFocus
                     >
-                        <option value="">Оберіть студента...</option>
+                        <option value="">Оберіть учня...</option>
                         {students.map((student) => (
                             <option key={student.id} value={student.id}>
                                 {student.name} (Баланс: {student.balance})

@@ -85,7 +85,7 @@ function EditLessonModal() {
             <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Student info (read-only) */}
                 <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-sm text-gray-600">Студент</div>
+                    <div className="text-sm text-gray-600">Учень</div>
                     <div className="text-lg font-bold text-gray-800">
                         {selectedLesson.student_name}
                     </div>

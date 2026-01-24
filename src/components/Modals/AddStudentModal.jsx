@@ -20,7 +20,7 @@ function AddStudentModal() {
         e.preventDefault();
 
         if (!name.trim()) {
-            setError("Введіть ім'я студента");
+            setError("Введіть ім'я учня");
             return;
         }
 
@@ -43,7 +43,7 @@ function AddStudentModal() {
             setBalance(0);
             closeModal('addStudent');
         } catch (err) {
-            setError('Помилка при додаванні студента');
+            setError('Помилка при додаванні учня');
             console.error(err);
         } finally {
             setLoading(false);
@@ -58,19 +58,19 @@ function AddStudentModal() {
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={handleClose} title="Додати студента" size="sm">
+        <Modal isOpen={isOpen} onClose={handleClose} title="Додати учня" size="sm">
             <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Name input */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Ім'я студента *
+                        Ім'я учня *
                     </label>
                     <input
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Маша"
+                        placeholder="Ім'я учня"
                         autoFocus
                     />
                 </div>

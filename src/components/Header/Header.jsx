@@ -44,7 +44,7 @@ function Header() {
                             onClick={() => openModal('addStudent')}
                             className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
                         >
-                            + Додати студента
+                            + Додати учня
                         </button>
 
                         <button
@@ -59,7 +59,7 @@ function Header() {
                             className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors flex items-center gap-2"
                         >
                             <Users size={18} />
-                            Студенти
+                            Учні
                         </button>
 
                         {/* Sync button */}
