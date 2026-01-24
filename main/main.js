@@ -38,6 +38,7 @@ app.whenReady().then(() => {
     try {
         db.initDatabase();
         db.syncCompletedLessons();
+        db.autoCreateLessonsForAllStudents();
     } catch (error) {
         console.error('Database initialization failed:', error);
         const { dialog } = require('electron');

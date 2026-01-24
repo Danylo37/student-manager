@@ -99,7 +99,9 @@ function ScheduleModal() {
                 alert(`Створено ${created} уроків на основі розкладу`);
                 handleClose();
             } else {
-                alert('Не вдалося створити уроки. Перевірте баланс учня та розклад.');
+                alert(
+                    'Не вдалося створити уроки. Перевірте розклад або можливо уроки вже існують.',
+                );
             }
         } catch (err) {
             setError('Помилка при створенні уроків');
@@ -230,9 +232,7 @@ function ScheduleModal() {
                     <button
                         onClick={handleAutoCreate}
                         disabled={
-                            autoCreateLoading ||
-                            schedules.filter((s) => s.is_active).length === 0 ||
-                            selectedStudent.balance <= 0
+                            autoCreateLoading || schedules.filter((s) => s.is_active).length === 0
                         }
                         className="w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -243,12 +243,6 @@ function ScheduleModal() {
                             Спочатку додайте дні уроків до розкладу
                         </p>
                     )}
-                    {selectedStudent.balance <= 0 &&
-                        schedules.filter((s) => s.is_active).length > 0 && (
-                            <p className="mt-2 text-sm text-gray-600 text-center">
-                                Недостатньо балансу для створення уроків
-                            </p>
-                        )}
                 </div>
             </div>
         </Modal>

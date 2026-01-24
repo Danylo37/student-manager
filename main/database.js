@@ -67,8 +67,6 @@ function addStudent(name, balance) {
 function updateStudentBalance(studentId, amount) {
     const stmt = db.prepare('UPDATE students SET balance = balance + ? WHERE id = ?');
     stmt.run(amount, studentId);
-
-    if (amount > 0) autoCreateLessons(studentId);
 }
 
 function deleteStudent(studentId) {
@@ -218,56 +216,56 @@ function deleteSchedule(scheduleId) {
 
 // === AUTO CREATE LESSONS ===
 function autoCreateLessons(studentId) {
-    const student = db.prepare('SELECT balance FROM students WHERE id = ?').get(studentId);
-    if (!student || student.balance <= 0) return 0;
-
     const schedules = getSchedules(studentId);
     if (schedules.length === 0) return 0;
 
     let created = 0;
-    let remainingBalance = student.balance;
     const now = new Date();
 
-    // Generate possible lesson dates, but only as many as needed
-    const possibleLessons = [];
-    const maxWeeksToCheck = Math.ceil(remainingBalance / schedules.length) + 2; // +2 for safety buffer
+    // Calculate the start of the current week (Monday)
+    const startOfWeek = new Date(now);
+    const currentDay = startOfWeek.getDay();
+    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1; // Sunday = 0, so 6 days back; otherwise day - 1
+    startOfWeek.setDate(startOfWeek.getDate() - daysFromMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
 
-    for (let week = 0; week < maxWeeksToCheck; week++) {
+    // Calculate the end: current week + 2 full weeks = 3 weeks total
+    const endDate = new Date(startOfWeek);
+    endDate.setDate(endDate.getDate() + 21); // 3 weeks = 21 days
+    endDate.setHours(23, 59, 59, 999);
+
+    // Generate lesson dates for current week + 2 weeks ahead
+    const possibleLessons = [];
+
+    for (let week = 0; week < 3; week++) {
+        // Check 3 weeks: current week + 2 weeks ahead
         for (const schedule of schedules) {
-            const lessonDate = new Date(now);
-            const currentDay = lessonDate.getDay();
+            const lessonDate = new Date(startOfWeek);
             const targetDay = schedule.day_of_week;
 
-            const targetDayJS = targetDay === 6 ? 0 : targetDay + 1;
-
-            let daysToAdd = targetDayJS - currentDay;
-            if (daysToAdd < 0) daysToAdd += 7;
-            daysToAdd += week * 7;
+            // targetDay: 0=Mon, 1=Tue, ..., 6=Sun
+            const daysToAdd = targetDay + week * 7;
 
             lessonDate.setDate(lessonDate.getDate() + daysToAdd);
 
             const [hours, minutes] = schedule.time.split(':');
             lessonDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
-            if (lessonDate <= now) continue;
+            // Only include lessons that are in the future and within the 3-week period
+            if (lessonDate <= now || lessonDate > endDate) continue;
 
             possibleLessons.push({
                 datetime: lessonDate,
                 schedule: schedule,
             });
         }
-
-        // Early exit if we have enough potential slots
-        if (possibleLessons.length >= remainingBalance * 2) break;
     }
 
     // Sort lessons chronologically
     possibleLessons.sort((a, b) => a.datetime - b.datetime);
 
-    // Create lessons in chronological order
+    // Create lessons
     for (const lesson of possibleLessons) {
-        if (remainingBalance <= 0) break;
-
         // Check if lesson already exists at this datetime or if this datetime was a previous datetime
         const existing = db
             .prepare(
@@ -279,7 +277,6 @@ function autoCreateLessons(studentId) {
             .get(studentId, lesson.datetime.toISOString(), lesson.datetime.toISOString());
 
         if (existing) {
-            remainingBalance--;
             continue;
         }
 
@@ -290,11 +287,22 @@ function autoCreateLessons(studentId) {
             `,
         ).run(studentId, lesson.datetime.toISOString());
 
-        remainingBalance--;
         created++;
     }
 
     return created;
+}
+
+function autoCreateLessonsForAllStudents() {
+    const students = db.prepare('SELECT id FROM students').all();
+    let totalCreated = 0;
+
+    for (const student of students) {
+        const created = autoCreateLessons(student.id);
+        totalCreated += created;
+    }
+
+    return totalCreated;
 }
 
 module.exports = {
@@ -312,4 +320,5 @@ module.exports = {
     addSchedule,
     deleteSchedule,
     autoCreateLessons,
+    autoCreateLessonsForAllStudents,
 };
