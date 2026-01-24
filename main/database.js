@@ -69,6 +69,7 @@ function updateStudentBalance(studentId, amount) {
     stmt.run(amount, studentId);
 
     if (amount > 0) {
+        // TODO: add check schedule count
         autoCreateLessons(studentId);
     }
 }
@@ -208,20 +209,14 @@ function autoCreateLessons(studentId) {
 
     let created = 0;
     let remainingBalance = student.balance;
-    const weeksAhead = 12;
     const now = new Date();
 
-    schedules.sort((a, b) => {
-        if (a.day_of_week !== b.day_of_week) {
-            return a.day_of_week - b.day_of_week;
-        }
-        return a.time.localeCompare(b.time);
-    });
+    // Generate possible lesson dates, but only as many as needed
+    const possibleLessons = [];
+    const maxWeeksToCheck = Math.ceil(remainingBalance / schedules.length) + 2; // +2 for safety buffer
 
-    for (let week = 0; week < weeksAhead && remainingBalance > 0; week++) {
+    for (let week = 0; week < maxWeeksToCheck; week++) {
         for (const schedule of schedules) {
-            if (remainingBalance <= 0) break;
-
             const lessonDate = new Date(now);
             const currentDay = lessonDate.getDay();
             const targetDay = schedule.day_of_week;
@@ -239,31 +234,47 @@ function autoCreateLessons(studentId) {
 
             if (lessonDate <= now) continue;
 
-            // Check if lesson already exists at this datetime or if this datetime was a previous datetime
-            const existing = db
-                .prepare(
-                    `
-                        SELECT id FROM lessons
-                        WHERE student_id = ? AND (datetime = ? OR previous_datetime = ?)
-                    `,
-                )
-                .get(studentId, lessonDate.toISOString(), lessonDate.toISOString());
-
-            if (existing) {
-                remainingBalance--;
-                continue;
-            }
-
-            db.prepare(
-                `
-                    INSERT INTO lessons (student_id, datetime, is_paid, is_completed)
-                    VALUES (?, ?, 1, 0)
-                `,
-            ).run(studentId, lessonDate.toISOString());
-
-            remainingBalance--;
-            created++;
+            possibleLessons.push({
+                datetime: lessonDate,
+                schedule: schedule,
+            });
         }
+
+        // Early exit if we have enough potential slots
+        if (possibleLessons.length >= remainingBalance * 2) break;
+    }
+
+    // Sort lessons chronologically
+    possibleLessons.sort((a, b) => a.datetime - b.datetime);
+
+    // Create lessons in chronological order
+    for (const lesson of possibleLessons) {
+        if (remainingBalance <= 0) break;
+
+        // Check if lesson already exists at this datetime or if this datetime was a previous datetime
+        const existing = db
+            .prepare(
+                `
+                    SELECT id FROM lessons
+                    WHERE student_id = ? AND (datetime = ? OR previous_datetime = ?)
+                `,
+            )
+            .get(studentId, lesson.datetime.toISOString(), lesson.datetime.toISOString());
+
+        if (existing) {
+            remainingBalance--;
+            continue;
+        }
+
+        db.prepare(
+            `
+                INSERT INTO lessons (student_id, datetime, is_paid, is_completed)
+                VALUES (?, ?, 1, 0)
+            `,
+        ).run(studentId, lesson.datetime.toISOString());
+
+        remainingBalance--;
+        created++;
     }
 
     return created;
