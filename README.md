@@ -87,7 +87,7 @@
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/Danylo37/student-manager
 cd student-manager
 
 # Install dependencies
