@@ -17,21 +17,24 @@
 ### Calendar
 ![Calendar](attachments/1_calendar.png)
 
+### Calendar (Purple Theme)
+![Purple theme](attachments/2_calendar_purple_theme.png)
+
 ### Calendar with Lessons
-![Calendar with lessons - view 1](attachments/2_calendar_with_lessons_1.png)
-![Calendar with lessons - view 2](attachments/3_calendar_with_lessons_2.png)
+![Calendar with lessons - view 1](attachments/3_calendar_with_lessons_1.png)
+![Calendar with lessons - view 2](attachments/4_calendar_with_lessons_2.png)
 
 ### Add Student
-![Add student](attachments/4_add_student.png)
+![Add student](attachments/5_add_student.png)
 
 ### Add Lesson
-![Add lesson](attachments/5_add_lesson.png)
+![Add lesson](attachments/6_add_lesson.png)
 
 ### Student List
-![Student list](attachments/6_student_list.png)
+![Student list](attachments/7_student_list.png)
 
 ### Schedule
-![Schedule](attachments/7_schedule.png)
+![Schedule](attachments/8_schedule.png)
 
 ---
 
@@ -56,6 +59,11 @@
 - Balance synchronization when marking lessons as completed
 - Automatic detection of overdue lessons
 - Secure local data storage using SQLite database
+
+✅ **Visual Customization**
+- Beautiful purple theme for a modern and pleasant interface
+- Elegant color scheme that reduces eye strain
+- Intuitive visual design for better user experience
 
 ---
 
