@@ -23,7 +23,8 @@ function initDatabase() {
         if (process.env.NODE_ENV === 'development') {
             schemaPath = path.join(__dirname, 'db', 'schema.sql');
         } else {
-            schemaPath = path.join(__dirname, 'db', 'schema.sql');
+            // In production, schema.sql is in extraResources
+            schemaPath = path.join(process.resourcesPath, 'main', 'db', 'schema.sql');
         }
 
         console.log('Schema path:', schemaPath);
