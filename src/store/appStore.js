@@ -43,6 +43,9 @@ const useAppStore = create((set, get) => ({
     // Pre-filled date/time for add lesson modal
     prefilledLessonDateTime: null,
 
+    // Theme
+    theme: localStorage.getItem('theme') || 'default',
+
     // ========== ACTIONS ==========
 
     /**
