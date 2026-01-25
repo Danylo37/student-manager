@@ -85,7 +85,7 @@ function StudentsListModal() {
                 </div>
 
                 {/* Students list */}
-                <div className="space-y-2 max-h-96 overflow-y-auto">
+                <div className="space-y-2 overflow-y-auto p-1">
                     {filteredStudents.length === 0 ? (
                         <div className="text-center text-gray-400 py-8">
                             {searchQuery ? 'Нічого не знайдено' : 'Немає учнів'}
