@@ -98,7 +98,9 @@ function DayColumn({ date, timeSlots }) {
                     return (
                         <div
                             key={hour}
-                            className="h-20 border-b border-gray-200 relative p-2 cursor-pointer hover:bg-blue-50 transition-colors"
+                            className={`h-20 border-b border-gray-200 relative p-2 cursor-pointer transition-colors ${
+                                hourLessons.length === 0 ? 'hover:bg-blue-50' : ''
+                            }`}
                             onClick={() => handleTimeSlotClick(hour)}
                         >
                             {/* Lessons in this hour */}
