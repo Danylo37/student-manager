@@ -373,6 +373,16 @@ const useAppStore = create((set, get) => ({
         await get().syncLessons();
         await Promise.all([get().loadStudents(), get().loadLessons()]);
     },
+
+    /**
+     * Toggle theme between default and purple
+     */
+    toggleTheme: () => {
+        const { theme } = get();
+        const newTheme = theme === 'default' ? 'purple' : 'default';
+        localStorage.setItem('theme', newTheme);
+        set({ theme: newTheme });
+    },
 }));
 
 export default useAppStore;

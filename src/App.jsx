@@ -16,6 +16,7 @@ function App() {
     const initialize = useAppStore((state) => state.initialize);
     const studentsError = useAppStore((state) => state.studentsError);
     const lessonsError = useAppStore((state) => state.lessonsError);
+    const theme = useAppStore((state) => state.theme);
 
     // Auto-sync completed lessons
     useBalanceSync();
@@ -26,7 +27,7 @@ function App() {
     }, [initialize]);
 
     return (
-        <div className="flex flex-col h-screen bg-gray-50">
+        <div className="flex flex-col h-screen bg-gray-50" data-theme={theme}>
             {/* Header with actions and navigation */}
             <Header />
 

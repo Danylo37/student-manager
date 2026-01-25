@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, Users } from 'lucide-react';
+import { RefreshCw, Users, Palette } from 'lucide-react';
 import { formatDateWithMonth } from '../../utils/dateHelpers';
 import useLessons from '../../hooks/useLessons';
 import useAppStore from '../../store/appStore';
@@ -13,6 +13,8 @@ function Header() {
     const syncLessons = useAppStore((state) => state.syncLessons);
     const loadStudents = useAppStore((state) => state.loadStudents);
     const loadLessons = useAppStore((state) => state.loadLessons);
+    const theme = useAppStore((state) => state.theme);
+    const toggleTheme = useAppStore((state) => state.toggleTheme);
 
     const [syncing, setSyncing] = useState(false);
 
@@ -66,10 +68,31 @@ function Header() {
                         <button
                             onClick={handleSync}
                             disabled={syncing}
-                            className="p-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg transition-colors disabled:opacity-50"
+                            className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
+                                theme === 'purple'
+                                    ? 'bg-purple-100 hover:bg-purple-200 text-purple-700'
+                                    : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+                            }`}
                             title="Синхронізувати уроки"
                         >
                             <RefreshCw size={20} className={syncing ? 'animate-spin' : ''} />
+                        </button>
+
+                        {/* Theme toggle button */}
+                        <button
+                            onClick={toggleTheme}
+                            className={`p-2 rounded-lg transition-colors ${
+                                theme === 'purple'
+                                    ? 'bg-purple-100 hover:bg-purple-200 text-purple-700'
+                                    : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+                            }`}
+                            title={
+                                theme === 'purple'
+                                    ? 'Перемкнути на стандартну тему'
+                                    : 'Перемкнути на фіолетову тему'
+                            }
+                        >
+                            <Palette size={20} />
                         </button>
                     </div>
 
