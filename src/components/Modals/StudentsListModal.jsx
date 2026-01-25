@@ -107,7 +107,7 @@ function StudentsListModal() {
                                                 Баланс:{' '}
                                                 <span
                                                     className={`font-bold ${
-                                                        student.balance < 0
+                                                        student.balance <= 0
                                                             ? 'text-red-600'
                                                             : student.balance < 3
                                                               ? 'text-yellow-600'

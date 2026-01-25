@@ -64,9 +64,33 @@ function addStudent(name, balance) {
     return { id: result.lastInsertRowid, name, balance: balance };
 }
 
+function getUnpaidCompletedLessons(studentId) {
+    const stmt = db.prepare(`
+        SELECT id
+        FROM lessons
+        WHERE student_id = ?
+          AND is_completed = 1
+          AND is_paid = 0
+        ORDER BY datetime ASC
+    `);
+    return stmt.all(studentId);
+}
+
 function updateStudentBalance(studentId, amount) {
     const stmt = db.prepare('UPDATE students SET balance = balance + ? WHERE id = ?');
     stmt.run(amount, studentId);
+
+    // If adding positive balance, mark the oldest unpaid completed lessons as paid
+    if (amount > 0) {
+        const unpaidLessons = getUnpaidCompletedLessons(studentId);
+        const lessonsToMark = unpaidLessons.slice(0, amount);
+
+        const markAsPaidStmt = db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?');
+
+        for (const lesson of lessonsToMark) {
+            markAsPaidStmt.run(lesson.id);
+        }
+    }
 }
 
 function deleteStudent(studentId) {

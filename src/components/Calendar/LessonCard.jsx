@@ -31,7 +31,7 @@ function LessonCard({ lesson }) {
                 ${bgColor} 
                 ${borderColor}
                 border-2
-                p-3
+                p-2
                 rounded-2xl
                 mb-2 
                 cursor-pointer 
