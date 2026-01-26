@@ -104,6 +104,12 @@ const useAppStore = create((set, get) => ({
     updateBalance: async (studentId, amount) => {
         try {
             await window.electron.updateBalance(studentId, amount);
+
+            // If adding positive balance, mark the oldest unpaid completed lessons as paid
+            if (amount > 0) {
+                await window.electron.markUnpaidLessonsPaid(studentId, amount);
+            }
+
             // Reload students and lessons (auto-create will happen)
             await get().loadStudents();
             await get().loadLessons();

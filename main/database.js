@@ -77,21 +77,22 @@ function getUnpaidCompletedLessons(studentId) {
     return stmt.all(studentId);
 }
 
+function markOldestUnpaidLessonsAsPaid(studentId, count) {
+    if (count <= 0) return;
+
+    const unpaidLessons = getUnpaidCompletedLessons(studentId);
+    const lessonsToMark = unpaidLessons.slice(0, count);
+
+    const markAsPaidStmt = db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?');
+
+    for (const lesson of lessonsToMark) {
+        markAsPaidStmt.run(lesson.id);
+    }
+}
+
 function updateStudentBalance(studentId, amount) {
     const stmt = db.prepare('UPDATE students SET balance = balance + ? WHERE id = ?');
     stmt.run(amount, studentId);
-
-    // If adding positive balance, mark the oldest unpaid completed lessons as paid
-    if (amount > 0) {
-        const unpaidLessons = getUnpaidCompletedLessons(studentId);
-        const lessonsToMark = unpaidLessons.slice(0, amount);
-
-        const markAsPaidStmt = db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?');
-
-        for (const lesson of lessonsToMark) {
-            markAsPaidStmt.run(lesson.id);
-        }
-    }
 }
 
 function deleteStudent(studentId) {
@@ -343,6 +344,7 @@ module.exports = {
     getStudents,
     addStudent,
     updateStudentBalance,
+    markOldestUnpaidLessonsAsPaid,
     deleteStudent,
     getLessons,
     addLesson,

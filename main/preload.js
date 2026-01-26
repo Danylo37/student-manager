@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electron', {
     addStudent: (name, balance) => ipcRenderer.invoke('db:add-student', name, balance),
     updateBalance: (studentId, amount) =>
         ipcRenderer.invoke('db:update-balance', studentId, amount),
+    markUnpaidLessonsPaid: (studentId, count) =>
+        ipcRenderer.invoke('db:mark-unpaid-lessons-paid', studentId, count),
     deleteStudent: (studentId) => ipcRenderer.invoke('db:delete-student', studentId),
 
     // Lessons

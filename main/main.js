@@ -74,6 +74,9 @@ function registerIpcHandlers() {
     ipcMain.handle('db:update-balance', (_, studentId, amount) =>
         db.updateStudentBalance(studentId, amount),
     );
+    ipcMain.handle('db:mark-unpaid-lessons-paid', (_, studentId, count) =>
+        db.markOldestUnpaidLessonsAsPaid(studentId, count),
+    );
     ipcMain.handle('db:delete-student', (_, studentId) => db.deleteStudent(studentId));
 
     // Lessons
