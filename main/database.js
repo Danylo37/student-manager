@@ -128,8 +128,15 @@ function addLesson(studentId, datetime, isPaid, isCompleted) {
 }
 
 function updateLesson(lessonId, updates) {
-    const currentLesson = db
-        .prepare('SELECT datetime, student_id FROM lessons WHERE id = ?')
+    const current = db
+        .prepare(
+            `
+            SELECT l.datetime, l.student_id, l.is_completed, l.is_paid, s.balance
+            FROM lessons l
+            JOIN students s ON l.student_id = s.id
+            WHERE l.id = ?
+        `,
+        )
         .get(lessonId);
     const fields = [];
     const values = [];
@@ -143,17 +150,19 @@ function updateLesson(lessonId, updates) {
         fields.push('is_paid = ?');
         values.push(updates.is_paid ? 1 : 0);
 
-        if (updates.is_paid) {
-            updateStudentBalance(currentLesson.student_id, -1);
+        const completedButNoBalance = current && current.balance <= 0 && updates.is_completed;
+
+        if (updates.is_paid || completedButNoBalance) {
+            updateStudentBalance(current.student_id, -1);
         } else {
-            updateStudentBalance(currentLesson.student_id, 1);
+            updateStudentBalance(current.student_id, 1);
         }
     }
 
     if (updates.datetime !== undefined) {
         // Store old datetime as previous_datetime
         fields.push('previous_datetime = ?');
-        values.push(currentLesson.datetime);
+        values.push(current.datetime);
 
         fields.push('datetime = ?');
         values.push(updates.datetime);
