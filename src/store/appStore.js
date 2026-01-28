@@ -231,10 +231,8 @@ const useAppStore = create((set, get) => ({
     addSchedule: async (studentId, dayOfWeek, time) => {
         try {
             await window.electron.addSchedule(studentId, dayOfWeek, time);
-            // Reload schedules and lessons
+            // Reload schedules
             await get().loadSchedules(studentId);
-            await get().loadLessons();
-            await get().loadStudents();
         } catch (error) {
             console.error('Failed to add schedule:', error);
             throw error;
