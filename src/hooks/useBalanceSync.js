@@ -1,34 +1,48 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import useAppStore from '../store/appStore';
 
 /**
- * Hook for automatic lesson synchronization
- * Syncs completed lessons on mount and periodically
+ * Backup sync mechanism
+ * Only runs when app starts or user returns
+ * Main sync is now handled by useLessonTimers
  */
 function useBalanceSync() {
     const syncLessons = useAppStore((state) => state.syncLessons);
     const loadStudents = useAppStore((state) => state.loadStudents);
     const loadLessons = useAppStore((state) => state.loadLessons);
 
-    useEffect(() => {
-        // Sync immediately on mount
-        const performSync = async () => {
-            try {
-                await syncLessons();
-                // Reload data after sync
-                await loadStudents();
-                await loadLessons();
-            } catch (error) {
-                console.error('Balance sync failed:', error);
-            }
-        };
+    const lastSyncTime = useRef(0);
 
+    const performSync = async () => {
+        try {
+            const now = Date.now();
+            if (now - lastSyncTime.current < 60 * 1000) {
+                return;
+            }
+
+            lastSyncTime.current = now;
+
+            await syncLessons();
+            await loadStudents();
+            await loadLessons();
+        } catch (error) {
+            console.error('Sync error:', error);
+        }
+    };
+
+    useEffect(() => {
+        // On app start
         performSync();
 
-        // Sync every 5 minutes
-        const interval = setInterval(performSync, 5 * 60 * 1000);
+        // When user returns to the app
+        const handleFocus = () => {
+            performSync();
+        };
+        window.addEventListener('focus', handleFocus);
 
-        return () => clearInterval(interval);
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+        };
     }, [syncLessons, loadStudents, loadLessons]);
 }
 

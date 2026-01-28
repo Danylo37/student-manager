@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import useAppStore from './store/appStore';
 import useBalanceSync from './hooks/useBalanceSync';
+import useLessonTimers from './hooks/useLessonTimers';
 import Header from './components/Header/Header';
 import WeekView from './components/Calendar/WeekView';
 import AddStudentModal from './components/Modals/AddStudentModal';
@@ -18,8 +19,11 @@ function App() {
     const lessonsError = useAppStore((state) => state.lessonsError);
     const theme = useAppStore((state) => state.theme);
 
-    // Auto-sync completed lessons
+    // Backup sync (in case the app was closed)
     useBalanceSync();
+
+    // Reactive timers for each lesson
+    useLessonTimers();
 
     // Initialize app on mount
     useEffect(() => {
