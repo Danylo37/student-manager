@@ -310,16 +310,16 @@ function autoCreateLessons(studentId) {
     startOfWeek.setDate(startOfWeek.getDate() - daysFromMonday);
     startOfWeek.setHours(0, 0, 0, 0);
 
-    // Calculate the end: current week + 2 full weeks = 3 weeks total
+    // Calculate the end: current week + 1 full week = 2 weeks total
     const endDate = new Date(startOfWeek);
-    endDate.setDate(endDate.getDate() + 21); // 3 weeks = 21 days
+    endDate.setDate(endDate.getDate() + 14); // 2 weeks = 14 days
     endDate.setHours(23, 59, 59, 999);
 
-    // Generate lesson dates for current week + 2 weeks ahead
+    // Generate lesson dates for current week + 1 week ahead
     const possibleLessons = [];
 
-    for (let week = 0; week < 3; week++) {
-        // Check 3 weeks: current week + 2 weeks ahead
+    for (let week = 0; week < 2; week++) {
+        // Check 2 weeks: current week + 1 week ahead
         for (const schedule of schedules) {
             const lessonDate = new Date(startOfWeek);
             const targetDay = schedule.day_of_week;
