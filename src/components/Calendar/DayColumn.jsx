@@ -44,6 +44,9 @@ function DayColumn({ date, timeSlots }) {
      * Handle click on time slot
      */
     const handleTimeSlotClick = (hour) => {
+        // Make 21:00 slot non-clickable
+        if (hour === 21) return;
+
         const datetime = new Date(date);
         datetime.setHours(hour, 0, 0, 0);
         openAddLessonModal(datetime);
@@ -94,12 +97,15 @@ function DayColumn({ date, timeSlots }) {
             <div className="flex-1 relative">
                 {timeSlots.map((hour) => {
                     const hourLessons = getLessonsForHour(hour);
+                    const isNonClickable = hour === 21;
 
                     return (
                         <div
                             key={hour}
-                            className={`h-20 border-b border-gray-200 relative p-2 cursor-pointer transition-colors ${
-                                hourLessons.length === 0 ? 'hover:bg-blue-50' : ''
+                            className={`h-20 border-b border-gray-200 relative p-2 transition-colors ${
+                                isNonClickable
+                                    ? 'cursor-not-allowed'
+                                    : `cursor-pointer ${hourLessons.length === 0 ? 'hover:bg-blue-50' : ''}`
                             }`}
                             onClick={() => handleTimeSlotClick(hour)}
                         >
