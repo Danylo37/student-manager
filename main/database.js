@@ -221,6 +221,7 @@ function syncCompletedLessons() {
         } else {
             // Student has no balance - mark only as completed, do NOT deduct
             updateCompletedStmt.run(id);
+            updateStudentBalance(student_id, -1);
         }
     }
 
