@@ -274,13 +274,31 @@ function syncCompletedLessons() {
 function getSchedules(studentId) {
     const stmt = db.prepare(`
         SELECT * FROM schedules
-        WHERE student_id = ? AND is_active = 1
-        ORDER BY day_of_week, time
+        WHERE student_id = ?
+        ORDER BY is_active DESC, day_of_week, time
     `);
     return stmt.all(studentId);
 }
 
 function addSchedule(studentId, dayOfWeek, time) {
+    // Check if schedule with same day and time already exists (active or inactive)
+    const existingStmt = db.prepare(`
+        SELECT id, is_active FROM schedules
+        WHERE student_id = ? AND day_of_week = ? AND time = ?
+    `);
+    const existing = existingStmt.get(studentId, dayOfWeek, time);
+
+    if (existing) {
+        // If inactive schedule exists, reactivate it
+        if (!existing.is_active) {
+            const reactivateStmt = db.prepare('UPDATE schedules SET is_active = 1 WHERE id = ?');
+            reactivateStmt.run(existing.id);
+            return { id: existing.id };
+        }
+        // If active schedule exists, throw error
+        throw new Error('Schedule with same day and time already exists');
+    }
+
     const stmt = db.prepare(`
         INSERT INTO schedules (student_id, day_of_week, time, is_active)
         VALUES (?, ?, ?, 1)
@@ -291,7 +309,12 @@ function addSchedule(studentId, dayOfWeek, time) {
 }
 
 function deleteSchedule(scheduleId) {
-    const stmt = db.prepare('UPDATE schedules SET is_active = 0 WHERE id = ?');
+    const stmt = db.prepare('DELETE FROM schedules WHERE id = ?');
+    stmt.run(scheduleId);
+}
+
+function toggleScheduleActive(scheduleId) {
+    const stmt = db.prepare('UPDATE schedules SET is_active = NOT is_active WHERE id = ?');
     stmt.run(scheduleId);
 }
 
@@ -299,6 +322,10 @@ function deleteSchedule(scheduleId) {
 function autoCreateLessons(studentId) {
     const schedules = getSchedules(studentId);
     if (schedules.length === 0) return 0;
+
+    // Filter only active schedules
+    const activeSchedules = schedules.filter((s) => s.is_active);
+    if (activeSchedules.length === 0) return 0;
 
     let created = 0;
     const now = new Date();
@@ -320,7 +347,7 @@ function autoCreateLessons(studentId) {
 
     for (let week = 0; week < 2; week++) {
         // Check 2 weeks: current week + 1 week ahead
-        for (const schedule of schedules) {
+        for (const schedule of activeSchedules) {
             const lessonDate = new Date(startOfWeek);
             const targetDay = schedule.day_of_week;
 
@@ -401,6 +428,7 @@ module.exports = {
     getSchedules,
     addSchedule,
     deleteSchedule,
+    toggleScheduleActive,
     autoCreateLessons,
     autoCreateLessonsForAllStudents,
 };

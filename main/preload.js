@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('electron', {
     addSchedule: (studentId, dayOfWeek, time) =>
         ipcRenderer.invoke('db:add-schedule', studentId, dayOfWeek, time),
     deleteSchedule: (scheduleId) => ipcRenderer.invoke('db:delete-schedule', scheduleId),
+    toggleScheduleActive: (scheduleId) =>
+        ipcRenderer.invoke('db:toggle-schedule-active', scheduleId),
     autoCreateLessons: (studentId) => ipcRenderer.invoke('db:auto-create-lessons', studentId),
 
     // Sync

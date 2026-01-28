@@ -93,6 +93,9 @@ function registerIpcHandlers() {
         db.addSchedule(studentId, dayOfWeek, time),
     );
     ipcMain.handle('db:delete-schedule', (_, scheduleId) => db.deleteSchedule(scheduleId));
+    ipcMain.handle('db:toggle-schedule-active', (_, scheduleId) =>
+        db.toggleScheduleActive(scheduleId),
+    );
     ipcMain.handle('db:auto-create-lessons', (_, studentId) => db.autoCreateLessons(studentId));
 
     // Sync

@@ -258,6 +258,24 @@ const useAppStore = create((set, get) => ({
     },
 
     /**
+     * Toggle schedule active status
+     * @param {number} scheduleId - Schedule ID
+     */
+    toggleScheduleActive: async (scheduleId) => {
+        try {
+            const studentId = get().selectedStudentForSchedule?.id;
+            await window.electron.toggleScheduleActive(scheduleId);
+            // Reload schedules
+            if (studentId) {
+                await get().loadSchedules(studentId);
+            }
+        } catch (error) {
+            console.error('Failed to toggle schedule:', error);
+            throw error;
+        }
+    },
+
+    /**
      * Auto-create lessons for a student based on their schedule
      * @param {number} studentId - Student ID
      */

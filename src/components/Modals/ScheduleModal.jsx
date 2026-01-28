@@ -23,6 +23,7 @@ function ScheduleModal() {
     const loadSchedules = useAppStore((state) => state.loadSchedules);
     const addSchedule = useAppStore((state) => state.addSchedule);
     const deleteSchedule = useAppStore((state) => state.deleteSchedule);
+    const toggleScheduleActive = useAppStore((state) => state.toggleScheduleActive);
     const autoCreateLessons = useAppStore((state) => state.autoCreateLessons);
     const schedules = useAppStore((state) => state.schedules);
 
@@ -73,7 +74,11 @@ function ScheduleModal() {
             setTime(defaultTime);
             setDayOfWeek(0);
         } catch (err) {
-            setError('Помилка при додаванні розкладу');
+            if (err.message && err.message.includes('already exists')) {
+                setError('Розклад на цей день і час вже існує');
+            } else {
+                setError('Помилка при додаванні розкладу');
+            }
             console.error(err);
         } finally {
             setLoading(false);
@@ -85,6 +90,15 @@ function ScheduleModal() {
             await deleteSchedule(scheduleId);
         } catch (err) {
             alert('Помилка при видаленні розкладу');
+            console.error(err);
+        }
+    };
+
+    const handleToggle = async (scheduleId) => {
+        try {
+            await toggleScheduleActive(scheduleId);
+        } catch (err) {
+            alert('Помилка при зміні статусу розкладу');
             console.error(err);
         }
     };
@@ -122,13 +136,23 @@ function ScheduleModal() {
 
     if (!selectedStudent) return null;
 
-    // Group schedules by day
-    const schedulesByDay = DAYS_OF_WEEK.map((day) => ({
+    // Group active schedules by day
+    const activeSchedulesByDay = DAYS_OF_WEEK.map((day) => ({
         ...day,
         times: schedules
             .filter((s) => s.day_of_week === day.value && s.is_active)
             .sort((a, b) => a.time.localeCompare(b.time)),
     }));
+
+    // Group inactive schedules by day
+    const inactiveSchedulesByDay = DAYS_OF_WEEK.map((day) => ({
+        ...day,
+        times: schedules
+            .filter((s) => s.day_of_week === day.value && !s.is_active)
+            .sort((a, b) => a.time.localeCompare(b.time)),
+    }));
+
+    const hasInactiveSchedules = schedules.some((s) => !s.is_active);
 
     return (
         <Modal
@@ -179,7 +203,7 @@ function ScheduleModal() {
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {schedulesByDay.map(
+                            {activeSchedulesByDay.map(
                                 (day) =>
                                     day.times.length > 0 && (
                                         <div
@@ -200,10 +224,19 @@ function ScheduleModal() {
                                                         </span>
                                                         <button
                                                             onClick={() =>
+                                                                handleToggle(schedule.id)
+                                                            }
+                                                            className="text-orange-500 hover:text-orange-700 font-bold text-lg"
+                                                            title="Призупинити"
+                                                        >
+                                                            ⏸
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
                                                                 handleDelete(schedule.id)
                                                             }
-                                                            className="text-red-500 hover:text-red-700 font-bold"
-                                                            title="Видалити"
+                                                            className="text-red-500 hover:text-red-700 font-bold text-lg"
+                                                            title="Видалити назавжди"
                                                         >
                                                             ×
                                                         </button>
@@ -216,6 +249,58 @@ function ScheduleModal() {
                         </div>
                     )}
                 </div>
+
+                {/* Inactive schedules */}
+                {hasInactiveSchedules && (
+                    <div>
+                        <h3 className="font-bold text-gray-600 mb-3">Неактивні розклади</h3>
+                        <div className="space-y-3">
+                            {inactiveSchedulesByDay.map(
+                                (day) =>
+                                    day.times.length > 0 && (
+                                        <div
+                                            key={day.value}
+                                            className="border border-gray-200 rounded-lg p-4 bg-gray-50"
+                                        >
+                                            <div className="font-bold text-gray-500 mb-2">
+                                                {day.label}
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {day.times.map((schedule) => (
+                                                    <div
+                                                        key={schedule.id}
+                                                        className="flex items-center gap-2 bg-gray-200 text-gray-600 px-3 py-2 rounded-lg"
+                                                    >
+                                                        <span className="font-mono font-bold">
+                                                            {schedule.time}
+                                                        </span>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleToggle(schedule.id)
+                                                            }
+                                                            className="text-green-600 hover:text-green-800 font-bold text-lg"
+                                                            title="Відновити"
+                                                        >
+                                                            ▶
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleDelete(schedule.id)
+                                                            }
+                                                            className="text-red-500 hover:text-red-700 font-bold text-lg"
+                                                            title="Видалити назавжди"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ),
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Summary */}
                 {schedules.filter((s) => s.is_active).length > 0 && (
