@@ -1,3 +1,5 @@
+import { LESSON_DURATION_MINUTES } from './constants';
+
 /**
  * Lesson status constants
  */
@@ -93,9 +95,8 @@ export function getStatusEmoji(status) {
 export function shouldBeCompleted(datetime) {
     const now = new Date();
     const lessonDate = new Date(datetime);
-    const lessonDurationMinutes = 50;
 
-    const lessonEndTime = new Date(lessonDate.getTime() + lessonDurationMinutes * 60 * 1000);
+    const lessonEndTime = new Date(lessonDate.getTime() + LESSON_DURATION_MINUTES * 60 * 1000);
     return lessonEndTime < now;
 }
 

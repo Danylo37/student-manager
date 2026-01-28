@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import useAppStore from '../store/appStore';
+import { LESSON_DURATION_MINUTES } from '../utils/constants';
 
 /**
  * Hook that creates timers for each lesson
@@ -37,7 +38,7 @@ function useLessonTimers() {
         }
 
         const lessonStart = new Date(lesson.datetime);
-        const lessonEnd = new Date(lessonStart.getTime() + 50 * 60 * 1000); // +50 minutes
+        const lessonEnd = new Date(lessonStart.getTime() + LESSON_DURATION_MINUTES * 60 * 1000);
         const now = new Date();
 
         // If lesson should have already completed, complete it immediately

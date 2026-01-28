@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
+const { LESSON_DURATION_MINUTES } = require('./constants');
 
 let db = null;
 
@@ -193,8 +194,7 @@ function deleteLesson(lessonId) {
 // === AUTO SYNC ===
 function syncCompletedLessons() {
     const now = new Date();
-    const lessonDurationMinutes = 50;
-    const thresholdTime = new Date(now.getTime() - lessonDurationMinutes * 60 * 1000);
+    const thresholdTime = new Date(now.getTime() - LESSON_DURATION_MINUTES * 60 * 1000);
     const thresholdISO = thresholdTime.toISOString();
 
     const sync = db.transaction(() => {
