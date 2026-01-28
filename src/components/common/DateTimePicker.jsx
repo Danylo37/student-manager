@@ -49,7 +49,7 @@ export function DatePickerInput({ value, onChange, className = '' }) {
  */
 export function TimePickerInput({ value, onChange, className = '' }) {
     // Set min time to 9:00
-    const minTime = setHours(setMinutes(new Date(), 45), 8);
+    const minTime = setHours(setMinutes(new Date(), 55), 8);
     // Set max time to 20:00
     const maxTime = setHours(setMinutes(new Date(), 0), 20);
 
@@ -59,7 +59,7 @@ export function TimePickerInput({ value, onChange, className = '' }) {
             onChange={onChange}
             showTimeSelect
             showTimeSelectOnly
-            timeIntervals={15}
+            timeIntervals={5}
             timeCaption="Час"
             dateFormat="HH:mm"
             locale={uk}
