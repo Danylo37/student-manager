@@ -203,6 +203,7 @@ function syncCompletedLessons() {
             FROM lessons l
             JOIN students s ON l.student_id = s.id
             WHERE l.datetime < ? AND l.is_completed = 0
+            ORDER BY l.datetime ASC
         `);
         const lessons = stmt.all(thresholdISO);
 
@@ -213,16 +214,26 @@ function syncCompletedLessons() {
         const lessonsWithBalance = [];
         const lessonsWithoutBalance = [];
 
+        // Track current balance for each student as we process lessons
+        const studentBalances = {};
         const balanceUpdates = {};
 
         lessons.forEach(({ id, student_id, balance }) => {
-            balanceUpdates[student_id] = (balanceUpdates[student_id] || 0) - 1;
+            // Initialize student balance if not yet tracked
+            if (studentBalances[student_id] === undefined) {
+                studentBalances[student_id] = balance;
+            }
 
-            if (balance > 0) {
+            // Check if student has balance at this moment (after previous lessons)
+            if (studentBalances[student_id] > 0) {
                 lessonsWithBalance.push(id);
+                studentBalances[student_id] -= 1;
             } else {
                 lessonsWithoutBalance.push(id);
             }
+
+            // Track total balance change for this student
+            balanceUpdates[student_id] = (balanceUpdates[student_id] || 0) - 1;
         });
 
         if (lessonsWithBalance.length > 0) {
