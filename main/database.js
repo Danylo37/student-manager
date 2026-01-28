@@ -176,6 +176,32 @@ function updateLesson(lessonId, updates) {
     stmt.run(...values);
 }
 
+function toggleLessonPayment(lessonId) {
+    const lessonData = db
+        .prepare(
+            `
+            SELECT l.id, l.is_completed, l.student_id, s.balance
+            FROM lessons l
+            JOIN students s ON l.student_id = s.id
+            WHERE l.id = ?
+        `,
+        )
+        .get(lessonId);
+
+    if (!lessonData || !lessonData.is_completed) {
+        throw new Error('Lesson not found or not completed');
+    }
+
+    // Update payment status
+    const updateStmt = db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?');
+    updateStmt.run(lessonId);
+
+    // Update balance only when marking as paid and balance < 0
+    if (lessonData.balance < 0) {
+        updateStudentBalance(lessonData.student_id, 1);
+    }
+}
+
 function deleteLesson(lessonId) {
     // Get lesson data before deleting
     const lessonStmt = db.prepare('SELECT * FROM lessons WHERE id = ?');
@@ -423,6 +449,7 @@ module.exports = {
     getLessons,
     addLesson,
     updateLesson,
+    toggleLessonPayment,
     deleteLesson,
     syncCompletedLessons,
     getSchedules,

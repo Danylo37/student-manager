@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electron', {
     getLessons: (startDate, endDate) => ipcRenderer.invoke('db:get-lessons', startDate, endDate),
     addLesson: (data) => ipcRenderer.invoke('db:add-lesson', data),
     updateLesson: (id, updates) => ipcRenderer.invoke('db:update-lesson', id, updates),
+    toggleLessonPayment: (id) => ipcRenderer.invoke('db:toggle-lesson-payment', id),
     deleteLesson: (id) => ipcRenderer.invoke('db:delete-lesson', id),
 
     // Schedules

@@ -173,6 +173,23 @@ const useAppStore = create((set, get) => ({
     },
 
     /**
+     * Toggle lesson payment status
+     * @param {number} lessonId - Lesson ID
+     */
+    toggleLessonPayment: async (lessonId) => {
+        try {
+            await window.electron.toggleLessonPayment(lessonId);
+            // Reload lessons
+            await get().loadLessons();
+            // Reload students (balance might change)
+            await get().loadStudents();
+        } catch (error) {
+            console.error('Failed to toggle payment:', error);
+            throw error;
+        }
+    },
+
+    /**
      * Delete lesson
      * @param {number} lessonId - Lesson ID
      */

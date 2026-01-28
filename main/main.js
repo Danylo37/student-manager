@@ -85,6 +85,7 @@ function registerIpcHandlers() {
         db.addLesson(data.studentId, data.datetime, data.isPaid, data.isCompleted),
     );
     ipcMain.handle('db:update-lesson', (_, id, updates) => db.updateLesson(id, updates));
+    ipcMain.handle('db:toggle-lesson-payment', (_, id) => db.toggleLessonPayment(id));
     ipcMain.handle('db:delete-lesson', (_, id) => db.deleteLesson(id));
 
     // Schedules
