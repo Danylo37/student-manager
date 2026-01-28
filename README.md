@@ -1,5 +1,28 @@
 # Student Manager
 
+## 📑 Table of Contents
+
+- [📖 About the Project](#-about-the-project)
+  - [Key Features](#key-features)
+  - [📸 Screenshots](#-screenshots)
+- [🛠 Technologies](#-technologies)
+- [📦 Installation and Setup](#-installation-and-setup)
+  - [Prerequisites](#prerequisites)
+  - [Installing Dependencies](#installing-dependencies)
+  - [Development Mode](#development-mode)
+- [🏗 Building the Application](#-building-the-application)
+  - [Windows](#windows)
+  - [Linux](#linux)
+  - [Universal Build](#universal-build)
+- [📁 Project Structure](#-project-structure)
+- [💾 Database](#-database)
+  - [Database Schema](#database-schema)
+- [🔧 Available Commands](#-available-commands)
+- [🐛 Debugging and Development](#-debugging-and-development)
+- [👨‍💻 Author](#-author)
+
+---
+
 ## 📖 About the Project
 
 **Student Manager** is a desktop application for managing students and lesson scheduling. Built with Electron + React, it's designed for tutors and teachers who need to:
@@ -182,10 +205,30 @@ npm run package
 
 ```
 student-manager/
+├── .git/                       # Git repository
+├── .gitignore                  # Git ignore rules
+├── .prettierrc                 # Prettier configuration
+├── README.md                   # Project documentation
+│
+├── attachments/                # Screenshots for README
+│   ├── 1_calendar.png
+│   ├── 2_calendar_purple_theme.png
+│   ├── 3_calendar_with_lessons_1.png
+│   ├── 4_calendar_with_lessons_2.png
+│   ├── 5_add_student.png
+│   ├── 6_add_lesson.png
+│   ├── 7_student_list.png
+│   └── 8_schedule.png
+│
+├── build/                      # Build resources
+│   ├── icon.ico                # Icon for Windows
+│   └── icon.png                # Icon for Linux
+│
 ├── main/                       # Electron main process
 │   ├── main.js                 # Electron entry point
 │   ├── preload.js              # Preload script for IPC
 │   ├── database.js             # SQLite database and API
+│   ├── constants.js            # Application constants
 │   └── db/
 │       └── schema.sql          # Database schema
 │
@@ -218,21 +261,20 @@ student-manager/
 │   ├── hooks/                  # React hooks
 │   │   ├── useStudents.js      # Students management
 │   │   ├── useLessons.js       # Lessons management
-│   │   └── useBalanceSync.js   # Balance synchronization
+│   │   ├── useBalanceSync.js   # Balance synchronization
+│   │   └── useLessonTimers.js  # Lesson timers management
 │   │
 │   ├── store/                  # State management
 │   │   └── appStore.js         # Zustand store
 │   │
 │   └── utils/                  # Utilities
+│       ├── constants.js        # Application constants
 │       ├── dateHelpers.js      # Date utilities
 │       └── lessonStatus.js     # Lesson statuses
 │
-├── build/                      # Build resources
-│   ├── icon.ico                # Icon for Windows
-│   └── icon.png                # Icon for Linux
-│
-├── index.html                  # HTML template
 ├── package.json                # NPM configuration
+├── package-lock.json           # NPM lock file
+├── index.html                  # HTML template
 ├── vite.config.js              # Vite configuration
 ├── tailwind.config.mjs         # Tailwind CSS configuration
 └── postcss.config.js           # PostCSS configuration
