@@ -200,33 +200,28 @@ function syncCompletedLessons() {
     const thresholdISO = thresholdTime.toISOString();
 
     const stmt = db.prepare(`
-        SELECT id, student_id FROM lessons
-        WHERE datetime < ? AND is_completed = 0
+        SELECT l.id, l.student_id, s.balance
+        FROM lessons l
+        JOIN students s ON l.student_id = s.id
+        WHERE l.datetime < ? AND l.is_completed = 0
     `);
 
     const lessons = stmt.all(thresholdISO);
 
-    const updateStmt = db.prepare('UPDATE lessons SET is_completed = 1 WHERE id = ?');
+    const updateCompletedStmt = db.prepare('UPDATE lessons SET is_completed = 1 WHERE id = ?');
+    const updateCompletedPaidStmt = db.prepare(
+        'UPDATE lessons SET is_completed = 1, is_paid = 1 WHERE id = ?',
+    );
 
-    for (const { id, student_id } of lessons) {
-        updateStmt.run(id);
-        updateStudentBalance(student_id, -1);
-    }
-
-    // Check for completed unpaid lessons where student has positive balance
-    const unpaidCompletedStmt = db.prepare(`
-        SELECT l.id, l.student_id, s.balance
-        FROM lessons l
-        JOIN students s ON l.student_id = s.id
-        WHERE l.is_completed = 1 AND l.is_paid = 0 AND s.balance > 0
-    `);
-
-    const unpaidLessons = unpaidCompletedStmt.all();
-    const markAsPaidStmt = db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?');
-
-    for (const { id, student_id } of unpaidLessons) {
-        markAsPaidStmt.run(id);
-        updateStudentBalance(student_id, -1);
+    for (const { id, student_id, balance } of lessons) {
+        if (balance > 0) {
+            // Student has balance - mark as completed AND paid, deduct from balance
+            updateCompletedPaidStmt.run(id);
+            updateStudentBalance(student_id, -1);
+        } else {
+            // Student has no balance - mark only as completed, do NOT deduct
+            updateCompletedStmt.run(id);
+        }
     }
 
     return lessons.length;
