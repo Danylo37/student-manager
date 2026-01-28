@@ -194,38 +194,69 @@ function deleteLesson(lessonId) {
 function syncCompletedLessons() {
     const now = new Date();
     const lessonDurationMinutes = 50;
-
-    // Calculate the time threshold: now - lesson duration
     const thresholdTime = new Date(now.getTime() - lessonDurationMinutes * 60 * 1000);
     const thresholdISO = thresholdTime.toISOString();
 
-    const stmt = db.prepare(`
-        SELECT l.id, l.student_id, s.balance
-        FROM lessons l
-        JOIN students s ON l.student_id = s.id
-        WHERE l.datetime < ? AND l.is_completed = 0
-    `);
+    const sync = db.transaction(() => {
+        const stmt = db.prepare(`
+            SELECT l.id, l.student_id, s.balance
+            FROM lessons l
+            JOIN students s ON l.student_id = s.id
+            WHERE l.datetime < ? AND l.is_completed = 0
+        `);
+        const lessons = stmt.all(thresholdISO);
 
-    const lessons = stmt.all(thresholdISO);
-
-    const updateCompletedStmt = db.prepare('UPDATE lessons SET is_completed = 1 WHERE id = ?');
-    const updateCompletedPaidStmt = db.prepare(
-        'UPDATE lessons SET is_completed = 1, is_paid = 1 WHERE id = ?',
-    );
-
-    for (const { id, student_id, balance } of lessons) {
-        if (balance > 0) {
-            // Student has balance - mark as completed AND paid, deduct from balance
-            updateCompletedPaidStmt.run(id);
-            updateStudentBalance(student_id, -1);
-        } else {
-            // Student has no balance - mark only as completed, do NOT deduct
-            updateCompletedStmt.run(id);
-            updateStudentBalance(student_id, -1);
+        if (lessons.length === 0) {
+            return 0;
         }
-    }
 
-    return lessons.length;
+        const lessonsWithBalance = [];
+        const lessonsWithoutBalance = [];
+
+        const balanceUpdates = {};
+
+        lessons.forEach(({ id, student_id, balance }) => {
+            balanceUpdates[student_id] = (balanceUpdates[student_id] || 0) - 1;
+
+            if (balance > 0) {
+                lessonsWithBalance.push(id);
+            } else {
+                lessonsWithoutBalance.push(id);
+            }
+        });
+
+        if (lessonsWithBalance.length > 0) {
+            const placeholders = lessonsWithBalance.map(() => '?').join(',');
+            const updatePaidStmt = db.prepare(`
+                UPDATE lessons 
+                SET is_completed = 1, is_paid = 1 
+                WHERE id IN (${placeholders})
+            `);
+            updatePaidStmt.run(...lessonsWithBalance);
+        }
+
+        if (lessonsWithoutBalance.length > 0) {
+            const placeholders = lessonsWithoutBalance.map(() => '?').join(',');
+            const updateCompletedStmt = db.prepare(`
+                UPDATE lessons 
+                SET is_completed = 1 
+                WHERE id IN (${placeholders})
+            `);
+            updateCompletedStmt.run(...lessonsWithoutBalance);
+        }
+
+        const updateBalanceStmt = db.prepare(
+            'UPDATE students SET balance = balance + ? WHERE id = ?',
+        );
+
+        for (const [studentId, amount] of Object.entries(balanceUpdates)) {
+            updateBalanceStmt.run(amount, parseInt(studentId));
+        }
+
+        return lessons.length;
+    });
+
+    return sync();
 }
 
 // === SCHEDULES ===
