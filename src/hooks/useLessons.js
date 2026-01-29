@@ -1,6 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import useAppStore from '../store/appStore';
-import { isSameDayAs } from '../utils/dateHelpers';
+import { isSameDayAs, formatDate } from '../utils/dateHelpers';
 import { getLessonStatus, LESSON_STATUS } from '../utils/lessonStatus';
 
 /**
@@ -24,17 +24,39 @@ function useLessons() {
     const goToToday = useAppStore((state) => state.goToToday);
 
     /**
+     * This memo recalculates only when lessons array changes
+     */
+    const lessonsByDate = useMemo(() => {
+        const grouped = {};
+
+        // Group lessons by date
+        lessons.forEach((lesson) => {
+            const dateKey = formatDate(new Date(lesson.datetime), 'yyyy-MM-dd');
+            if (!grouped[dateKey]) {
+                grouped[dateKey] = [];
+            }
+            grouped[dateKey].push(lesson);
+        });
+
+        // Sort lessons in each date group
+        Object.keys(grouped).forEach((key) => {
+            grouped[key].sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+        });
+
+        return grouped;
+    }, [lessons]);
+
+    /**
      * Get lessons for specific date
      * @param {Date} date - Date to filter
      * @returns {Array} - Lessons for this date
      */
     const getLessonsForDate = useCallback(
         (date) => {
-            return lessons
-                .filter((lesson) => isSameDayAs(lesson.datetime, date))
-                .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+            const dateKey = formatDate(date, 'yyyy-MM-dd');
+            return lessonsByDate[dateKey] || [];
         },
-        [lessons],
+        [lessonsByDate],
     );
 
     /**
@@ -102,9 +124,10 @@ function useLessons() {
      */
     const hasLessonsOnDate = useCallback(
         (date) => {
-            return lessons.some((lesson) => isSameDayAs(lesson.datetime, date));
+            const dateKey = formatDate(date, 'yyyy-MM-dd');
+            return !!lessonsByDate[dateKey];
         },
-        [lessons],
+        [lessonsByDate],
     );
 
     /**
