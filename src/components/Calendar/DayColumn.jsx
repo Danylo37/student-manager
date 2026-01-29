@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { formatDate, formatDayOfWeekShort } from '../../utils/dateHelpers';
 import { isToday } from '../../utils/lessonStatus';
 import useLessons from '../../hooks/useLessons';
@@ -15,29 +15,27 @@ function DayColumn({ date, timeSlots }) {
     const isTodayDate = isToday(date.toISOString());
 
     /**
-     * Get the hour from a datetime string
+     * This memo recalculates only when dayLessons changes
      */
-    const getLessonHour = (datetime) => {
-        const lessonDate = new Date(datetime);
-        return lessonDate.getHours();
-    };
-
-    /**
-     * Get the minute offset for positioning within the hour slot
-     */
-    const getLessonMinuteOffset = (datetime) => {
-        const lessonDate = new Date(datetime);
-        return lessonDate.getMinutes();
-    };
+    const lessonTimes = useMemo(
+        () =>
+            dayLessons.map((lesson) => {
+                const lessonDate = new Date(lesson.datetime);
+                return {
+                    id: lesson.id,
+                    lesson,
+                    hour: lessonDate.getHours(),
+                    minuteOffset: lessonDate.getMinutes(),
+                };
+            }),
+        [dayLessons],
+    );
 
     /**
      * Get lessons for a specific hour
      */
     const getLessonsForHour = (hour) => {
-        return dayLessons.filter((lesson) => {
-            const lessonHour = getLessonHour(lesson.datetime);
-            return lessonHour === hour;
-        });
+        return lessonTimes.filter((lt) => lt.hour === hour);
     };
 
     /**
@@ -110,14 +108,13 @@ function DayColumn({ date, timeSlots }) {
                             onClick={() => handleTimeSlotClick(hour)}
                         >
                             {/* Lessons in this hour */}
-                            {hourLessons.map((lesson) => {
-                                const minuteOffset = getLessonMinuteOffset(lesson.datetime);
+                            {hourLessons.map(({ id, lesson, minuteOffset }) => {
                                 // Calculate top position based on minutes (0-60 minutes = 0-80px)
                                 const topPosition = (minuteOffset / 60) * 80;
 
                                 return (
                                     <div
-                                        key={lesson.id}
+                                        key={id}
                                         className="absolute left-1 right-3 z-10"
                                         style={{ top: `${topPosition}px` }}
                                         onClick={(e) => e.stopPropagation()}
