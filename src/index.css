@@ -13,76 +13,92 @@
         /* Background colors */
         --tw-bg-opacity: 1;
     }
-    
+
     /* Override blue colors with purple in purple theme */
     [data-theme="purple"] .bg-blue-50 {
-        background-color: rgb(250 245 255 / var(--tw-bg-opacity));
-    }
-    
-    [data-theme="purple"] .bg-blue-100 {
         background-color: rgb(243 232 255 / var(--tw-bg-opacity));
     }
-    
+
+    [data-theme="purple"] .bg-blue-100 {
+        background-color: rgb(233 213 255 / var(--tw-bg-opacity));
+    }
+
+    [data-theme="purple"] .hover\:bg-blue-100:hover {
+        background-color: rgb(216 180 254 / var(--tw-bg-opacity));
+    }
+
+    [data-theme="purple"] .bg-blue-200 {
+        background-color: rgb(216 180 254 / var(--tw-bg-opacity));
+    }
+
+    [data-theme="purple"] .hover\:bg-blue-200:hover {
+        background-color: rgb(192 132 252 / var(--tw-bg-opacity));
+    }
+
     [data-theme="purple"] .bg-blue-500 {
         background-color: rgb(147 51 234 / var(--tw-bg-opacity));
     }
-    
+
     [data-theme="purple"] .hover\:bg-blue-600:hover {
         background-color: rgb(126 34 206 / var(--tw-bg-opacity));
     }
-    
+
     [data-theme="purple"] .bg-blue-600 {
         background-color: rgb(126 34 206 / var(--tw-bg-opacity));
     }
-    
+
     /* Text colors */
     [data-theme="purple"] .text-blue-600 {
         color: rgb(147 51 234);
     }
-    
+
     [data-theme="purple"] .text-blue-700 {
         color: rgb(126 34 206);
     }
-    
+
     [data-theme="purple"] .text-blue-800 {
         color: rgb(107 33 168);
     }
-    
+
     /* Border colors */
     [data-theme="purple"] .border-blue-200 {
         border-color: rgb(233 213 255);
     }
-    
+
     [data-theme="purple"] .border-blue-300 {
         border-color: rgb(216 180 254);
     }
-    
+
     [data-theme="purple"] .border-blue-400 {
         border-color: rgb(192 132 252);
     }
-    
+
     [data-theme="purple"] .border-blue-500 {
         border-color: rgb(168 85 247);
     }
-    
+
     /* Ring colors for focus */
     [data-theme="purple"] .focus\:ring-blue-500:focus {
         --tw-ring-color: rgb(147 51 234);
     }
-    
+
     [data-theme="purple"] .ring-blue-500 {
         --tw-ring-color: rgb(147 51 234);
     }
-    
+
     /* Background adjustments for purple theme */
     [data-theme="purple"] .bg-gray-50 {
         background-color: rgb(250 245 255 / var(--tw-bg-opacity));
     }
-    
+
     [data-theme="purple"] .bg-gray-100 {
         background-color: rgb(243 232 255 / var(--tw-bg-opacity));
     }
-    
+
+    [data-theme="purple"] .bg-gray-200 {
+        background-color: rgb(233 213 255 / var(--tw-bg-opacity));
+    }
+
     /* Border adjustments */
     [data-theme="purple"] .border-gray-200 {
         border-color: rgb(233 213 255);

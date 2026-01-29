@@ -155,7 +155,7 @@ function StudentsListModal() {
                                             <>
                                                 <button
                                                     onClick={() => handleOpenSchedule(student)}
-                                                    className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded text-sm font-medium flex items-center gap-1"
+                                                    className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-sm font-medium flex items-center gap-1"
                                                     title="Налаштувати розклад"
                                                 >
                                                     <Calendar size={16} />
