@@ -207,6 +207,7 @@ npm run package
 student-manager/
 ├── .git/                       # Git repository
 ├── .gitignore                  # Git ignore rules
+├── .idea/                      # IDE configuration (WebStorm/IntelliJ)
 ├── .prettierrc                 # Prettier configuration
 ├── README.md                   # Project documentation
 │
@@ -228,9 +229,12 @@ student-manager/
 │   ├── main.js                 # Electron entry point
 │   ├── preload.js              # Preload script for IPC
 │   ├── database.js             # SQLite database and API
-│   ├── constants.ts            # Application constants
+│   ├── logger.js               # Application logging
+│   ├── constants.js            # Application constants
 │   └── db/
 │       └── schema.sql          # Database schema
+│
+├── node_modules/               # NPM dependencies
 │
 ├── src/                        # React application
 │   ├── App.jsx                 # Main component
@@ -259,13 +263,16 @@ student-manager/
 │   │       └── DateTimePicker.css
 │   │
 │   ├── hooks/                  # React hooks
-│   │   ├── useStudents.js      # Students management
-│   │   ├── useLessons.js       # Lessons management
-│   │   ├── useBalanceSync.js   # Balance synchronization
-│   │   └── useLessonTimers.js  # Lesson timers management
+│   │   ├── useStudents.ts      # Students management
+│   │   ├── useLessons.ts       # Lessons management
+│   │   ├── useBalanceSync.ts   # Balance synchronization
+│   │   └── useLessonTimers.ts  # Lesson timers management
 │   │
 │   ├── store/                  # State management
-│   │   └── appStore.js         # Zustand store
+│   │   └── appStore.ts         # Zustand store
+│   │
+│   ├── types/                  # TypeScript type definitions
+│   │   └── index.ts            # Common types and interfaces
 │   │
 │   └── utils/                  # Utilities
 │       ├── constants.ts        # Application constants
@@ -275,6 +282,8 @@ student-manager/
 ├── package.json                # NPM configuration
 ├── package-lock.json           # NPM lock file
 ├── index.html                  # HTML template
+├── tsconfig.json               # TypeScript configuration
+├── tsconfig.node.json          # TypeScript Node configuration
 ├── vite.config.ts              # Vite configuration
 ├── tailwind.config.mjs         # Tailwind CSS configuration
 └── postcss.config.js           # PostCSS configuration

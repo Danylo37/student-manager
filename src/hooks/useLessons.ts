@@ -1,13 +1,60 @@
 import { useMemo, useCallback } from 'react';
-import useAppStore from '../store/appStore';
-import { isSameDayAs, formatDate } from '@/utils/dateHelpers';
-import { getLessonStatus, LessonStatus } from '@/utils/lessonStatus';
+import useAppStore from '@/store/appStore';
+import { isSameDayAs, formatDate } from '../utils/dateHelpers';
+import { getLessonStatus, LessonStatus } from '../utils/lessonStatus';
+import type { Lesson, AddLessonData, UpdateLessonData } from '@/types';
+
+interface LessonsByStatus {
+    [LessonStatus.PAID]: Lesson[];
+    [LessonStatus.PENDING]: Lesson[];
+    [LessonStatus.OVERDUE]: Lesson[];
+}
+
+interface LessonStats {
+    total: number;
+    paid: number;
+    pending: number;
+    overdue: number;
+    completed: number;
+    notCompleted: number;
+}
+
+interface TimeSlotResult {
+    time: string;
+    date: Date;
+}
+
+interface UseLessonsReturn {
+    // State
+    lessons: Lesson[];
+    lessonsLoading: boolean;
+    lessonsError: string | null;
+    currentWeek: Date;
+    lessonsByStatus: LessonsByStatus;
+    stats: LessonStats;
+
+    // Actions
+    loadLessons: () => Promise<void>;
+    addLesson: (data: AddLessonData) => Promise<void>;
+    updateLesson: (lessonId: number, updates: UpdateLessonData) => Promise<void>;
+    deleteLesson: (lessonId: number) => Promise<void>;
+    nextWeek: () => void;
+    prevWeek: () => void;
+    goToToday: () => void;
+
+    // Helpers
+    getLessonsForDate: (date: Date) => Lesson[];
+    getLessonsForStudent: (studentId: number) => Lesson[];
+    getLessonById: (lessonId: number) => Lesson | undefined;
+    hasLessonsOnDate: (date: Date) => boolean;
+    getNextTimeSlot: (date: Date) => TimeSlotResult;
+}
 
 /**
  * Hook for working with lessons
  * Provides convenient methods and filtered data
  */
-function useLessons() {
+function useLessons(): UseLessonsReturn {
     // Get state from store
     const lessons = useAppStore((state) => state.lessons);
     const lessonsLoading = useAppStore((state) => state.lessonsLoading);
@@ -26,8 +73,8 @@ function useLessons() {
     /**
      * This memo recalculates only when lessons array changes
      */
-    const lessonsByDate = useMemo(() => {
-        const grouped = {};
+    const lessonsByDate = useMemo((): Record<string, Lesson[]> => {
+        const grouped: Record<string, Lesson[]> = {};
 
         // Group lessons by date
         lessons.forEach((lesson) => {
@@ -40,7 +87,9 @@ function useLessons() {
 
         // Sort lessons in each date group
         Object.keys(grouped).forEach((key) => {
-            grouped[key].sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+            grouped[key].sort(
+                (a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime(),
+            );
         });
 
         return grouped;
@@ -48,11 +97,9 @@ function useLessons() {
 
     /**
      * Get lessons for specific date
-     * @param {Date} date - Date to filter
-     * @returns {Array} - Lessons for this date
      */
     const getLessonsForDate = useCallback(
-        (date) => {
+        (date: Date): Lesson[] => {
             const dateKey = formatDate(date, 'yyyy-MM-dd');
             return lessonsByDate[dateKey] || [];
         },
@@ -61,11 +108,9 @@ function useLessons() {
 
     /**
      * Get lessons for specific student
-     * @param {number} studentId - Student ID
-     * @returns {Array} - Student's lessons
      */
     const getLessonsForStudent = useCallback(
-        (studentId) => {
+        (studentId: number): Lesson[] => {
             return lessons.filter((lesson) => lesson.student_id === studentId);
         },
         [lessons],
@@ -75,7 +120,7 @@ function useLessons() {
      * Get lesson by ID
      */
     const getLessonById = useCallback(
-        (lessonId) => {
+        (lessonId: number): Lesson | undefined => {
             return lessons.find((l) => l.id === lessonId);
         },
         [lessons],
@@ -84,8 +129,8 @@ function useLessons() {
     /**
      * Get lessons grouped by status
      */
-    const lessonsByStatus = useMemo(() => {
-        const grouped = {
+    const lessonsByStatus = useMemo((): LessonsByStatus => {
+        const grouped: LessonsByStatus = {
             [LessonStatus.PAID]: [],
             [LessonStatus.PENDING]: [],
             [LessonStatus.OVERDUE]: [],
@@ -102,7 +147,7 @@ function useLessons() {
     /**
      * Get lessons statistics
      */
-    const stats = useMemo(() => {
+    const stats = useMemo((): LessonStats => {
         const total = lessons.length;
         const paid = lessonsByStatus[LessonStatus.PAID].length;
         const pending = lessonsByStatus[LessonStatus.PENDING].length;
@@ -123,7 +168,7 @@ function useLessons() {
      * Check if there are lessons on specific date
      */
     const hasLessonsOnDate = useCallback(
-        (date) => {
+        (date: Date): boolean => {
             const dateKey = formatDate(date, 'yyyy-MM-dd');
             return !!lessonsByDate[dateKey];
         },
@@ -132,28 +177,21 @@ function useLessons() {
 
     /**
      * Get next available time slot for a date
-     * Returns suggested time (e.g., last lesson time + 1 hour)
-     * For today's date, returns the nearest rounded hour
-     * Maximum time is 20:00, after that suggests next day at 14:00
-     * Returns object with time and date (date can be next day if after 20:00)
      */
     const getNextTimeSlot = useCallback(
-        (date) => {
+        (date: Date): TimeSlotResult => {
             const dayLessons = getLessonsForDate(date);
             const today = new Date();
             const isToday = isSameDayAs(date, today);
 
             if (dayLessons.length === 0) {
-                // No lessons - suggest nearest rounded hour if today, otherwise 14:00
                 if (isToday) {
                     const now = new Date();
                     const currentHour = now.getHours();
                     const currentMinutes = now.getMinutes();
 
-                    // Round to next hour
                     const nextHour = currentMinutes > 0 ? currentHour + 1 : currentHour;
 
-                    // If after 20:00, suggest next day at 14:00
                     if (nextHour > 20) {
                         const nextDay = new Date(date);
                         nextDay.setDate(nextDay.getDate() + 1);
@@ -166,23 +204,18 @@ function useLessons() {
                 return { time: '14:00', date };
             }
 
-            // Get last lesson time
             const lastLesson = dayLessons[dayLessons.length - 1];
             const lastTime = new Date(lastLesson.datetime);
 
-            // Add 1 hour
             lastTime.setHours(lastTime.getHours() + 1);
 
-            // If it's today and the suggested time is in the past, use current time rounded to next hour
             if (isToday && lastTime < today) {
                 const now = new Date();
                 const currentHour = now.getHours();
                 const currentMinutes = now.getMinutes();
 
-                // Round to next hour
                 const nextHour = currentMinutes > 0 ? currentHour + 1 : currentHour;
 
-                // If after 20:00, suggest next day at 14:00
                 if (nextHour > 20) {
                     const nextDay = new Date(date);
                     nextDay.setDate(nextDay.getDate() + 1);
@@ -193,7 +226,6 @@ function useLessons() {
                 return { time: `${hours}:00`, date };
             }
 
-            // If suggested time is after 20:00, suggest next day at 14:00
             if (
                 lastTime.getHours() > 20 ||
                 (lastTime.getHours() === 20 && lastTime.getMinutes() > 0)

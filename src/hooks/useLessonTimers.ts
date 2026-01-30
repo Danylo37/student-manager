@@ -1,26 +1,27 @@
 import { useEffect, useRef } from 'react';
-import useAppStore from '../store/appStore';
-import { LESSON_DURATION_MINUTES } from '@/utils/constants';
+import useAppStore from '@/store/appStore';
+import { LESSON_DURATION_MINUTES } from '../utils/constants';
+import type { Lesson } from '@/types';
 
 /**
  * Hook that creates timers for each lesson
  * When lesson should complete, automatically updates its status
  */
-function useLessonTimers() {
+function useLessonTimers(): null {
     const lessons = useAppStore((state) => state.lessons);
     const updateLesson = useAppStore((state) => state.updateLesson);
     const loadStudents = useAppStore((state) => state.loadStudents);
 
     // Store all active timers
-    const timersRef = useRef(new Map());
+    const timersRef = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
     // Function to update the lesson
-    const completeLessonAutomatically = async (lesson) => {
+    const completeLessonAutomatically = async (lesson: Lesson): Promise<void> => {
         try {
             // Update lesson in DB
             await updateLesson(lesson.id, {
                 is_completed: 1,
-                is_paid: lesson.balance > 0 ? 1 : 0, // Mark as paid if balance exists
+                is_paid: lesson.balance && lesson.balance > 0 ? 1 : 0, // Mark as paid if balance exists
             });
 
             // Update student balances
@@ -31,7 +32,7 @@ function useLessonTimers() {
     };
 
     // Create timer for a single lesson
-    const createTimer = (lesson) => {
+    const createTimer = (lesson: Lesson): void => {
         // If lesson is already completed, skip
         if (lesson.is_completed) {
             return;
@@ -48,7 +49,7 @@ function useLessonTimers() {
         }
 
         // Time until lesson completion
-        const timeUntilEnd = lessonEnd - now;
+        const timeUntilEnd = lessonEnd.getTime() - now.getTime();
 
         // Create timer
         const timerId = setTimeout(() => {
@@ -61,7 +62,7 @@ function useLessonTimers() {
     };
 
     // Clear all timers
-    const clearAllTimers = () => {
+    const clearAllTimers = (): void => {
         timersRef.current.forEach((timerId) => clearTimeout(timerId));
         timersRef.current.clear();
     };

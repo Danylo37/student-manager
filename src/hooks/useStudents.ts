@@ -1,11 +1,41 @@
 import { useMemo, useCallback } from 'react';
-import useAppStore from '../store/appStore';
+import useAppStore from '@/store/appStore';
+import type { Student } from '@/types';
+
+interface StudentStats {
+    total: number;
+    lowBalance: number;
+    negativeBalance: number;
+    totalBalance: number;
+}
+
+interface UseStudentsReturn {
+    // State
+    students: Student[];
+    studentsLoading: boolean;
+    studentsError: string | null;
+    studentsSorted: Student[];
+    studentsLowBalance: Student[];
+    studentsNegativeBalance: Student[];
+    totalStudents: number;
+    stats: StudentStats;
+
+    // Actions
+    loadStudents: () => Promise<void>;
+    addStudent: (name: string, balance: number) => Promise<void>;
+    deleteStudent: (studentId: number) => Promise<void>;
+    updateBalance: (studentId: number, amount: number) => Promise<void>;
+
+    // Helpers
+    getStudentById: (studentId: number) => Student | undefined;
+    searchStudents: (query: string) => Student[];
+}
 
 /**
  * Hook for working with students
  * Provides convenient methods and computed data
  */
-function useStudents() {
+function useStudents(): UseStudentsReturn {
     // Get state from store
     const students = useAppStore((state) => state.students);
     const studentsLoading = useAppStore((state) => state.studentsLoading);
@@ -21,7 +51,7 @@ function useStudents() {
      * Get student by ID
      */
     const getStudentById = useCallback(
-        (studentId) => {
+        (studentId: number): Student | undefined => {
             return students.find((s) => s.id === studentId);
         },
         [students],
@@ -29,11 +59,9 @@ function useStudents() {
 
     /**
      * Search students by name
-     * @param {string} query - Search query
-     * @returns {Array} - Filtered students
      */
     const searchStudents = useCallback(
-        (query) => {
+        (query: string): Student[] => {
             if (!query || query.trim() === '') {
                 return students;
             }
@@ -47,21 +75,21 @@ function useStudents() {
     /**
      * Get students sorted by name
      */
-    const studentsSorted = useMemo(() => {
+    const studentsSorted = useMemo((): Student[] => {
         return [...students].sort((a, b) => a.name.localeCompare(b.name, 'uk'));
     }, [students]);
 
     /**
      * Get students with low balance (< 3)
      */
-    const studentsLowBalance = useMemo(() => {
+    const studentsLowBalance = useMemo((): Student[] => {
         return students.filter((s) => s.balance < 3);
     }, [students]);
 
     /**
      * Get students with negative balance
      */
-    const studentsNegativeBalance = useMemo(() => {
+    const studentsNegativeBalance = useMemo((): Student[] => {
         return students.filter((s) => s.balance < 0);
     }, [students]);
 
@@ -73,7 +101,7 @@ function useStudents() {
     /**
      * Get statistics
      */
-    const stats = useMemo(() => {
+    const stats = useMemo((): StudentStats => {
         return {
             total: students.length,
             lowBalance: studentsLowBalance.length,

@@ -1,19 +1,19 @@
 import { useEffect, useRef } from 'react';
-import useAppStore from '../store/appStore';
+import useAppStore from '@/store/appStore';
 
 /**
  * Backup sync mechanism
  * Only runs when app starts or user returns
  * Main sync is now handled by useLessonTimers
  */
-function useBalanceSync() {
+function useBalanceSync(): void {
     const syncLessons = useAppStore((state) => state.syncLessons);
     const loadStudents = useAppStore((state) => state.loadStudents);
     const loadLessons = useAppStore((state) => state.loadLessons);
 
-    const lastSyncTime = useRef(0);
+    const lastSyncTime = useRef<number>(0);
 
-    const performSync = async () => {
+    const performSync = async (): Promise<void> => {
         try {
             const now = Date.now();
             if (now - lastSyncTime.current < 60 * 1000) {
@@ -35,7 +35,7 @@ function useBalanceSync() {
         performSync();
 
         // When user returns to the app
-        const handleFocus = () => {
+        const handleFocus = (): void => {
             performSync();
         };
         window.addEventListener('focus', handleFocus);

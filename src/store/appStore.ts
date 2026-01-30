@@ -1,10 +1,19 @@
 import { create } from 'zustand';
-import { getWeekStart, getWeekRange } from '@/utils/dateHelpers';
+import { getWeekStart, getWeekRange } from '../utils/dateHelpers';
+import type {
+    Student,
+    Lesson,
+    AddLessonData,
+    UpdateLessonData,
+    ModalName,
+    Theme,
+    AppState,
+} from '@/types';
 
 /**
  * Global application state using Zustand
  */
-const useAppStore = create((set, get) => ({
+const useAppStore = create<AppState>((set, get) => ({
     // ========== STATE ==========
 
     // Students data
@@ -44,14 +53,14 @@ const useAppStore = create((set, get) => ({
     prefilledLessonDateTime: null,
 
     // Theme
-    theme: localStorage.getItem('theme') || 'default',
+    theme: (localStorage.getItem('theme') as Theme) || 'default',
 
     // ========== ACTIONS ==========
 
     /**
      * Load all students from database
      */
-    loadStudents: async () => {
+    loadStudents: async (): Promise<void> => {
         set({ studentsLoading: true, studentsError: null });
 
         try {
@@ -59,16 +68,15 @@ const useAppStore = create((set, get) => ({
             set({ students, studentsLoading: false });
         } catch (error) {
             console.error('Failed to load students:', error);
-            set({ studentsError: error.message, studentsLoading: false });
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            set({ studentsError: errorMessage, studentsLoading: false });
         }
     },
 
     /**
      * Add new student
-     * @param {string} name - Student name
-     * @param {number} balance - Initial balance
      */
-    addStudent: async (name, balance) => {
+    addStudent: async (name: string, balance: number): Promise<void> => {
         try {
             await window.electron.addStudent(name, balance);
             // Reload students list
@@ -81,9 +89,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Delete student
-     * @param {number} studentId - Student ID
      */
-    deleteStudent: async (studentId) => {
+    deleteStudent: async (studentId: number): Promise<void> => {
         try {
             await window.electron.deleteStudent(studentId);
             // Reload students list
@@ -98,10 +105,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Update student balance
-     * @param {number} studentId - Student ID
-     * @param {number} amount - Amount to add (can be negative)
      */
-    updateBalance: async (studentId, amount) => {
+    updateBalance: async (studentId: number, amount: number): Promise<void> => {
         try {
             await window.electron.updateBalance(studentId, amount);
 
@@ -122,7 +127,7 @@ const useAppStore = create((set, get) => ({
     /**
      * Load lessons for current week
      */
-    loadLessons: async () => {
+    loadLessons: async (): Promise<void> => {
         set({ lessonsLoading: true, lessonsError: null });
 
         try {
@@ -133,15 +138,15 @@ const useAppStore = create((set, get) => ({
             set({ lessons, lessonsLoading: false });
         } catch (error) {
             console.error('Failed to load lessons:', error);
-            set({ lessonsError: error.message, lessonsLoading: false });
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            set({ lessonsError: errorMessage, lessonsLoading: false });
         }
     },
 
     /**
      * Add new lesson
-     * @param {Object} lessonData - Lesson data
      */
-    addLesson: async (lessonData) => {
+    addLesson: async (lessonData: AddLessonData): Promise<void> => {
         try {
             await window.electron.addLesson(lessonData);
             // Reload lessons
@@ -156,10 +161,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Update lesson
-     * @param {number} lessonId - Lesson ID
-     * @param {Object} updates - Fields to update
      */
-    updateLesson: async (lessonId, updates) => {
+    updateLesson: async (lessonId: number, updates: UpdateLessonData): Promise<void> => {
         try {
             await window.electron.updateLesson(lessonId, updates);
             // Reload lessons
@@ -174,9 +177,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Toggle lesson payment status
-     * @param {number} lessonId - Lesson ID
      */
-    toggleLessonPayment: async (lessonId) => {
+    toggleLessonPayment: async (lessonId: number): Promise<void> => {
         try {
             await window.electron.toggleLessonPayment(lessonId);
             // Reload lessons
@@ -191,9 +193,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Delete lesson
-     * @param {number} lessonId - Lesson ID
      */
-    deleteLesson: async (lessonId) => {
+    deleteLesson: async (lessonId: number): Promise<void> => {
         try {
             await window.electron.deleteLesson(lessonId);
             // Reload lessons
@@ -209,7 +210,7 @@ const useAppStore = create((set, get) => ({
     /**
      * Sync completed lessons
      */
-    syncLessons: async () => {
+    syncLessons: async (): Promise<void> => {
         try {
             await window.electron.syncLessons();
             // Reload everything
@@ -225,9 +226,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Load schedules for a student
-     * @param {number} studentId - Student ID
      */
-    loadSchedules: async (studentId) => {
+    loadSchedules: async (studentId: number): Promise<void> => {
         set({ schedulesLoading: true, schedulesError: null });
 
         try {
@@ -235,17 +235,15 @@ const useAppStore = create((set, get) => ({
             set({ schedules, schedulesLoading: false });
         } catch (error) {
             console.error('Failed to load schedules:', error);
-            set({ schedulesError: error.message, schedulesLoading: false });
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            set({ schedulesError: errorMessage, schedulesLoading: false });
         }
     },
 
     /**
      * Add schedule
-     * @param {number} studentId - Student ID
-     * @param {number} dayOfWeek - Day of week (0-6)
-     * @param {string} time - Time in HH:MM format
      */
-    addSchedule: async (studentId, dayOfWeek, time) => {
+    addSchedule: async (studentId: number, dayOfWeek: number, time: string): Promise<void> => {
         try {
             await window.electron.addSchedule(studentId, dayOfWeek, time);
             // Reload schedules
@@ -258,9 +256,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Delete schedule
-     * @param {number} scheduleId - Schedule ID
      */
-    deleteSchedule: async (scheduleId) => {
+    deleteSchedule: async (scheduleId: number): Promise<void> => {
         try {
             const studentId = get().selectedStudentForSchedule?.id;
             await window.electron.deleteSchedule(scheduleId);
@@ -276,9 +273,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Toggle schedule active status
-     * @param {number} scheduleId - Schedule ID
      */
-    toggleScheduleActive: async (scheduleId) => {
+    toggleScheduleActive: async (scheduleId: number): Promise<void> => {
         try {
             const studentId = get().selectedStudentForSchedule?.id;
             await window.electron.toggleScheduleActive(scheduleId);
@@ -294,9 +290,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Auto-create lessons for a student based on their schedule
-     * @param {number} studentId - Student ID
      */
-    autoCreateLessons: async (studentId) => {
+    autoCreateLessons: async (studentId: number): Promise<number> => {
         try {
             const created = await window.electron.autoCreateLessons(studentId);
             // Reload lessons and students
@@ -314,7 +309,7 @@ const useAppStore = create((set, get) => ({
     /**
      * Move to next week
      */
-    nextWeek: () => {
+    nextWeek: (): void => {
         const { currentWeek } = get();
         const nextWeek = new Date(currentWeek);
         nextWeek.setDate(nextWeek.getDate() + 7);
@@ -326,7 +321,7 @@ const useAppStore = create((set, get) => ({
     /**
      * Move to previous week
      */
-    prevWeek: () => {
+    prevWeek: (): void => {
         const { currentWeek } = get();
         const prevWeek = new Date(currentWeek);
         prevWeek.setDate(prevWeek.getDate() - 7);
@@ -338,7 +333,7 @@ const useAppStore = create((set, get) => ({
     /**
      * Go to today's week
      */
-    goToToday: () => {
+    goToToday: (): void => {
         set({ currentWeek: getWeekStart(new Date()) });
         get().loadLessons();
     },
@@ -347,9 +342,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Open modal
-     * @param {string} modalName - Modal name
      */
-    openModal: (modalName) => {
+    openModal: (modalName: ModalName): void => {
         set((state) => ({
             modals: { ...state.modals, [modalName]: true },
         }));
@@ -357,9 +351,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Open add lesson modal with pre-filled date/time
-     * @param {Date} datetime - Pre-filled date and time
      */
-    openAddLessonModal: (datetime) => {
+    openAddLessonModal: (datetime: Date): void => {
         set({ prefilledLessonDateTime: datetime });
         set((state) => ({
             modals: { ...state.modals, addLesson: true },
@@ -368,9 +361,8 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Close modal
-     * @param {string} modalName - Modal name
      */
-    closeModal: (modalName) => {
+    closeModal: (modalName: ModalName): void => {
         set((state) => ({
             modals: { ...state.modals, [modalName]: false },
         }));
@@ -393,25 +385,23 @@ const useAppStore = create((set, get) => ({
 
     /**
      * Select lesson for editing
-     * @param {Object} lesson - Lesson object
      */
-    selectLesson: (lesson) => {
+    selectLesson: (lesson: Lesson): void => {
         set({ selectedLesson: lesson });
         get().openModal('editLesson');
     },
 
     /**
      * Select student for schedule management
-     * @param {Object} student - Student object
      */
-    selectStudentForSchedule: (student) => {
+    selectStudentForSchedule: (student: Student): void => {
         set({ selectedStudentForSchedule: student });
     },
 
     /**
      * Initialize app
      */
-    initialize: async () => {
+    initialize: async (): Promise<void> => {
         await get().syncLessons();
         await Promise.all([get().loadStudents(), get().loadLessons()]);
     },
@@ -419,9 +409,9 @@ const useAppStore = create((set, get) => ({
     /**
      * Toggle theme between default and purple
      */
-    toggleTheme: () => {
+    toggleTheme: (): void => {
         const { theme } = get();
-        const newTheme = theme === 'default' ? 'purple' : 'default';
+        const newTheme: Theme = theme === 'default' ? 'purple' : 'default';
         localStorage.setItem('theme', newTheme);
         set({ theme: newTheme });
     },
