@@ -1,5 +1,5 @@
 import React from 'react';
-import { getWeekDays } from '../../utils/dateHelpers';
+import { getWeekDays } from '@/utils/dateHelpers';
 import useLessons from '../../hooks/useLessons';
 import DayColumn from './DayColumn';
 
@@ -8,7 +8,7 @@ const TIME_SLOTS = Array.from({ length: 13 }, (_, i) => i + 9);
 
 /**
  * Week view calendar component with time slots
- * Displays 7 day columns with time grid
+ * Displays 7-day columns with time grid
  */
 function WeekView() {
     const { currentWeek } = useLessons();

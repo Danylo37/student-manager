@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import useAppStore from '../store/appStore';
-import { isSameDayAs, formatDate } from '../utils/dateHelpers';
-import { getLessonStatus, LESSON_STATUS } from '../utils/lessonStatus';
+import { isSameDayAs, formatDate } from '@/utils/dateHelpers';
+import { getLessonStatus, LessonStatus } from '@/utils/lessonStatus';
 
 /**
  * Hook for working with lessons
@@ -86,9 +86,9 @@ function useLessons() {
      */
     const lessonsByStatus = useMemo(() => {
         const grouped = {
-            [LESSON_STATUS.PAID]: [],
-            [LESSON_STATUS.PENDING]: [],
-            [LESSON_STATUS.OVERDUE]: [],
+            [LessonStatus.PAID]: [],
+            [LessonStatus.PENDING]: [],
+            [LessonStatus.OVERDUE]: [],
         };
 
         lessons.forEach((lesson) => {
@@ -104,9 +104,9 @@ function useLessons() {
      */
     const stats = useMemo(() => {
         const total = lessons.length;
-        const paid = lessonsByStatus[LESSON_STATUS.PAID].length;
-        const pending = lessonsByStatus[LESSON_STATUS.PENDING].length;
-        const overdue = lessonsByStatus[LESSON_STATUS.OVERDUE].length;
+        const paid = lessonsByStatus[LessonStatus.PAID].length;
+        const pending = lessonsByStatus[LessonStatus.PENDING].length;
+        const overdue = lessonsByStatus[LessonStatus.OVERDUE].length;
         const completed = lessons.filter((l) => l.is_completed).length;
 
         return {

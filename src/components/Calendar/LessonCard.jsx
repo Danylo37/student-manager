@@ -1,11 +1,11 @@
 import React from 'react';
-import { formatTime } from '../../utils/dateHelpers';
+import { formatTime } from '@/utils/dateHelpers';
 import {
     getLessonStatus,
     getStatusBorderColor,
     getStatusBgLight,
     getStatusEmoji,
-} from '../../utils/lessonStatus';
+} from '@/utils/lessonStatus';
 import useAppStore from '../../store/appStore';
 
 /**

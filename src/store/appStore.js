@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getWeekStart, getWeekRange } from '../utils/dateHelpers';
+import { getWeekStart, getWeekRange } from '@/utils/dateHelpers';
 
 /**
  * Global application state using Zustand

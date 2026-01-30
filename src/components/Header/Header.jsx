@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RefreshCw, Users, Palette } from 'lucide-react';
-import { formatDateWithMonth } from '../../utils/dateHelpers';
+import { formatDateWithMonth } from '@/utils/dateHelpers';
 import useLessons from '../../hooks/useLessons';
 import useAppStore from '../../store/appStore';
 

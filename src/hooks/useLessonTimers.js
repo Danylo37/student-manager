@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import useAppStore from '../store/appStore';
-import { LESSON_DURATION_MINUTES } from '../utils/constants';
+import { LESSON_DURATION_MINUTES } from '@/utils/constants';
 
 /**
  * Hook that creates timers for each lesson

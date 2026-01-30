@@ -6,7 +6,7 @@
     "scripts": {
         "dev": "cross-env NODE_ENV=development LOG_LEVEL=debug concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
         "dev:vite": "vite",
-        "dev:electron": "wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .",
+        "dev:electron": "wait-on http://localhost:5173 && cross-env NODE_ENV=development electron . --ozone-platform=x11",
         "build": "vite build",
         "package": "cross-env NODE_ENV=production LOG_LEVEL=info electron-builder",
         "package:win": "cross-env NODE_ENV=production LOG_LEVEL=info electron-builder --win",
@@ -21,6 +21,10 @@
     "license": "ISC",
     "type": "commonjs",
     "devDependencies": {
+        "@types/better-sqlite3": "^7.6.13",
+        "@types/node": "^25.1.0",
+        "@types/react": "^19.2.10",
+        "@types/react-dom": "^19.2.3",
         "@vitejs/plugin-react": "^5.1.2",
         "autoprefixer": "^10.4.23",
         "concurrently": "^9.2.1",
@@ -32,6 +36,7 @@
         "postcss": "^8.5.6",
         "prettier": "^3.8.0",
         "tailwindcss": "^3.4.19",
+        "typescript": "^5.9.3",
         "vite": "^7.3.1",
         "wait-on": "^9.0.3"
     },

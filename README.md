@@ -228,7 +228,7 @@ student-manager/
 │   ├── main.js                 # Electron entry point
 │   ├── preload.js              # Preload script for IPC
 │   ├── database.js             # SQLite database and API
-│   ├── constants.js            # Application constants
+│   ├── constants.ts            # Application constants
 │   └── db/
 │       └── schema.sql          # Database schema
 │
@@ -268,14 +268,14 @@ student-manager/
 │   │   └── appStore.js         # Zustand store
 │   │
 │   └── utils/                  # Utilities
-│       ├── constants.js        # Application constants
-│       ├── dateHelpers.js      # Date utilities
-│       └── lessonStatus.js     # Lesson statuses
+│       ├── constants.ts        # Application constants
+│       ├── dateHelpers.ts      # Date utilities
+│       └── lessonStatus.ts     # Lesson statuses
 │
 ├── package.json                # NPM configuration
 ├── package-lock.json           # NPM lock file
 ├── index.html                  # HTML template
-├── vite.config.js              # Vite configuration
+├── vite.config.ts              # Vite configuration
 ├── tailwind.config.mjs         # Tailwind CSS configuration
 └── postcss.config.js           # PostCSS configuration
 ```

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import useAppStore from '../../store/appStore';
 import useStudents from '../../hooks/useStudents';
 import useLessons from '../../hooks/useLessons';
-import { shouldBeCompleted } from '../../utils/lessonStatus';
+import { shouldBeCompleted } from '@/utils/lessonStatus';
 import { DatePickerInput, TimePickerInput } from '../common/DateTimePicker';
 import Modal from './Modal';
 
