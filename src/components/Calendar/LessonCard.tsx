@@ -1,18 +1,23 @@
 import React from 'react';
-import { formatTime } from '@/utils/dateHelpers';
+import { formatTime } from '@/utils/dateHelpers.ts';
 import {
     getLessonStatus,
     getStatusBorderColor,
     getStatusBgLight,
     getStatusEmoji,
-} from '@/utils/lessonStatus';
-import useAppStore from '../../store/appStore';
+} from '@/utils/lessonStatus.ts';
+import useAppStore from '@/store/appStore';
+import type { Lesson } from '@/types';
+
+interface LessonCardProps {
+    lesson: Lesson;
+}
 
 /**
  * Lesson card component
  * Displays single lesson with status, time, and student info
  */
-function LessonCard({ lesson }) {
+function LessonCard({ lesson }: LessonCardProps) {
     const selectLesson = useAppStore((state) => state.selectLesson);
     const toggleLessonPayment = useAppStore((state) => state.toggleLessonPayment);
 
@@ -21,11 +26,11 @@ function LessonCard({ lesson }) {
     const bgColor = getStatusBgLight(status);
     const emoji = getStatusEmoji(status);
 
-    const handleClick = () => {
+    const handleClick = (): void => {
         selectLesson(lesson);
     };
 
-    const handleTogglePayment = async (e) => {
+    const handleTogglePayment = async (e: React.MouseEvent<HTMLButtonElement>): Promise<void> => {
         e.stopPropagation(); // Prevent card click
         try {
             await toggleLessonPayment(lesson.id);

@@ -245,13 +245,13 @@ student-manager/
 │   │   ├── Calendar/           # Calendar and scheduling
 │   │   │   ├── WeekView.jsx    # Weekly view
 │   │   │   ├── DayColumn.jsx   # Day column
-│   │   │   └── LessonCard.jsx  # Lesson card
+│   │   │   └── LessonCard.tsx  # Lesson card
 │   │   │
 │   │   ├── Header/             # Application header
 │   │   │   └── Header.jsx      # Navigation and actions
 │   │   │
 │   │   ├── Modals/             # Modal windows
-│   │   │   ├── Modal.jsx               # Base modal
+│   │   │   ├── Modal.tsx               # Base modal
 │   │   │   ├── AddStudentModal.jsx     # Add student
 │   │   │   ├── AddLessonModal.jsx      # Add lesson
 │   │   │   ├── EditLessonModal.jsx     # Edit lesson
@@ -259,7 +259,7 @@ student-manager/
 │   │   │   └── ScheduleModal.jsx       # Schedule management
 │   │   │
 │   │   └── common/             # Common components
-│   │       ├── DateTimePicker.jsx
+│   │       ├── DateTimePicker.tsx
 │   │       └── DateTimePicker.css
 │   │
 │   ├── hooks/                  # React hooks

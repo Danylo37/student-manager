@@ -1,15 +1,26 @@
-import React from 'react';
 import DatePicker from 'react-datepicker';
 import { uk } from 'date-fns/locale';
 import { setHours, setMinutes } from 'date-fns';
 import 'react-datepicker/dist/react-datepicker.css';
 import './DateTimePicker.css';
 
+interface DateTimePickerProps {
+    value: Date | null;
+    onChange: (date: Date | null) => void;
+    showTimeSelect?: boolean;
+    className?: string;
+}
+
 /**
  * Custom DateTimePicker with Ukrainian locale
  */
-function DateTimePicker({ value, onChange, showTimeSelect = false, className = '' }) {
-    const handleChange = (date) => {
+function DateTimePicker({
+    value,
+    onChange,
+    showTimeSelect = false,
+    className = '',
+}: DateTimePickerProps) {
+    const handleChange = (date: Date | null): void => {
         if (onChange) {
             onChange(date);
         }
@@ -30,10 +41,16 @@ function DateTimePicker({ value, onChange, showTimeSelect = false, className = '
     );
 }
 
+interface DatePickerInputProps {
+    value: Date | null;
+    onChange: (date: Date | null) => void;
+    className?: string;
+}
+
 /**
  * Separate Date Picker
  */
-export function DatePickerInput({ value, onChange, className = '' }) {
+export function DatePickerInput({ value, onChange, className = '' }: DatePickerInputProps) {
     return (
         <DateTimePicker
             value={value}
@@ -44,10 +61,16 @@ export function DatePickerInput({ value, onChange, className = '' }) {
     );
 }
 
+interface TimePickerInputProps {
+    value: Date | null;
+    onChange: (date: Date | null) => void;
+    className?: string;
+}
+
 /**
  * Separate Time Picker with time restrictions (9:00 - 20:00)
  */
-export function TimePickerInput({ value, onChange, className = '' }) {
+export function TimePickerInput({ value, onChange, className = '' }: TimePickerInputProps) {
     // Set min time to 9:00
     const minTime = setHours(setMinutes(new Date(), 55), 8);
     // Set max time to 20:00

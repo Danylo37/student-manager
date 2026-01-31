@@ -1,12 +1,20 @@
 import React, { useEffect } from 'react';
 
+interface ModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    title: string;
+    children: React.ReactNode;
+    size?: 'sm' | 'md' | 'lg' | 'xl';
+}
+
 /**
  * Base modal component with overlay
  */
-function Modal({ isOpen, onClose, title, children, size = 'md' }) {
+function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
     // Close on Escape key
     useEffect(() => {
-        const handleEscape = (e) => {
+        const handleEscape = (e: KeyboardEvent): void => {
             if (e.key === 'Escape') {
                 onClose();
             }
@@ -20,7 +28,7 @@ function Modal({ isOpen, onClose, title, children, size = 'md' }) {
 
     if (!isOpen) return null;
 
-    const sizeClasses = {
+    const sizeClasses: Record<string, string> = {
         sm: 'max-w-md',
         md: 'max-w-2xl',
         lg: 'max-w-4xl',
