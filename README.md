@@ -349,9 +349,6 @@ npm run rebuild          # Rebuild native modules for Electron
 
 ### Issues with better-sqlite3
 
-Если возникают ошибки с модулем `better-sqlite3`:
-
-```bash
 If you encounter errors with the `better-sqlite3` module:
 
 ```bash
