@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import useAppStore from '@/store/appStore';
 import useLessons from '@/hooks/useLessons';
 import useStudents from '@/hooks/useStudents';
@@ -29,7 +29,7 @@ function EditLessonModal() {
         }
     }, [selectedLesson]);
 
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
         e.preventDefault();
 
         if (!selectedLesson) return;

@@ -8,36 +8,37 @@ const logger = require('./logger');
 let db = null;
 
 function initDatabase() {
+    logger.info('Initializing database');
+
+    const userDataPath = app.getPath('userData');
+    const dbPath = path.join(userDataPath, 'students.db');
+
+    logger.debug('Database path', { path: dbPath });
+
+    if (!fs.existsSync(userDataPath)) {
+        fs.mkdirSync(userDataPath, { recursive: true });
+        logger.debug('Created user data directory', { path: userDataPath });
+    }
+
+    // Determine schema path
+    let schemaPath;
+    if (process.env.NODE_ENV === 'development') {
+        schemaPath = path.join(__dirname, 'db', 'schema.sql');
+    } else {
+        schemaPath = path.join(process.resourcesPath, 'main', 'db', 'schema.sql');
+    }
+
+    logger.debug('Schema path', { path: schemaPath });
+
+    if (!fs.existsSync(schemaPath)) {
+        logger.error('Schema file not found', { path: schemaPath });
+        throw new Error(`Schema file not found: ${schemaPath}`);
+    }
+
     try {
-        logger.info('Initializing database');
-
-        const userDataPath = app.getPath('userData');
-        const dbPath = path.join(userDataPath, 'students.db');
-
-        logger.debug('Database path', { path: dbPath });
-
-        if (!fs.existsSync(userDataPath)) {
-            fs.mkdirSync(userDataPath, { recursive: true });
-            logger.debug('Created user data directory', { path: userDataPath });
-        }
-
         db = new Database(dbPath);
         db.pragma('journal_mode = WAL');
         logger.debug('Database connection established');
-
-        let schemaPath;
-        if (process.env.NODE_ENV === 'development') {
-            schemaPath = path.join(__dirname, 'db', 'schema.sql');
-        } else {
-            schemaPath = path.join(process.resourcesPath, 'main', 'db', 'schema.sql');
-        }
-
-        logger.debug('Schema path', { path: schemaPath });
-
-        if (!fs.existsSync(schemaPath)) {
-            logger.error('Schema file not found', { path: schemaPath });
-            throw new Error(`Schema file not found: ${schemaPath}`);
-        }
 
         const schema = fs.readFileSync(schemaPath, 'utf8');
         db.exec(schema);
@@ -320,25 +321,25 @@ function updateLesson(lessonId, updates) {
 function toggleLessonPayment(lessonId) {
     logger.info('Toggling lesson payment', { lessonId });
 
+    const lessonData = db
+        .prepare(
+            `
+            SELECT l.id, l.is_completed, l.student_id, s.balance
+            FROM lessons l
+            JOIN students s ON l.student_id = s.id
+            WHERE l.id = ?
+        `,
+        )
+        .get(lessonId);
+
+    if (!lessonData || !lessonData.is_completed) {
+        logger.warn('Cannot toggle payment: lesson not found or not completed', {
+            lessonId,
+        });
+        throw new Error('Lesson not found or not completed');
+    }
+
     try {
-        const lessonData = db
-            .prepare(
-                `
-                SELECT l.id, l.is_completed, l.student_id, s.balance
-                FROM lessons l
-                JOIN students s ON l.student_id = s.id
-                WHERE l.id = ?
-            `,
-            )
-            .get(lessonId);
-
-        if (!lessonData || !lessonData.is_completed) {
-            logger.warn('Cannot toggle payment: lesson not found or not completed', {
-                lessonId,
-            });
-            throw new Error('Lesson not found or not completed');
-        }
-
         // Update payment status
         const updateStmt = db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?');
         updateStmt.run(lessonId);
@@ -523,29 +524,36 @@ function getSchedules(studentId) {
 function addSchedule(studentId, dayOfWeek, time) {
     logger.info('Adding schedule', { studentId, dayOfWeek, time });
 
-    try {
-        // Check if schedule with same day and time already exists (active or inactive)
-        const existingStmt = db.prepare(`
-            SELECT id, is_active FROM schedules
-            WHERE student_id = ? AND day_of_week = ? AND time = ?
-        `);
-        const existing = existingStmt.get(studentId, dayOfWeek, time);
+    const existingStmt = db.prepare(`
+        SELECT id, is_active FROM schedules
+        WHERE student_id = ? AND day_of_week = ? AND time = ?
+    `);
+    const existing = existingStmt.get(studentId, dayOfWeek, time);
 
-        if (existing) {
-            // If inactive schedule exists, reactivate it
-            if (!existing.is_active) {
+    if (existing) {
+        // If inactive schedule exists, reactivate it
+        if (!existing.is_active) {
+            try {
                 const reactivateStmt = db.prepare(
                     'UPDATE schedules SET is_active = 1 WHERE id = ?',
                 );
                 reactivateStmt.run(existing.id);
                 logger.info('Reactivated existing schedule', { id: existing.id });
                 return { id: existing.id };
+            } catch (error) {
+                logger.error('Failed to reactivate schedule', {
+                    scheduleId: existing.id,
+                    error: error.message,
+                });
+                throw error;
             }
-            // If active schedule exists, throw error
-            logger.warn('Schedule already exists', { studentId, dayOfWeek, time });
-            throw new Error('Schedule with same day and time already exists');
         }
+        // If active schedule exists, throw error
+        logger.warn('Schedule already exists', { studentId, dayOfWeek, time });
+        throw new Error('Schedule with same day and time already exists');
+    }
 
+    try {
         const stmt = db.prepare(`
             INSERT INTO schedules (student_id, day_of_week, time, is_active)
             VALUES (?, ?, ?, 1)

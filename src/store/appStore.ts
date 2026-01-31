@@ -315,7 +315,7 @@ const useAppStore = create<AppState>((set, get) => ({
         nextWeek.setDate(nextWeek.getDate() + 7);
 
         set({ currentWeek: getWeekStart(nextWeek) });
-        get().loadLessons();
+        void get().loadLessons();
     },
 
     /**
@@ -327,7 +327,7 @@ const useAppStore = create<AppState>((set, get) => ({
         prevWeek.setDate(prevWeek.getDate() - 7);
 
         set({ currentWeek: getWeekStart(prevWeek) });
-        get().loadLessons();
+        void get().loadLessons();
     },
 
     /**
@@ -335,7 +335,7 @@ const useAppStore = create<AppState>((set, get) => ({
      */
     goToToday: (): void => {
         set({ currentWeek: getWeekStart(new Date()) });
-        get().loadLessons();
+        void get().loadLessons();
     },
 
     // ========== MODALS ==========

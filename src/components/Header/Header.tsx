@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { RefreshCw, Users, Palette } from 'lucide-react';
 import { formatDateWithMonth } from '@/utils/dateHelpers';
-import useLessons from '../../hooks/useLessons';
-import useAppStore from '../../store/appStore';
+import useLessons from '@/hooks/useLessons';
+import useAppStore from '@/store/appStore';
 
 /**
  * Application header with action buttons and week navigation

@@ -27,7 +27,7 @@ function App() {
 
     // Initialize app on mount
     useEffect(() => {
-        initialize();
+        void initialize();
     }, [initialize]);
 
     return (

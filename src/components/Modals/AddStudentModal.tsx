@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import useAppStore from '../../store/appStore';
-import useStudents from '../../hooks/useStudents';
+import React, { useState } from 'react';
+import useAppStore from '@/store/appStore';
+import useStudents from '@/hooks/useStudents';
 import Modal from './Modal';
 
 /**
@@ -16,7 +16,7 @@ function AddStudentModal() {
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
 
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
         e.preventDefault();
 
         if (!name.trim()) {

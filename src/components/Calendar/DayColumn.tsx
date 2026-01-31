@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { formatDate, formatDayOfWeekShort } from '@/utils/dateHelpers';
 import { isToday } from '@/utils/lessonStatus';
-import useLessons from '../../hooks/useLessons';
-import useAppStore from '../../store/appStore';
+import useLessons from '@/hooks/useLessons';
+import useAppStore from '@/store/appStore';
 import LessonCard from './LessonCard';
 import type { Lesson } from '@/types';
 

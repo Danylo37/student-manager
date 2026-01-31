@@ -1,7 +1,7 @@
 const winston = require('winston');
 const path = require('path');
 const { app } = require('electron');
-require('winston-daily-rotate-file');
+const DailyRotateFile = require('winston-daily-rotate-file');
 
 // Define log directory
 const logDir = path.join(app.getPath('userData'), 'logs');
@@ -32,7 +32,7 @@ const logger = winston.createLogger({
     format: fileFormat,
     transports: [
         // Error logs - separate file
-        new winston.transports.DailyRotateFile({
+        new DailyRotateFile({
             filename: path.join(logDir, 'error-%DATE%.log'),
             datePattern: 'YYYY-MM-DD',
             level: 'error',
@@ -41,7 +41,7 @@ const logger = winston.createLogger({
         }),
 
         // Combined logs - all levels
-        new winston.transports.DailyRotateFile({
+        new DailyRotateFile({
             filename: path.join(logDir, 'app-%DATE%.log'),
             datePattern: 'YYYY-MM-DD',
             maxFiles: '14d',

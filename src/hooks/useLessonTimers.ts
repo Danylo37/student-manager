@@ -44,7 +44,7 @@ function useLessonTimers(): null {
 
         // If lesson should have already completed, complete it immediately
         if (now >= lessonEnd) {
-            completeLessonAutomatically(lesson);
+            void completeLessonAutomatically(lesson);
             return;
         }
 
@@ -53,7 +53,7 @@ function useLessonTimers(): null {
 
         // Create timer
         const timerId = setTimeout(() => {
-            completeLessonAutomatically(lesson);
+            void completeLessonAutomatically(lesson);
             timersRef.current.delete(lesson.id); // Remove from timer list
         }, timeUntilEnd);
 

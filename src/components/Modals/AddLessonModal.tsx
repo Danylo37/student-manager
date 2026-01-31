@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import useAppStore from '../../store/appStore';
-import useStudents from '../../hooks/useStudents';
-import useLessons from '../../hooks/useLessons';
+import React, { useState, useEffect } from 'react';
+import useAppStore from '@/store/appStore';
+import useStudents from '@/hooks/useStudents';
+import useLessons from '@/hooks/useLessons';
 import { shouldBeCompleted } from '@/utils/lessonStatus';
 import { DatePickerInput, TimePickerInput } from '../common/DateTimePicker';
 import Modal from './Modal';
@@ -52,7 +52,7 @@ function AddLessonModal() {
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
         e.preventDefault();
 
         if (!studentId) {
@@ -161,7 +161,7 @@ function AddLessonModal() {
                     </div>
                 </div>
 
-                {/* Past time warning */}
+                {/* Warning for past datetime */}
                 {isPastTime && (
                     <div className="bg-orange-50 border border-orange-200 text-orange-800 px-4 py-3 rounded text-sm">
                         ⚠️ Час уже минув. Урок буде автоматично позначено як проведений

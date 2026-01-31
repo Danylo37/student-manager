@@ -1,5 +1,5 @@
 import { getWeekDays } from '@/utils/dateHelpers';
-import useLessons from '../../hooks/useLessons';
+import useLessons from '@/hooks/useLessons';
 import DayColumn from './DayColumn';
 
 // Time slots from 9:00 to 21:00

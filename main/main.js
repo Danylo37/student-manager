@@ -8,10 +8,16 @@ let mainWindow;
 function createWindow() {
     logger.info('Creating main window');
 
+    // Use appropriate icon format for each platform
+    const iconPath =
+        process.platform === 'win32'
+            ? path.join(__dirname, '../build/icon.ico')
+            : path.join(__dirname, '../build/icon.png');
+
     mainWindow = new BrowserWindow({
         width: 1400,
         height: 900,
-        icon: path.join(__dirname, '../build/icon.png'),
+        icon: iconPath,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
@@ -23,19 +29,26 @@ function createWindow() {
 
     if (process.env.NODE_ENV === 'development') {
         logger.debug('Loading development URL');
-        mainWindow.loadURL('http://localhost:5173');
+        mainWindow.loadURL('http://localhost:5173').catch((error) => {
+            logger.error('Failed to load development URL', { error: error.message });
+        });
         mainWindow.webContents.openDevTools();
     } else {
         logger.debug('Loading production file');
-        mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+        mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html')).catch((error) => {
+            logger.error('Failed to load production file', { error: error.message });
+        });
     }
 
     mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
         logger.error('Window failed to load', { errorCode, errorDescription });
     });
 
-    mainWindow.webContents.on('crashed', () => {
-        logger.error('Window crashed');
+    mainWindow.webContents.on('render-process-gone', (_event, details) => {
+        logger.error('Renderer process gone', {
+            reason: details.reason,
+            exitCode: details.exitCode,
+        });
     });
 
     logger.info('Main window created successfully');

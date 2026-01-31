@@ -184,22 +184,27 @@ function useLessons(): UseLessonsReturn {
             const today = new Date();
             const isToday = isSameDayAs(date, today);
 
+            // Helper function to calculate next time slot based on current time
+            const getNextTimeSlotFromNow = (baseDate: Date): TimeSlotResult => {
+                const now = new Date();
+                const currentHour = now.getHours();
+                const currentMinutes = now.getMinutes();
+
+                const nextHour = currentMinutes > 0 ? currentHour + 1 : currentHour;
+
+                if (nextHour > 20) {
+                    const nextDay = new Date(baseDate);
+                    nextDay.setDate(nextDay.getDate() + 1);
+                    return { time: '14:00', date: nextDay };
+                }
+
+                const hours = String(nextHour).padStart(2, '0');
+                return { time: `${hours}:00`, date: baseDate };
+            };
+
             if (dayLessons.length === 0) {
                 if (isToday) {
-                    const now = new Date();
-                    const currentHour = now.getHours();
-                    const currentMinutes = now.getMinutes();
-
-                    const nextHour = currentMinutes > 0 ? currentHour + 1 : currentHour;
-
-                    if (nextHour > 20) {
-                        const nextDay = new Date(date);
-                        nextDay.setDate(nextDay.getDate() + 1);
-                        return { time: '14:00', date: nextDay };
-                    }
-
-                    const hours = String(nextHour).padStart(2, '0');
-                    return { time: `${hours}:00`, date };
+                    return getNextTimeSlotFromNow(date);
                 }
                 return { time: '14:00', date };
             }
@@ -210,20 +215,7 @@ function useLessons(): UseLessonsReturn {
             lastTime.setHours(lastTime.getHours() + 1);
 
             if (isToday && lastTime < today) {
-                const now = new Date();
-                const currentHour = now.getHours();
-                const currentMinutes = now.getMinutes();
-
-                const nextHour = currentMinutes > 0 ? currentHour + 1 : currentHour;
-
-                if (nextHour > 20) {
-                    const nextDay = new Date(date);
-                    nextDay.setDate(nextDay.getDate() + 1);
-                    return { time: '14:00', date: nextDay };
-                }
-
-                const hours = String(nextHour).padStart(2, '0');
-                return { time: `${hours}:00`, date };
+                return getNextTimeSlotFromNow(date);
             }
 
             if (

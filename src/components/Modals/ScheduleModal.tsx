@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import useAppStore from '@/store/appStore';
 import { TimePickerInput } from '../common/DateTimePicker';
 import Modal from './Modal';
@@ -47,12 +47,18 @@ function ScheduleModal() {
     }, [isOpen, time]);
 
     useEffect(() => {
-        if (isOpen && selectedStudent) {
-            loadSchedules(selectedStudent.id);
-        }
+        if (!isOpen || !selectedStudent) return;
+
+        (async () => {
+            try {
+                await loadSchedules(selectedStudent.id);
+            } catch (err) {
+                console.error('Failed to load schedules', err);
+            }
+        })();
     }, [isOpen, selectedStudent, loadSchedules]);
 
-    const handleAdd = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    const handleAdd = async (e: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
         e.preventDefault();
         setError(null);
 

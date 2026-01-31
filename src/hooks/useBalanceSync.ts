@@ -32,12 +32,13 @@ function useBalanceSync(): void {
 
     useEffect(() => {
         // On app start
-        performSync();
+        void performSync();
 
         // When user returns to the app
         const handleFocus = (): void => {
-            performSync();
+            void performSync();
         };
+
         window.addEventListener('focus', handleFocus);
 
         return () => {
