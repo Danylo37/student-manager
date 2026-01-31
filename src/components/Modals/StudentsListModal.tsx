@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Calendar } from 'lucide-react';
-import useAppStore from '../../store/appStore';
-import useStudents from '../../hooks/useStudents';
+import useAppStore from '@/store/appStore';
+import useStudents from '@/hooks/useStudents';
 import Modal from './Modal';
 
 /**
@@ -14,13 +14,13 @@ function StudentsListModal() {
     const selectStudentForSchedule = useAppStore((state) => state.selectStudentForSchedule);
     const { students, searchStudents, deleteStudent, updateBalance } = useStudents();
 
-    const [searchQuery, setSearchQuery] = useState('');
-    const [editingBalance, setEditingBalance] = useState(null);
-    const [balanceAmount, setBalanceAmount] = useState(0);
+    const [searchQuery, setSearchQuery] = useState<string>('');
+    const [editingBalance, setEditingBalance] = useState<number | null>(null);
+    const [balanceAmount, setBalanceAmount] = useState<number>(0);
 
     const filteredStudents = searchStudents(searchQuery);
 
-    const handleDelete = async (studentId, studentName) => {
+    const handleDelete = async (studentId: number, studentName: string): Promise<void> => {
         if (!confirm(`Видалити учня "${studentName}"? Всі його уроки також будуть видалені.`)) {
             return;
         }
@@ -33,12 +33,12 @@ function StudentsListModal() {
         }
     };
 
-    const handleBalanceEdit = (studentId) => {
+    const handleBalanceEdit = (studentId: number): void => {
         setEditingBalance(studentId);
         setBalanceAmount(0);
     };
 
-    const handleBalanceSubmit = async (studentId) => {
+    const handleBalanceSubmit = async (studentId: number): Promise<void> => {
         try {
             await updateBalance(studentId, balanceAmount);
             setEditingBalance(null);
@@ -49,13 +49,13 @@ function StudentsListModal() {
         }
     };
 
-    const handleOpenSchedule = (student) => {
+    const handleOpenSchedule = (student: (typeof students)[0]): void => {
         selectStudentForSchedule(student);
         handleClose();
         openModal('schedule');
     };
 
-    const handleClose = () => {
+    const handleClose = (): void => {
         setSearchQuery('');
         setEditingBalance(null);
         setBalanceAmount(0);

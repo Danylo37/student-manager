@@ -1,10 +1,9 @@
-import React from 'react';
 import { getWeekDays } from '@/utils/dateHelpers';
 import useLessons from '../../hooks/useLessons';
 import DayColumn from './DayColumn';
 
 // Time slots from 9:00 to 21:00
-const TIME_SLOTS = Array.from({ length: 13 }, (_, i) => i + 9);
+const TIME_SLOTS: number[] = Array.from({ length: 13 }, (_, i) => i + 9);
 
 /**
  * Week view calendar component with time slots

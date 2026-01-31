@@ -1,14 +1,27 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { formatDate, formatDayOfWeekShort } from '@/utils/dateHelpers';
 import { isToday } from '@/utils/lessonStatus';
 import useLessons from '../../hooks/useLessons';
 import useAppStore from '../../store/appStore';
 import LessonCard from './LessonCard';
+import type { Lesson } from '@/types';
+
+interface DayColumnProps {
+    date: Date;
+    timeSlots: number[];
+}
+
+interface LessonTime {
+    id: number;
+    lesson: Lesson;
+    hour: number;
+    minuteOffset: number;
+}
 
 /**
  * Day column component for calendar with time grid
  */
-function DayColumn({ date, timeSlots }) {
+function DayColumn({ date, timeSlots }: DayColumnProps) {
     const { getLessonsForDate } = useLessons();
     const openAddLessonModal = useAppStore((state) => state.openAddLessonModal);
     const dayLessons = getLessonsForDate(date);
@@ -17,31 +30,29 @@ function DayColumn({ date, timeSlots }) {
     /**
      * This memo recalculates only when dayLessons changes
      */
-    const lessonTimes = useMemo(
-        () =>
-            dayLessons.map((lesson) => {
-                const lessonDate = new Date(lesson.datetime);
-                return {
-                    id: lesson.id,
-                    lesson,
-                    hour: lessonDate.getHours(),
-                    minuteOffset: lessonDate.getMinutes(),
-                };
-            }),
-        [dayLessons],
-    );
+    const lessonTimes = useMemo((): LessonTime[] => {
+        return dayLessons.map((lesson) => {
+            const lessonDate = new Date(lesson.datetime);
+            return {
+                id: lesson.id,
+                lesson,
+                hour: lessonDate.getHours(),
+                minuteOffset: lessonDate.getMinutes(),
+            };
+        });
+    }, [dayLessons]);
 
     /**
      * Get lessons for a specific hour
      */
-    const getLessonsForHour = (hour) => {
+    const getLessonsForHour = (hour: number): LessonTime[] => {
         return lessonTimes.filter((lt) => lt.hour === hour);
     };
 
     /**
      * Handle click on time slot
      */
-    const handleTimeSlotClick = (hour) => {
+    const handleTimeSlotClick = (hour: number): void => {
         // Make 21:00 slot non-clickable
         if (hour === 21) return;
 

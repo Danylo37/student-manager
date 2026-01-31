@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import useAppStore from '../../store/appStore';
-import useLessons from '../../hooks/useLessons';
-import useStudents from '../../hooks/useStudents';
+import { useState, useEffect } from 'react';
+import useAppStore from '@/store/appStore';
+import useLessons from '@/hooks/useLessons';
+import useStudents from '@/hooks/useStudents';
 import { getLessonStatus, getStatusLabel, shouldBeCompleted } from '@/utils/lessonStatus';
 import { DatePickerInput, TimePickerInput } from '../common/DateTimePicker';
 import Modal from './Modal';
@@ -16,12 +16,11 @@ function EditLessonModal() {
     const { updateLesson, deleteLesson } = useLessons();
     const { getStudentById } = useStudents();
 
-    const [date, setDate] = useState(null);
-    const [time, setTime] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const [date, setDate] = useState<Date | null>(null);
+    const [time, setTime] = useState<Date | null>(null);
+    const [loading, setLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
 
-    // Initialize form when lesson is selected
     useEffect(() => {
         if (selectedLesson) {
             const lessonDate = new Date(selectedLesson.datetime);
@@ -30,8 +29,10 @@ function EditLessonModal() {
         }
     }, [selectedLesson]);
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
         e.preventDefault();
+
+        if (!selectedLesson) return;
 
         if (!date || !time) {
             setError('Вкажіть дату та час');
@@ -45,22 +46,24 @@ function EditLessonModal() {
             const datetime = new Date(date);
             datetime.setHours(time.getHours(), time.getMinutes(), 0, 0);
 
-            const is_completed = shouldBeCompleted(datetime);
+            const is_completed = shouldBeCompleted(datetime.toISOString());
             const completionStatusChanged = is_completed !== (selectedLesson.is_completed === 1);
 
-            const updateData = {
+            const updateData: {
+                datetime: string;
+                is_completed?: number;
+                is_paid?: number;
+            } = {
                 datetime: datetime.toISOString(),
             };
 
-            // Recalculate completion and payment status if completion status changed
             if (completionStatusChanged) {
                 const student = getStudentById(selectedLesson.student_id);
-                updateData.is_completed = is_completed;
+                updateData.is_completed = is_completed ? 1 : 0;
                 updateData.is_paid = student && student.balance > 0 && is_completed ? 1 : 0;
             }
 
             await updateLesson(selectedLesson.id, updateData);
-
             closeModal('editLesson');
         } catch (err) {
             setError('Помилка при оновленні уроку');
@@ -70,7 +73,9 @@ function EditLessonModal() {
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = async (): Promise<void> => {
+        if (!selectedLesson) return;
+
         if (!confirm('Видалити цей урок?')) {
             return;
         }
@@ -84,7 +89,7 @@ function EditLessonModal() {
         }
     };
 
-    const handleClose = () => {
+    const handleClose = (): void => {
         setError(null);
         closeModal('editLesson');
     };

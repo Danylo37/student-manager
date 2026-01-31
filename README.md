@@ -237,26 +237,26 @@ student-manager/
 ├── node_modules/               # NPM dependencies
 │
 ├── src/                        # React application
-│   ├── App.jsx                 # Main component
-│   ├── main.jsx                # React entry point
+│   ├── App.tsx                 # Main component
+│   ├── main.tsx                # React entry point
 │   ├── index.css               # Global styles
 │   │
 │   ├── components/             # React components
 │   │   ├── Calendar/           # Calendar and scheduling
-│   │   │   ├── WeekView.jsx    # Weekly view
-│   │   │   ├── DayColumn.jsx   # Day column
+│   │   │   ├── WeekView.tsx    # Weekly view
+│   │   │   ├── DayColumn.tsx   # Day column
 │   │   │   └── LessonCard.tsx  # Lesson card
 │   │   │
 │   │   ├── Header/             # Application header
-│   │   │   └── Header.jsx      # Navigation and actions
+│   │   │   └── Header.tsx      # Navigation and actions
 │   │   │
 │   │   ├── Modals/             # Modal windows
 │   │   │   ├── Modal.tsx               # Base modal
-│   │   │   ├── AddStudentModal.jsx     # Add student
-│   │   │   ├── AddLessonModal.jsx      # Add lesson
-│   │   │   ├── EditLessonModal.jsx     # Edit lesson
-│   │   │   ├── StudentsListModal.jsx   # Students list
-│   │   │   └── ScheduleModal.jsx       # Schedule management
+│   │   │   ├── AddStudentModal.tsx     # Add student
+│   │   │   ├── AddLessonModal.tsx      # Add lesson
+│   │   │   ├── EditLessonModal.tsx     # Edit lesson
+│   │   │   ├── StudentsListModal.tsx   # Students list
+│   │   │   └── ScheduleModal.tsx       # Schedule management
 │   │   │
 │   │   └── common/             # Common components
 │   │       ├── DateTimePicker.tsx

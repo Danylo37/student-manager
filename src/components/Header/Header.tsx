@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { RefreshCw, Users, Palette } from 'lucide-react';
 import { formatDateWithMonth } from '@/utils/dateHelpers';
 import useLessons from '../../hooks/useLessons';
@@ -16,14 +16,14 @@ function Header() {
     const theme = useAppStore((state) => state.theme);
     const toggleTheme = useAppStore((state) => state.toggleTheme);
 
-    const [syncing, setSyncing] = useState(false);
+    const [syncing, setSyncing] = useState<boolean>(false);
 
     const weekDays = useLessons().currentWeek;
     const weekStart = new Date(weekDays);
     const weekEnd = new Date(weekDays);
     weekEnd.setDate(weekEnd.getDate() + 6);
 
-    const handleSync = async () => {
+    const handleSync = async (): Promise<void> => {
         setSyncing(true);
         try {
             await syncLessons();

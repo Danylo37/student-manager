@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import useAppStore from './store/appStore';
 import useBalanceSync from './hooks/useBalanceSync';
 import useLessonTimers from './hooks/useLessonTimers';

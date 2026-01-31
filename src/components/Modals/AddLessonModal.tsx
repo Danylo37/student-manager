@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import useAppStore from '../../store/appStore';
 import useStudents from '../../hooks/useStudents';
 import useLessons from '../../hooks/useLessons';
@@ -16,27 +16,23 @@ function AddLessonModal() {
     const { students } = useStudents();
     const { addLesson, getNextTimeSlot } = useLessons();
 
-    const [studentId, setStudentId] = useState('');
-    const [date, setDate] = useState(null);
-    const [time, setTime] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const [studentId, setStudentId] = useState<string>('');
+    const [date, setDate] = useState<Date | null>(null);
+    const [time, setTime] = useState<Date | null>(null);
+    const [loading, setLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
 
-    // Set default date to today and suggested time
     useEffect(() => {
         if (isOpen) {
             if (prefilledDateTime) {
-                // Use pre-filled date/time from clicking on calendar
                 setDate(prefilledDateTime);
                 setTime(prefilledDateTime);
             } else {
-                // Use suggested time based on today
                 const today = new Date();
                 const { time: suggestedTime, date: suggestedDate } = getNextTimeSlot(today);
 
                 setDate(suggestedDate);
 
-                // Set suggested time
                 const [hours, minutes] = suggestedTime.split(':');
                 const timeDate = new Date();
                 timeDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
@@ -45,8 +41,7 @@ function AddLessonModal() {
         }
     }, [isOpen, getNextTimeSlot, prefilledDateTime]);
 
-    // Update suggested time when date changes
-    const handleDateChange = (newDate) => {
+    const handleDateChange = (newDate: Date | null): void => {
         setDate(newDate);
         if (newDate) {
             const { time: suggestedTime } = getNextTimeSlot(newDate);
@@ -57,7 +52,7 @@ function AddLessonModal() {
         }
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
         e.preventDefault();
 
         if (!studentId) {
@@ -74,14 +69,13 @@ function AddLessonModal() {
         setError(null);
 
         try {
-            // Combine date and time
             const datetime = new Date(date);
             datetime.setHours(time.getHours(), time.getMinutes(), 0, 0);
 
             const isCompleted = shouldBeCompleted(datetime.toISOString());
 
             const student = students.find((s) => s.id === parseInt(studentId));
-            const isPaid = student && student.balance > 0 && isCompleted;
+            const isPaid = !!(student && student.balance > 0 && isCompleted);
 
             await addLesson({
                 studentId: parseInt(studentId),
@@ -90,7 +84,6 @@ function AddLessonModal() {
                 isCompleted,
             });
 
-            // Reset form and close
             setStudentId('');
             setDate(null);
             setTime(null);
@@ -103,7 +96,7 @@ function AddLessonModal() {
         }
     };
 
-    const handleClose = () => {
+    const handleClose = (): void => {
         setStudentId('');
         setDate(null);
         setTime(null);
@@ -111,10 +104,8 @@ function AddLessonModal() {
         closeModal('addLesson');
     };
 
-    // Get selected student
     const selectedStudent = students.find((s) => s.id === parseInt(studentId));
 
-    // Check if selected time is in the past
     const datetime =
         date && time
             ? (() => {

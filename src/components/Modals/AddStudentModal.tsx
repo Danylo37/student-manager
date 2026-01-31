@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import useAppStore from '../../store/appStore';
 import useStudents from '../../hooks/useStudents';
 import Modal from './Modal';
@@ -11,12 +11,12 @@ function AddStudentModal() {
     const closeModal = useAppStore((state) => state.closeModal);
     const { addStudent } = useStudents();
 
-    const [name, setName] = useState('');
-    const [balance, setBalance] = useState(0);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const [name, setName] = useState<string>('');
+    const [balance, setBalance] = useState<number>(0);
+    const [loading, setLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
         e.preventDefault();
 
         if (!name.trim()) {
@@ -28,10 +28,7 @@ function AddStudentModal() {
         setError(null);
 
         try {
-            // Add student
             await addStudent(name.trim(), balance);
-
-            // Reset form and close
             setName('');
             setBalance(0);
             closeModal('addStudent');
@@ -43,7 +40,7 @@ function AddStudentModal() {
         }
     };
 
-    const handleClose = () => {
+    const handleClose = (): void => {
         setName('');
         setBalance(0);
         setError(null);

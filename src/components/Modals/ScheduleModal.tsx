@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import useAppStore from '../../store/appStore';
+import { useState, useEffect } from 'react';
+import useAppStore from '@/store/appStore';
 import { TimePickerInput } from '../common/DateTimePicker';
 import Modal from './Modal';
 
-const DAYS_OF_WEEK = [
+interface DayOfWeek {
+    value: number;
+    label: string;
+}
+
+const DAYS_OF_WEEK: DayOfWeek[] = [
     { value: 0, label: 'Понеділок' },
     { value: 1, label: 'Вівторок' },
     { value: 2, label: 'Середа' },
@@ -27,13 +32,12 @@ function ScheduleModal() {
     const autoCreateLessons = useAppStore((state) => state.autoCreateLessons);
     const schedules = useAppStore((state) => state.schedules);
 
-    const [dayOfWeek, setDayOfWeek] = useState(0);
-    const [time, setTime] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [autoCreateLoading, setAutoCreateLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const [dayOfWeek, setDayOfWeek] = useState<number>(0);
+    const [time, setTime] = useState<Date | null>(null);
+    const [loading, setLoading] = useState<boolean>(false);
+    const [autoCreateLoading, setAutoCreateLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
 
-    // Set default time to 14:00
     useEffect(() => {
         if (isOpen && !time) {
             const defaultTime = new Date();
@@ -42,18 +46,17 @@ function ScheduleModal() {
         }
     }, [isOpen, time]);
 
-    // Load schedules when modal opens
     useEffect(() => {
         if (isOpen && selectedStudent) {
             loadSchedules(selectedStudent.id);
         }
     }, [isOpen, selectedStudent, loadSchedules]);
 
-    const handleAdd = async (e) => {
+    const handleAdd = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
         e.preventDefault();
         setError(null);
 
-        if (!time) {
+        if (!time || !selectedStudent) {
             setError('Оберіть час');
             return;
         }
@@ -61,20 +64,18 @@ function ScheduleModal() {
         setLoading(true);
 
         try {
-            // Convert Date to HH:mm format
             const hours = String(time.getHours()).padStart(2, '0');
             const minutes = String(time.getMinutes()).padStart(2, '0');
             const timeString = `${hours}:${minutes}`;
 
             await addSchedule(selectedStudent.id, dayOfWeek, timeString);
 
-            // Reset to default time
             const defaultTime = new Date();
             defaultTime.setHours(14, 0, 0, 0);
             setTime(defaultTime);
             setDayOfWeek(0);
         } catch (err) {
-            if (err.message && err.message.includes('already exists')) {
+            if (err instanceof Error && err.message.includes('already exists')) {
                 setError('Розклад на цей день і час вже існує');
             } else {
                 setError('Помилка при додаванні розкладу');
@@ -85,7 +86,7 @@ function ScheduleModal() {
         }
     };
 
-    const handleDelete = async (scheduleId) => {
+    const handleDelete = async (scheduleId: number): Promise<void> => {
         try {
             await deleteSchedule(scheduleId);
         } catch (err) {
@@ -94,7 +95,7 @@ function ScheduleModal() {
         }
     };
 
-    const handleToggle = async (scheduleId) => {
+    const handleToggle = async (scheduleId: number): Promise<void> => {
         try {
             await toggleScheduleActive(scheduleId);
         } catch (err) {
@@ -103,7 +104,9 @@ function ScheduleModal() {
         }
     };
 
-    const handleAutoCreate = async () => {
+    const handleAutoCreate = async (): Promise<void> => {
+        if (!selectedStudent) return;
+
         setAutoCreateLoading(true);
         setError(null);
 
@@ -125,7 +128,7 @@ function ScheduleModal() {
         }
     };
 
-    const handleClose = () => {
+    const handleClose = (): void => {
         setError(null);
         const defaultTime = new Date();
         defaultTime.setHours(14, 0, 0, 0);
@@ -136,7 +139,6 @@ function ScheduleModal() {
 
     if (!selectedStudent) return null;
 
-    // Group active schedules by day
     const activeSchedulesByDay = DAYS_OF_WEEK.map((day) => ({
         ...day,
         times: schedules
@@ -144,7 +146,6 @@ function ScheduleModal() {
             .sort((a, b) => a.time.localeCompare(b.time)),
     }));
 
-    // Group inactive schedules by day
     const inactiveSchedulesByDay = DAYS_OF_WEEK.map((day) => ({
         ...day,
         times: schedules
