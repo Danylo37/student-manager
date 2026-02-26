@@ -43,6 +43,18 @@ function initDatabase() {
         const schema = fs.readFileSync(schemaPath, 'utf8');
         db.exec(schema);
 
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS deleted_lesson_slots(
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER NOT NULL,
+                datetime   TEXT    NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
+                );
+            CREATE INDEX IF NOT EXISTS idx_deleted_slots_student 
+            ON deleted_lesson_slots (student_id, datetime);
+        `);
+
         logger.info('Database initialized successfully');
         return db;
     } catch (error) {
@@ -284,9 +296,11 @@ function updateLesson(lessonId, updates) {
         }
 
         if (updates.datetime !== undefined) {
-            // Store old datetime as previous_datetime
-            fields.push('previous_datetime = ?');
-            values.push(current.datetime);
+            // Store old datetime as previous_datetime only if not already set
+            if (!current.previous_datetime) {
+                fields.push('previous_datetime = ?');
+                values.push(current.datetime);
+            }
 
             fields.push('datetime = ?');
             values.push(updates.datetime);
@@ -366,7 +380,6 @@ function deleteLesson(lessonId) {
     logger.info('Deleting lesson', { lessonId });
 
     try {
-        // Get lesson data before deleting
         const lessonStmt = db.prepare('SELECT * FROM lessons WHERE id = ?');
         const lesson = lessonStmt.get(lessonId);
 
@@ -375,17 +388,22 @@ function deleteLesson(lessonId) {
             return;
         }
 
-        // Delete lesson
         const deleteStmt = db.prepare('DELETE FROM lessons WHERE id = ?');
         deleteStmt.run(lessonId);
 
-        // If lesson was completed, return 1 to balance
-        if (lesson && lesson.is_completed) {
+        if (lesson.is_completed) {
             updateStudentBalance(lesson.student_id, 1);
             logger.debug('Returned balance after lesson deletion', {
                 studentId: lesson.student_id,
             });
         }
+
+        db.prepare(
+            `
+            INSERT OR IGNORE INTO deleted_lesson_slots (student_id, datetime)
+            VALUES (?, ?)
+        `,
+        ).run(lesson.student_id, lesson.datetime);
 
         logger.info('Lesson deleted successfully', { lessonId });
     } catch (error) {
@@ -397,10 +415,37 @@ function deleteLesson(lessonId) {
     }
 }
 
+function cleanupExpiredDeletedSlots() {
+    logger.debug('Cleaning up expired deleted lesson slots');
+
+    const now = new Date();
+    const thresholdTime = new Date(now.getTime() - LESSON_DURATION_MINUTES * 60 * 1000);
+    const thresholdISO = thresholdTime.toISOString();
+
+    try {
+        const result = db
+            .prepare(
+                `
+            DELETE FROM deleted_lesson_slots
+            WHERE datetime < ?
+        `,
+            )
+            .run(thresholdISO);
+
+        logger.debug('Expired deleted slots cleaned up', { count: result.changes });
+        return result.changes;
+    } catch (error) {
+        logger.error('Failed to cleanup expired deleted slots', { error: error.message });
+        throw error;
+    }
+}
+
 // === AUTO SYNC ===
 function syncCompletedLessons() {
     const startTime = Date.now();
     logger.info('Starting lesson synchronization');
+
+    cleanupExpiredDeletedSlots();
 
     const now = new Date();
     const thresholdTime = new Date(now.getTime() - LESSON_DURATION_MINUTES * 60 * 1000);
@@ -687,7 +732,7 @@ function autoCreateLessons(studentId) {
 
     // Create lessons
     for (const lesson of possibleLessons) {
-        // Check if lesson already exists at this datetime or if this datetime was a previous datetime
+        const iso = lesson.datetime.toISOString();
         const existing = db
             .prepare(
                 `
@@ -695,9 +740,22 @@ function autoCreateLessons(studentId) {
                     WHERE student_id = ? AND (datetime = ? OR previous_datetime = ?)
                 `,
             )
-            .get(studentId, lesson.datetime.toISOString(), lesson.datetime.toISOString());
+            .get(studentId, iso, iso);
 
         if (existing) {
+            continue;
+        }
+
+        const deleted = db
+            .prepare(
+                `
+                    SELECT id FROM deleted_lesson_slots
+                    WHERE student_id = ? AND datetime = ?
+                `,
+            )
+            .get(studentId, iso);
+
+        if (deleted) {
             continue;
         }
 

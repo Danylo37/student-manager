@@ -29,6 +29,16 @@ CREATE TABLE IF NOT EXISTS schedules
     FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS deleted_lesson_slots
+(
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    datetime   TEXT    NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
+    );
+
 CREATE INDEX IF NOT EXISTS idx_lessons_datetime ON lessons (datetime);
 CREATE INDEX IF NOT EXISTS idx_lessons_student ON lessons (student_id);
 CREATE INDEX IF NOT EXISTS idx_schedules_student ON schedules (student_id);
+CREATE INDEX IF NOT EXISTS idx_deleted_slots_student ON deleted_lesson_slots (student_id, datetime);
