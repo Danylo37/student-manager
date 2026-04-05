@@ -38,25 +38,32 @@
 ## 📸 Screenshots
 
 ### Calendar
+
 ![Calendar](attachments/1_calendar.png)
 
 ### Calendar (Purple Theme)
+
 ![Purple theme](attachments/2_calendar_purple_theme.png)
 
 ### Calendar with Lessons
+
 ![Calendar with lessons - view 1](attachments/3_calendar_with_lessons_1.png)
 ![Calendar with lessons - view 2](attachments/4_calendar_with_lessons_2.png)
 
 ### Add Student
+
 ![Add student](attachments/5_add_student.png)
 
 ### Add Lesson
+
 ![Add lesson](attachments/6_add_lesson.png)
 
 ### Student List
+
 ![Student list](attachments/7_student_list.png)
 
 ### Schedule
+
 ![Schedule](attachments/8_schedule.png)
 
 ---
@@ -64,26 +71,31 @@
 ### Key Features
 
 ✅ **Student Management**
+
 - Add, edit, and delete students
 - Track each student's balance
 - View lesson history
 
 ✅ **Lesson Calendar**
+
 - Weekly view with lessons
 - Visual lesson statuses (scheduled, completed, paid, overdue)
 - Quick lesson adding and editing
 
 ✅ **Scheduling**
+
 - Create recurring schedules for each student
 - Automatic lesson generation based on schedule
 - Flexible schedule management (activate/deactivate)
 
 ✅ **Automatic Accounting**
+
 - Balance synchronization when marking lessons as completed
 - Automatic detection of overdue lessons
 - Secure local data storage using SQLite database
 
 ✅ **Visual Customization**
+
 - Beautiful purple theme for a modern and pleasant interface
 - Elegant color scheme that reduces eye strain
 - Intuitive visual design for better user experience
@@ -135,6 +147,7 @@ npm run dev
 ```
 
 This command will start:
+
 - Vite dev server on `http://localhost:5173`
 - Electron application with hot-reload
 
@@ -155,10 +168,12 @@ npm run package:win
 **Output:** Executable `.exe` installer in `release/` folder
 
 **Windows Requirements:**
+
 - Visual Studio Build Tools 2017 or newer
 - Windows SDK (usually included in Visual Studio Build Tools)
 
 Install Build Tools with:
+
 ```bash
 npm install --global windows-build-tools
 ```
@@ -173,13 +188,15 @@ npm run build
 npm run package:linux
 ```
 
-**Output:** 
+**Output:**
+
 - `.AppImage` — universal format for all distributions
 - `.deb` — for Ubuntu/Debian-based systems
 
 In `release/` folder
 
 **Linux Requirements:**
+
 ```bash
 # Debian/Ubuntu
 sudo apt-get install build-essential python3 make g++
@@ -301,12 +318,14 @@ The application uses **SQLite** for local data storage. The database is automati
 ### Database Schema
 
 **Table `students`**
+
 - `id` — unique identifier
 - `name` — student name
 - `balance` — balance (positive = overpayment, negative = debt)
 - `created_at` — creation date
 
 **Table `lessons`**
+
 - `id` — unique identifier
 - `student_id` — reference to student
 - `datetime` — lesson date and time
@@ -316,6 +335,7 @@ The application uses **SQLite** for local data storage. The database is automati
 - `created_at` — creation date
 
 **Table `schedules`**
+
 - `id` — unique identifier
 - `student_id` — reference to student
 - `day_of_week` — day of week (0-6, where 0 = Sunday)
@@ -368,4 +388,3 @@ In development mode, React changes are automatically applied without reloading. 
 
 **Danylo Lopatin**  
 Email: danilofokinn@gmail.com
-
