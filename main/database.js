@@ -255,7 +255,7 @@ function updateLesson(lessonId, updates) {
     const current = db
       .prepare(
         `
-                SELECT l.datetime, l.student_id, l.is_completed, l.is_paid, s.balance
+                SELECT l.datetime, l.previous_datetime, l.student_id, l.is_completed, l.is_paid, s.balance
                 FROM lessons l
                 JOIN students s ON l.student_id = s.id
                 WHERE l.id = ?
