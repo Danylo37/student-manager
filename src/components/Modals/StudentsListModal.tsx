@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Calendar } from 'lucide-react';
 import useAppStore from '@/store/appStore';
 import useStudents from '@/hooks/useStudents';
+import { useNotification } from '../common/NotificationProvider';
 import Modal from './Modal';
 
 /**
@@ -13,6 +14,7 @@ function StudentsListModal() {
   const openModal = useAppStore((state) => state.openModal);
   const selectStudentForSchedule = useAppStore((state) => state.selectStudentForSchedule);
   const { students, searchStudents, deleteStudent, updateBalance } = useStudents();
+  const { showToast, showConfirm } = useNotification();
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [editingBalance, setEditingBalance] = useState<number | null>(null);
@@ -21,14 +23,21 @@ function StudentsListModal() {
   const filteredStudents = searchStudents(searchQuery);
 
   const handleDelete = async (studentId: number, studentName: string): Promise<void> => {
-    if (!confirm(`Видалити учня "${studentName}"? Всі його уроки також будуть видалені.`)) {
-      return;
-    }
+    const confirmed = await showConfirm({
+      title: 'Видалити учня?',
+      message: `Учень "${studentName}" та всі його уроки будуть видалені назавжди. Цю дію неможливо скасувати.`,
+      confirmLabel: 'Видалити',
+      cancelLabel: 'Скасувати',
+      danger: true,
+    });
+
+    if (!confirmed) return;
 
     try {
       await deleteStudent(studentId);
+      showToast(`Учня "${studentName}" видалено успішно!`, 'success');
     } catch (err) {
-      alert('Помилка при видаленні учня');
+      showToast('Помилка при видаленні учня!', 'error');
       console.error(err);
     }
   };
@@ -43,8 +52,11 @@ function StudentsListModal() {
       await updateBalance(studentId, balanceAmount);
       setEditingBalance(null);
       setBalanceAmount(0);
+      const message = balanceAmount >= 0 ? 'Уроків додано до балансу:' : 'Уроків знято з балансу:';
+      const balance = balanceAmount >= 0 ? balanceAmount : -balanceAmount
+      showToast(`${message} ${balance}`, 'success');
     } catch (err) {
-      alert('Помилка при оновленні балансу');
+      showToast('Помилка при оновленні балансу!', 'error');
       console.error(err);
     }
   };
@@ -79,9 +91,7 @@ function StudentsListModal() {
 
         {/* Stats */}
         <div className="bg-blue-50 p-4 rounded-lg">
-          <div className="text-xl font-bold text-blue-700">
-            Всього учнів: {students.length}
-          </div>
+          <div className="text-xl font-bold text-blue-700">Всього учнів: {students.length}</div>
         </div>
 
         {/* Students list */}
@@ -99,26 +109,23 @@ function StudentsListModal() {
                 <div className="flex items-center justify-between">
                   {/* Student info */}
                   <div className="flex-1">
-                    <h3 className="text-lg font-bold text-gray-800">
-                      {student.name}
-                    </h3>
+                    <h3 className="text-lg font-bold text-gray-800">{student.name}</h3>
                     <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
                       <span>
                         Баланс:{' '}
                         <span
-                          className={`font-bold ${student.balance <= 0
-                            ? 'text-red-600'
-                            : student.balance < 3
-                              ? 'text-yellow-600'
-                              : 'text-green-600'
-                            }`}
+                          className={`font-bold ${
+                            student.balance <= 0
+                              ? 'text-red-600'
+                              : student.balance < 3
+                                ? 'text-yellow-600'
+                                : 'text-green-600'
+                          }`}
                         >
                           {student.balance}
                         </span>
                       </span>
-                      <span>
-                        Проведено: {student.completed_lessons_count || 0}
-                      </span>
+                      <span>Проведено: {student.completed_lessons_count || 0}</span>
                     </div>
                   </div>
 
@@ -129,11 +136,7 @@ function StudentsListModal() {
                         <input
                           type="number"
                           value={balanceAmount}
-                          onChange={(e) =>
-                            setBalanceAmount(
-                              parseInt(e.target.value) || 0,
-                            )
-                          }
+                          onChange={(e) => setBalanceAmount(parseInt(e.target.value) || 0)}
                           className="w-20 px-2 py-1 border border-gray-300 rounded"
                           placeholder="±0"
                         />
@@ -167,9 +170,7 @@ function StudentsListModal() {
                           Додати до балансу
                         </button>
                         <button
-                          onClick={() =>
-                            handleDelete(student.id, student.name)
-                          }
+                          onClick={() => handleDelete(student.id, student.name)}
                           className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-sm font-medium"
                         >
                           Видалити

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import useAppStore from '@/store/appStore';
 import useStudents from '@/hooks/useStudents';
 import useLessons from '@/hooks/useLessons';
+import { useNotification } from '../common/NotificationProvider';
 import { shouldBeCompleted } from '@/utils/lessonStatus';
 import { DatePickerInput, TimePickerInput } from '../common/DateTimePicker';
 import Modal from './Modal';
@@ -15,6 +16,7 @@ function AddLessonModal() {
   const prefilledDateTime = useAppStore((state) => state.prefilledLessonDateTime);
   const { students } = useStudents();
   const { addLesson, getNextTimeSlot } = useLessons();
+  const { showToast } = useNotification();
 
   const [studentId, setStudentId] = useState<string>('');
   const [date, setDate] = useState<Date | null>(null);
@@ -84,12 +86,14 @@ function AddLessonModal() {
         isCompleted,
       });
 
+      showToast(`Урок створено успішно!`, 'success');
+
       setStudentId('');
       setDate(null);
       setTime(null);
       closeModal('addLesson');
     } catch (err) {
-      setError('Помилка при додаванні уроку');
+      showToast('Помилка при створенні уроку!', 'error');
       console.error(err);
     } finally {
       setLoading(false);

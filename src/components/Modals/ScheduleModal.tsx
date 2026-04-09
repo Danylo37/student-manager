@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import useAppStore from '@/store/appStore';
 import { TimePickerInput } from '../common/DateTimePicker';
+import { useNotification } from '../common/NotificationProvider';
 import Modal from './Modal';
 
 interface DayOfWeek {
@@ -31,6 +32,7 @@ function ScheduleModal() {
   const toggleScheduleActive = useAppStore((state) => state.toggleScheduleActive);
   const autoCreateLessons = useAppStore((state) => state.autoCreateLessons);
   const schedules = useAppStore((state) => state.schedules);
+  const { showToast } = useNotification();
 
   const [dayOfWeek, setDayOfWeek] = useState<number>(0);
   const [time, setTime] = useState<Date | null>(null);
@@ -76,6 +78,9 @@ function ScheduleModal() {
 
       await addSchedule(selectedStudent.id, dayOfWeek, timeString);
 
+      const dayLabel = DAYS_OF_WEEK.find((d) => d.value === dayOfWeek)?.label ?? '';
+      showToast(`Додано: ${dayLabel} о ${timeString}!`, 'success');
+
       const defaultTime = new Date();
       defaultTime.setHours(14, 0, 0, 0);
       setTime(defaultTime);
@@ -95,8 +100,9 @@ function ScheduleModal() {
   const handleDelete = async (scheduleId: number): Promise<void> => {
     try {
       await deleteSchedule(scheduleId);
+      showToast('День з розкладу видалено успішно!', 'success');
     } catch (err) {
-      alert('Помилка при видаленні розкладу');
+      showToast('Помилка при видаленні дня з розкладу!', 'error');
       console.error(err);
     }
   };
@@ -104,8 +110,9 @@ function ScheduleModal() {
   const handleToggle = async (scheduleId: number): Promise<void> => {
     try {
       await toggleScheduleActive(scheduleId);
+      showToast('Статус дня з розкладу змінено успішно!', 'success');
     } catch (err) {
-      alert('Помилка при зміні статусу розкладу');
+      showToast('Помилка при зміні статусу розкладу!', 'error');
       console.error(err);
     }
   };
@@ -119,15 +126,13 @@ function ScheduleModal() {
     try {
       const created = await autoCreateLessons(selectedStudent.id);
       if (created > 0) {
-        alert(`Створено ${created} уроків на основі розкладу`);
+        showToast(`Створено уроків по розкладу: ${created}`, 'success');
         handleClose();
       } else {
-        alert(
-          'Не вдалося створити уроки. Перевірте розклад або можливо уроки вже існують.',
-        );
+        showToast('Уроки вже існують або немає підходящих слотів!', 'warning');
       }
     } catch (err) {
-      setError('Помилка при створенні уроків');
+      showToast('Помилка при створенні уроків!', 'error');
       console.error(err);
     } finally {
       setAutoCreateLoading(false);
@@ -213,35 +218,24 @@ function ScheduleModal() {
               {activeSchedulesByDay.map(
                 (day) =>
                   day.times.length > 0 && (
-                    <div
-                      key={day.value}
-                      className="border border-gray-200 rounded-lg p-4"
-                    >
-                      <div className="font-bold text-gray-700 mb-2">
-                        {day.label}
-                      </div>
+                    <div key={day.value} className="border border-gray-200 rounded-lg p-4">
+                      <div className="font-bold text-gray-700 mb-2">{day.label}</div>
                       <div className="flex flex-wrap gap-2">
                         {day.times.map((schedule) => (
                           <div
                             key={schedule.id}
                             className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-2 rounded-lg"
                           >
-                            <span className="font-mono font-bold">
-                              {schedule.time}
-                            </span>
+                            <span className="font-mono font-bold">{schedule.time}</span>
                             <button
-                              onClick={() =>
-                                handleToggle(schedule.id)
-                              }
+                              onClick={() => handleToggle(schedule.id)}
                               className="text-orange-500 hover:text-orange-700 font-bold text-lg"
                               title="Призупинити"
                             >
                               ⏸
                             </button>
                             <button
-                              onClick={() =>
-                                handleDelete(schedule.id)
-                              }
+                              onClick={() => handleDelete(schedule.id)}
                               className="text-red-500 hover:text-red-700 font-bold text-lg"
                               title="Видалити назавжди"
                             >
@@ -269,31 +263,23 @@ function ScheduleModal() {
                       key={day.value}
                       className="border border-gray-200 rounded-lg p-4 bg-gray-50"
                     >
-                      <div className="font-bold text-gray-500 mb-2">
-                        {day.label}
-                      </div>
+                      <div className="font-bold text-gray-500 mb-2">{day.label}</div>
                       <div className="flex flex-wrap gap-2">
                         {day.times.map((schedule) => (
                           <div
                             key={schedule.id}
                             className="flex items-center gap-2 bg-gray-200 text-gray-600 px-3 py-2 rounded-lg"
                           >
-                            <span className="font-mono font-bold">
-                              {schedule.time}
-                            </span>
+                            <span className="font-mono font-bold">{schedule.time}</span>
                             <button
-                              onClick={() =>
-                                handleToggle(schedule.id)
-                              }
+                              onClick={() => handleToggle(schedule.id)}
                               className="text-green-600 hover:text-green-800 font-bold text-lg"
                               title="Відновити"
                             >
                               ▶
                             </button>
                             <button
-                              onClick={() =>
-                                handleDelete(schedule.id)
-                              }
+                              onClick={() => handleDelete(schedule.id)}
                               className="text-red-500 hover:text-red-700 font-bold text-lg"
                               title="Видалити назавжди"
                             >
@@ -323,9 +309,7 @@ function ScheduleModal() {
         <div className="pt-4 border-t border-gray-200">
           <button
             onClick={handleAutoCreate}
-            disabled={
-              autoCreateLoading || schedules.filter((s) => s.is_active).length === 0
-            }
+            disabled={autoCreateLoading || schedules.filter((s) => s.is_active).length === 0}
             className="w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {autoCreateLoading ? '⏳ Створення...' : '✨ Створити уроки по розкладу'}

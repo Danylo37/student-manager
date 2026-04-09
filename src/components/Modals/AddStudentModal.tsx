@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import useAppStore from '@/store/appStore';
 import useStudents from '@/hooks/useStudents';
+import { useNotification } from '../common/NotificationProvider';
 import Modal from './Modal';
 
 /**
@@ -10,6 +11,7 @@ function AddStudentModal() {
   const isOpen = useAppStore((state) => state.modals.addStudent);
   const closeModal = useAppStore((state) => state.closeModal);
   const { addStudent } = useStudents();
+  const { showToast } = useNotification();
 
   const [name, setName] = useState<string>('');
   const [balance, setBalance] = useState<number>(0);
@@ -29,11 +31,12 @@ function AddStudentModal() {
 
     try {
       await addStudent(name.trim(), balance);
+      showToast(`Учня "${name.trim()}" додано успішно!`, 'success');
       setName('');
       setBalance(0);
       closeModal('addStudent');
     } catch (err) {
-      setError('Помилка при додаванні учня');
+      showToast('Помилка при додаванні учня!', 'error');
       console.error(err);
     } finally {
       setLoading(false);

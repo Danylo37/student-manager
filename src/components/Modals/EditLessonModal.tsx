@@ -4,6 +4,7 @@ import useLessons from '@/hooks/useLessons';
 import useStudents from '@/hooks/useStudents';
 import { getLessonStatus, getStatusLabel, shouldBeCompleted } from '@/utils/lessonStatus';
 import { DatePickerInput, TimePickerInput } from '../common/DateTimePicker';
+import { useNotification } from '../common/NotificationProvider';
 import Modal from './Modal';
 
 /**
@@ -15,6 +16,7 @@ function EditLessonModal() {
   const selectedLesson = useAppStore((state) => state.selectedLesson);
   const { updateLesson, deleteLesson } = useLessons();
   const { getStudentById } = useStudents();
+  const { showToast, showConfirm } = useNotification();
 
   const [date, setDate] = useState<Date | null>(null);
   const [time, setTime] = useState<Date | null>(null);
@@ -64,9 +66,10 @@ function EditLessonModal() {
       }
 
       await updateLesson(selectedLesson.id, updateData);
+      showToast('Урок оновлено успішно!', 'success');
       closeModal('editLesson');
     } catch (err) {
-      setError('Помилка при оновленні уроку');
+      setError('Помилка при оновленні уроку!');
       console.error(err);
     } finally {
       setLoading(false);
@@ -76,15 +79,22 @@ function EditLessonModal() {
   const handleDelete = async (): Promise<void> => {
     if (!selectedLesson) return;
 
-    if (!confirm('Видалити цей урок?')) {
-      return;
-    }
+    const confirmed = await showConfirm({
+      title: 'Видалити урок?',
+      message: `Урок учня "${selectedLesson.student_name}" буде видалено. Цю дію неможливо скасувати.`,
+      confirmLabel: 'Видалити',
+      cancelLabel: 'Скасувати',
+      danger: true,
+    });
+
+    if (!confirmed) return;
 
     try {
       await deleteLesson(selectedLesson.id);
+      showToast('Урок видалено успішно!', 'success');
       closeModal('editLesson');
     } catch (err) {
-      alert('Помилка при видаленні уроку');
+      showToast('Помилка при видаленні уроку!', 'error');
       console.error(err);
     }
   };
@@ -105,9 +115,7 @@ function EditLessonModal() {
         {/* Student info (read-only) */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <div className="text-sm text-gray-600">Учень</div>
-          <div className="text-lg font-bold text-gray-800">
-            {selectedLesson.student_name}
-          </div>
+          <div className="text-lg font-bold text-gray-800">{selectedLesson.student_name}</div>
           <div className="text-sm text-gray-600 mt-1">
             Баланс: {selectedLesson.balance} | Статус: {statusLabel}
           </div>
@@ -116,16 +124,12 @@ function EditLessonModal() {
         {/* Date and time */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Дата *
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Дата *</label>
             <DatePickerInput value={date} onChange={setDate} />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Час *
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Час *</label>
             <TimePickerInput value={time} onChange={setTime} />
           </div>
         </div>
