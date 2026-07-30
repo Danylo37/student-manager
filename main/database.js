@@ -508,9 +508,9 @@ function getEarningsStats(startDate, endDate) {
     .prepare(
       `
     SELECT
-      COALESCE(SUM(price), 0)                       AS total,
-      COUNT(CASE WHEN price IS NOT NULL THEN 1 END)  AS lessons_with_price,
-      COUNT(*)                                        AS lessons_total
+      COALESCE(SUM(CASE WHEN is_paid = 1 THEN price END), 0) AS total,
+      COUNT(CASE WHEN price IS NOT NULL THEN 1 END)          AS lessons_with_price,
+      COUNT(*)                                                AS lessons_total
     FROM lessons
     WHERE is_completed = 1 AND datetime >= ? AND datetime < ?
   `,
@@ -524,7 +524,7 @@ function getEarningsByDay(startDate, endDate) {
       `
     SELECT DATE(datetime) AS day, COALESCE(SUM(price), 0) AS total, COUNT(*) AS count
     FROM lessons
-    WHERE is_completed = 1 AND datetime >= ? AND datetime < ? AND price IS NOT NULL
+    WHERE is_completed = 1 AND is_paid = 1 AND datetime >= ? AND datetime < ? AND price IS NOT NULL
     GROUP BY DATE(datetime)
     ORDER BY day ASC
   `,
@@ -543,7 +543,7 @@ function getEarningsByStudent(startDate, endDate) {
       COUNT(*)                                         AS count
     FROM lessons l
     LEFT JOIN students s ON s.id = l.student_id
-    WHERE l.is_completed = 1 AND l.datetime >= ? AND l.datetime < ? AND l.price IS NOT NULL
+    WHERE l.is_completed = 1 AND l.is_paid = 1 AND l.datetime >= ? AND l.datetime < ? AND l.price IS NOT NULL
     GROUP BY COALESCE(s.id, -1)
     ORDER BY total DESC
   `,
@@ -951,7 +951,7 @@ function getEarningsDateRange() {
       MAX(datetime)                                          AS max_date,
       COUNT(DISTINCT strftime('%Y-%m', datetime))            AS months_count
     FROM lessons
-    WHERE is_completed = 1 AND price IS NOT NULL
+    WHERE is_completed = 1 AND is_paid = 1 AND price IS NOT NULL
   `,
     )
     .get();
