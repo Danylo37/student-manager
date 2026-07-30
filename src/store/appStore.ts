@@ -44,6 +44,7 @@ const useAppStore = create<AppState>((set, get) => ({
 
   theme: (localStorage.getItem('theme') as Theme) || 'default',
   taxSettings: null,
+  taxStart: null,
 
   // ── Students ───────────────────────────────────────────────────────────────
 
@@ -92,6 +93,9 @@ const useAppStore = create<AppState>((set, get) => ({
       const { start, end } = getWeekRange(currentWeek);
       const lessons = await window.electron.getLessons(start, end);
       set({ lessons, lessonsLoading: false });
+      // The first paid lesson with a price starts the tax clock, and any lesson
+      // change can create it, so keep the anchor in sync.
+      void get().refreshTaxStart();
     } catch (error) {
       set({
         lessonsError: error instanceof Error ? error.message : 'Error',
@@ -177,6 +181,20 @@ const useAppStore = create<AppState>((set, get) => ({
       set({ taxSettings });
     } catch (error) {
       console.error('Failed to load tax settings:', error);
+    }
+    await get().refreshTaxStart();
+  },
+
+  /**
+   * Refresh the date of the first paid lesson with a price. Fixed taxes start
+   * from that month, so an install without prices yet stays untaxed.
+   */
+  refreshTaxStart: async () => {
+    try {
+      const dateRange = await window.electron.getEarningsDateRange();
+      set({ taxStart: dateRange?.min_date ?? null });
+    } catch (error) {
+      console.error('Failed to load tax start date:', error);
     }
   },
 

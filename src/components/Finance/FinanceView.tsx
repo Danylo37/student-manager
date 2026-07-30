@@ -3,6 +3,7 @@ import { Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'luc
 import useAppStore from '@/store/appStore';
 import {
   calculateNetEarnings,
+  getFixedTaxMonths,
   formatUAH,
   formatChange,
   getDateRangeForPeriod,
@@ -361,6 +362,7 @@ const PERIODS: { key: EarningsPeriod; label: string }[] = [
 function FinanceView() {
   const openModal = useAppStore((s) => s.openModal);
   const taxSettings = useAppStore((s) => s.taxSettings);
+  const taxStart = useAppStore((s) => s.taxStart);
 
   const [period, setPeriod] = useState<EarningsPeriod>('month');
   const [offset, setOffset] = useState(0); // 0 = current, -1 = previous, etc.
@@ -371,8 +373,6 @@ function FinanceView() {
   const [prevStats, setPrevStats] = useState<EarningsStats | null>(null);
   const [byDay, setByDay] = useState<EarningsByDay[]>([]);
   const [byStudent, setByStudent] = useState<EarningsByStudent[]>([]);
-  // Actual months with income inside the active period (drives fixed ЄСВ)
-  const [actualMonths, setActualMonths] = useState<number | undefined>(undefined);
 
   // Reset offset when switching periods
   useEffect(() => {
@@ -399,27 +399,18 @@ function FinanceView() {
     try {
       const range = getActiveRange();
       const prevRange = getPrevRange();
-      // Fixed monthly taxes are charged per month that actually had income,
-      // so the period's real month count is needed for month/quarter/year/all.
-      const needsMonths =
-        period === 'month' || period === 'quarter' || period === 'year' || period === 'all';
-
-      const [s, byday, bystudent, ps, dr] = await Promise.all([
+      const [s, byday, bystudent, ps] = await Promise.all([
         window.electron.getEarningsStats(range.start, range.end),
         window.electron.getEarningsByDay(range.start, range.end),
         window.electron.getEarningsByStudent(range.start, range.end),
         prevRange
           ? window.electron.getEarningsStats(prevRange.start, prevRange.end)
           : Promise.resolve(null),
-        needsMonths
-          ? window.electron.getEarningsDateRange(range.start, range.end)
-          : Promise.resolve(null),
       ]);
       setStats(s);
       setByDay(byday);
       setByStudent(bystudent);
       setPrevStats(ps);
-      setActualMonths(dr ? dr.months_count : undefined);
     } catch (e) {
       console.error(e);
     } finally {
@@ -431,12 +422,18 @@ function FinanceView() {
     void loadData();
   }, [loadData]);
 
+  const activeRange = getActiveRange();
+
+  // ЄСВ is due for every month since the first paid lesson with a price,
+  // including months without lessons, but never before it or in the future.
+  const taxMonths = getFixedTaxMonths(period, taxStart, activeRange.start, activeRange.end);
+
   const gross = stats?.total ?? 0;
   const { net, taxTotal, fixedTaxAmount, percentageTaxAmount } = calculateNetEarnings(
     gross,
     taxSettings,
     period,
-    actualMonths,
+    taxMonths,
   );
   const change = formatChange(gross, prevStats?.total ?? 0);
 
@@ -444,13 +441,17 @@ function FinanceView() {
     taxSettings && (taxSettings.esv_type !== 'none' || !!taxSettings.military_tax_enabled);
 
   const noPrice = (stats?.lessons_total ?? 0) > 0 && (stats?.lessons_with_price ?? 0) === 0;
+
+  // Whole-month periods explain how many months of ЄСВ are included
   const showEsvNote =
-    actualMonths !== undefined &&
-    actualMonths > 0 &&
+    taxMonths >= 1 &&
+    period !== 'day' &&
+    period !== 'week' &&
     taxSettings?.esv_type === 'fixed' &&
     taxSettings.esv_fixed > 0;
 
-  const activeRange = getActiveRange();
+  // No prices anywhere yet → finances are not in use, so nothing is taxed
+  const financesNotStarted = !taxStart;
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
@@ -548,12 +549,20 @@ function FinanceView() {
               />
             </div>
 
-            {/* ESV basis note — fixed ЄСВ is charged per month that actually had income */}
+            {/* Finances not in use yet — nothing is taxed until a price and a lesson exist */}
+            {financesNotStarted && hasTax && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-500 text-sm">
+                ℹ️ Податки поки не нараховуються. Вони почнуть рахуватися з місяця, коли ви
+                встановите ціну учню та проведете й позначите оплаченим перший урок.
+              </div>
+            )}
+
+            {/* ESV basis note — ЄСВ is due every month since finances started */}
             {showEsvNote && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-500 text-sm">
-                ℹ️ ЄСВ пораховано за {actualMonths}{' '}
-                {monthsWordUA(actualMonths!)} з доходом ({formatUAH(taxSettings!.esv_fixed)} ×{' '}
-                {actualMonths}), а не за весь період.
+                ℹ️ ЄСВ за {taxMonths} {monthsWordUA(taxMonths)}: {formatUAH(taxSettings!.esv_fixed)}{' '}
+                × {taxMonths}. ЄСВ платиться щомісяця, навіть без уроків, — з місяця першого
+                оплаченого уроку з ціною і до поточного.
                 {period === 'quarter' && ' Сплатити до 20 числа після кварталу.'}
               </div>
             )}

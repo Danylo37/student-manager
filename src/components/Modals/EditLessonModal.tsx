@@ -60,7 +60,9 @@ function EditLessonModal() {
       };
 
       if (completionStatusChanged) {
-        const student = getStudentById(selectedLesson.student_id);
+        // student_id is null for lessons kept after the student was deleted
+        const student =
+          selectedLesson.student_id != null ? getStudentById(selectedLesson.student_id) : undefined;
         updateData.is_completed = is_completed ? 1 : 0;
         updateData.is_paid = student && student.balance > 0 && is_completed ? 1 : 0;
       }

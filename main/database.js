@@ -943,23 +943,27 @@ function autoCreateLessonsForAllStudents() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Date range and number of distinct months that actually have income.
- * Optional startDate/endDate scope it to a period, so fixed monthly taxes (ЄСВ)
- * can be charged for the months that really happened, not the full calendar period.
+ * First/last income and the number of months that actually had income.
+ *
+ * `min_date` is the moment the user really started using the finance features
+ * (first paid lesson with a price). Fixed monthly taxes (ЄСВ) are charged from
+ * that month onwards — including months without lessons, as a real ФОП pays —
+ * but never before it, so an existing install stays at zero tax until a price
+ * is set and such a lesson happens.
  */
-function getEarningsDateRange(startDate = null, endDate = null) {
-  const scoped = startDate != null && endDate != null;
-  const sql = `
+function getEarningsDateRange() {
+  return db
+    .prepare(
+      `
     SELECT
       MIN(datetime)                                          AS min_date,
       MAX(datetime)                                          AS max_date,
       COUNT(DISTINCT strftime('%Y-%m', datetime))            AS months_count
     FROM lessons
     WHERE is_completed = 1 AND is_paid = 1 AND price IS NOT NULL
-    ${scoped ? 'AND datetime >= ? AND datetime < ?' : ''}
-  `;
-  const stmt = db.prepare(sql);
-  return scoped ? stmt.get(startDate, endDate) : stmt.get();
+  `,
+    )
+    .get();
 }
 
 module.exports = {
