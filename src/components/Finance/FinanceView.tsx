@@ -3,6 +3,7 @@ import { Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'luc
 import useAppStore from '@/store/appStore';
 import {
   calculateNetEarnings,
+  getFixedTaxMonths,
   formatUAH,
   formatChange,
   getDateRangeForPeriod,
@@ -14,6 +15,15 @@ import {
   type DateRange,
 } from '@/utils/financials';
 import type { EarningsStats, EarningsByDay, EarningsByStudent } from '@/types';
+
+/** Ukrainian plural for "місяць": 1 місяць, 2 місяці, 5 місяців. */
+function monthsWordUA(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'місяць';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'місяці';
+  return 'місяців';
+}
 
 // ─── Bar chart ────────────────────────────────────────────────────────────────
 function MiniBarChart({ data }: { data: EarningsByDay[] }) {
@@ -352,6 +362,7 @@ const PERIODS: { key: EarningsPeriod; label: string }[] = [
 function FinanceView() {
   const openModal = useAppStore((s) => s.openModal);
   const taxSettings = useAppStore((s) => s.taxSettings);
+  const taxStart = useAppStore((s) => s.taxStart);
 
   const [period, setPeriod] = useState<EarningsPeriod>('month');
   const [offset, setOffset] = useState(0); // 0 = current, -1 = previous, etc.
@@ -362,7 +373,6 @@ function FinanceView() {
   const [prevStats, setPrevStats] = useState<EarningsStats | null>(null);
   const [byDay, setByDay] = useState<EarningsByDay[]>([]);
   const [byStudent, setByStudent] = useState<EarningsByStudent[]>([]);
-  const [allTimeMonths, setAllTimeMonths] = useState(0);
 
   // Reset offset when switching periods
   useEffect(() => {
@@ -401,11 +411,6 @@ function FinanceView() {
       setByDay(byday);
       setByStudent(bystudent);
       setPrevStats(ps);
-
-      if (period === 'all') {
-        const dr = await window.electron.getEarningsDateRange();
-        setAllTimeMonths(Math.max(1, dr.months_count));
-      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -417,12 +422,18 @@ function FinanceView() {
     void loadData();
   }, [loadData]);
 
+  const activeRange = getActiveRange();
+
+  // ЄСВ is due for every month since the first paid lesson with a price,
+  // including months without lessons, but never before it or in the future.
+  const taxMonths = getFixedTaxMonths(period, taxStart, activeRange.start, activeRange.end);
+
   const gross = stats?.total ?? 0;
   const { net, taxTotal, fixedTaxAmount, percentageTaxAmount } = calculateNetEarnings(
     gross,
     taxSettings,
     period,
-    allTimeMonths,
+    taxMonths,
   );
   const change = formatChange(gross, prevStats?.total ?? 0);
 
@@ -430,10 +441,17 @@ function FinanceView() {
     taxSettings && (taxSettings.esv_type !== 'none' || !!taxSettings.military_tax_enabled);
 
   const noPrice = (stats?.lessons_total ?? 0) > 0 && (stats?.lessons_with_price ?? 0) === 0;
-  const showEsvNote =
-    period === 'quarter' && taxSettings?.esv_type === 'fixed' && taxSettings.esv_fixed > 0;
 
-  const activeRange = getActiveRange();
+  // Whole-month periods explain how many months of ЄСВ are included
+  const showEsvNote =
+    taxMonths >= 1 &&
+    period !== 'day' &&
+    period !== 'week' &&
+    taxSettings?.esv_type === 'fixed' &&
+    taxSettings.esv_fixed > 0;
+
+  // No prices anywhere yet → finances are not in use, so nothing is taxed
+  const financesNotStarted = !taxStart;
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
@@ -531,21 +549,21 @@ function FinanceView() {
               />
             </div>
 
-            {/* All-time ESV basis note */}
-            {period === 'all' && taxSettings?.esv_type === 'fixed' && taxSettings.esv_fixed > 0 && (
+            {/* Finances not in use yet — nothing is taxed until a price and a lesson exist */}
+            {financesNotStarted && hasTax && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-500 text-sm">
-                ℹ️ ЄСВ пораховано за {allTimeMonths}{' '}
-                {allTimeMonths === 1 ? 'місяць' : allTimeMonths < 5 ? 'місяці' : 'місяців'} — з
-                моменту першого уроку з встановленою ціною.
+                ℹ️ Податки поки не нараховуються. Вони почнуть рахуватися з місяця, коли ви
+                встановите ціну учню та проведете й позначите оплаченим перший урок.
               </div>
             )}
 
-            {/* ESV quarter note */}
+            {/* ESV basis note — ЄСВ is due every month since finances started */}
             {showEsvNote && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-blue-800 text-sm">
-                💡 ЄСВ за квартал: <strong>{formatUAH(taxSettings!.esv_fixed * 3)}</strong> (
-                {formatUAH(taxSettings!.esv_fixed)} × 3 місяці). Сплатити до 20 числа після
-                кварталу.
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-500 text-sm">
+                ℹ️ ЄСВ за {taxMonths} {monthsWordUA(taxMonths)}: {formatUAH(taxSettings!.esv_fixed)}{' '}
+                × {taxMonths}. ЄСВ платиться щомісяця, навіть без уроків, — з місяця першого
+                оплаченого уроку з ціною і до поточного.
+                {period === 'quarter' && ' Сплатити до 20 числа після кварталу.'}
               </div>
             )}
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { RefreshCw, Users, Palette, BarChart2, CalendarDays } from 'lucide-react';
 import { formatDateWithMonth } from '@/utils/dateHelpers';
-import { calculateNetEarnings, formatUAH } from '@/utils/financials';
+import { calculateNetEarnings, getFixedTaxMonths, formatUAH } from '@/utils/financials';
 import useLessons from '@/hooks/useLessons';
 import useAppStore from '@/store/appStore';
 
@@ -16,6 +16,7 @@ function Header() {
   const currentView = useAppStore((s) => s.currentView);
   const setView = useAppStore((s) => s.setView);
   const taxSettings = useAppStore((s) => s.taxSettings);
+  const taxStart = useAppStore((s) => s.taxStart);
   const currentWeek = useAppStore((s) => s.currentWeek);
 
   const [syncing, setSyncing] = useState(false);
@@ -29,7 +30,16 @@ function Header() {
     .filter((l) => l.is_completed && l.is_paid && l.price != null)
     .reduce((sum, l) => sum + (l.price ?? 0), 0);
 
-  const { net: weekNetKopiyky } = calculateNetEarnings(weekGrossKopiyky, taxSettings, 'week');
+  // Week end is exclusive for the tax helper
+  const weekEndExclusive = new Date(weekStart);
+  weekEndExclusive.setDate(weekEndExclusive.getDate() + 7);
+
+  const { net: weekNetKopiyky } = calculateNetEarnings(
+    weekGrossKopiyky,
+    taxSettings,
+    'week',
+    getFixedTaxMonths('week', taxStart, weekStart.toISOString(), weekEndExclusive.toISOString()),
+  );
 
   const hasTax =
     taxSettings && (taxSettings.esv_type !== 'none' || !!taxSettings.military_tax_enabled);

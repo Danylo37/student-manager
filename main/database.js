@@ -942,6 +942,15 @@ function autoCreateLessonsForAllStudents() {
 // EXPORTS
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * First/last income and the number of months that actually had income.
+ *
+ * `min_date` is the moment the user really started using the finance features
+ * (first paid lesson with a price). Fixed monthly taxes (ЄСВ) are charged from
+ * that month onwards — including months without lessons, as a real ФОП pays —
+ * but never before it, so an existing install stays at zero tax until a price
+ * is set and such a lesson happens.
+ */
 function getEarningsDateRange() {
   return db
     .prepare(
