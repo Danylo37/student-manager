@@ -7,20 +7,20 @@ const logger = require('./logger');
 
 let db = null;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// INIT & MIGRATION
+// ─────────────────────────────────────────────────────────────────────────────
+
 function initDatabase() {
   logger.info('Initializing database');
 
   const userDataPath = app.getPath('userData');
   const dbPath = path.join(userDataPath, 'students.db');
 
-  logger.debug('Database path', { path: dbPath });
-
   if (!fs.existsSync(userDataPath)) {
     fs.mkdirSync(userDataPath, { recursive: true });
-    logger.debug('Created user data directory', { path: userDataPath });
   }
 
-  // Determine schema path
   let schemaPath;
   if (process.env.NODE_ENV === 'development') {
     schemaPath = path.join(__dirname, 'db', 'schema.sql');
@@ -28,795 +28,975 @@ function initDatabase() {
     schemaPath = path.join(process.resourcesPath, 'main', 'db', 'schema.sql');
   }
 
-  logger.debug('Schema path', { path: schemaPath });
-
   if (!fs.existsSync(schemaPath)) {
-    logger.error('Schema file not found', { path: schemaPath });
     throw new Error(`Schema file not found: ${schemaPath}`);
   }
 
   try {
     db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
-    logger.debug('Database connection established');
+    db.pragma('foreign_keys = ON');
 
     const schema = fs.readFileSync(schemaPath, 'utf8');
     db.exec(schema);
 
-    db.exec(`
-            CREATE TABLE IF NOT EXISTS deleted_lesson_slots(
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                student_id INTEGER NOT NULL,
-                datetime   TEXT    NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
-                );
-            CREATE INDEX IF NOT EXISTS idx_deleted_slots_student 
-            ON deleted_lesson_slots (student_id, datetime);
-        `);
+    // Run migration if this is an existing (pre-v2) database
+    if (needsMigrationV2()) {
+      runMigrationV2();
+    }
 
     logger.info('Database initialized successfully');
     return db;
   } catch (error) {
-    logger.error('Database initialization failed', {
-      error: error.message,
-      stack: error.stack,
-    });
+    logger.error('Database initialization failed', { error: error.message });
     throw error;
   }
 }
 
-// === STUDENTS ===
+/** Detect pre-v2 schema: lessons table lacks student_name_cache column */
+function needsMigrationV2() {
+  try {
+    const cols = db
+      .prepare('PRAGMA table_info(lessons)')
+      .all()
+      .map((c) => c.name);
+    return !cols.includes('student_name_cache');
+  } catch {
+    return false;
+  }
+}
+
+function runMigrationV2() {
+  logger.info('Running database migration to v2');
+
+  db.pragma('foreign_keys = OFF');
+
+  // 1. Ensure payment_bundles table exists (needed before recreating lessons)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS payment_bundles (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_id    INTEGER,
+      total_price   INTEGER NOT NULL,
+      lessons_count INTEGER NOT NULL,
+      lessons_used  INTEGER DEFAULT 0,
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_bundles_student ON payment_bundles (student_id, created_at);
+  `);
+
+  // 2. Recreate lessons table: nullable student_id, student_name_cache, price in kopiyky,
+  //    payment_bundle_id. Copy data, convert price hryvnias→kopiyky.
+  db.exec(`
+    CREATE TABLE lessons_v2 (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_id          INTEGER,
+      student_name_cache  TEXT,
+      datetime            TEXT    NOT NULL,
+      previous_datetime   TEXT,
+      is_completed        BOOLEAN  DEFAULT 0,
+      is_paid             BOOLEAN  DEFAULT 0,
+      price               INTEGER  DEFAULT NULL,
+      payment_bundle_id   INTEGER,
+      created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE SET NULL,
+      FOREIGN KEY (payment_bundle_id) REFERENCES payment_bundles (id) ON DELETE SET NULL
+    );
+
+    INSERT INTO lessons_v2
+      (id, student_id, student_name_cache, datetime, previous_datetime,
+       is_completed, is_paid, price, created_at)
+    SELECT
+      l.id,
+      l.student_id,
+      s.name,
+      l.datetime,
+      l.previous_datetime,
+      l.is_completed,
+      l.is_paid,
+      CASE WHEN l.price IS NOT NULL THEN CAST(ROUND(l.price * 100) AS INTEGER) ELSE NULL END,
+      l.created_at
+    FROM lessons l
+    LEFT JOIN students s ON s.id = l.student_id;
+
+    DROP TABLE lessons;
+    ALTER TABLE lessons_v2 RENAME TO lessons;
+    CREATE INDEX IF NOT EXISTS idx_lessons_datetime ON lessons (datetime);
+    CREATE INDEX IF NOT EXISTS idx_lessons_student  ON lessons (student_id);
+  `);
+
+  // 3. Convert lesson_prices.price hryvnias→kopiyky
+  try {
+    db.exec(
+      `UPDATE lesson_prices SET price = CAST(ROUND(price * 100) AS INTEGER) WHERE price < 100000`,
+    );
+  } catch (_) {}
+
+  // 4. Convert discounts.total_price hryvnias→kopiyky
+  try {
+    db.exec(
+      `UPDATE discounts SET total_price = CAST(ROUND(total_price * 100) AS INTEGER) WHERE total_price < 1000000`,
+    );
+  } catch (_) {}
+
+  // 5. Recreate tax_settings: simplified schema, convert esv_fixed hryvnias→kopiyky
+  db.exec(`
+    CREATE TABLE tax_settings_v2 (
+      id                   INTEGER PRIMARY KEY DEFAULT 1,
+      esv_type             TEXT    DEFAULT 'none',
+      esv_fixed            INTEGER DEFAULT 0,
+      military_tax_enabled INTEGER DEFAULT 0,
+      military_tax_rate    REAL    DEFAULT 1.0,
+      updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  const oldTax = db.prepare('SELECT * FROM tax_settings WHERE id = 1').get();
+  if (oldTax) {
+    db.prepare(
+      `
+      INSERT OR IGNORE INTO tax_settings_v2
+        (id, esv_type, esv_fixed, military_tax_enabled, military_tax_rate)
+      VALUES (1, ?, ?, ?, ?)
+    `,
+    ).run(
+      oldTax.esv_type || 'none',
+      oldTax.esv_fixed ? Math.round(oldTax.esv_fixed * 100) : 0,
+      oldTax.military_tax_enabled || 0,
+      oldTax.military_tax_rate != null ? oldTax.military_tax_rate : 1.0,
+    );
+  } else {
+    db.prepare('INSERT OR IGNORE INTO tax_settings_v2 (id) VALUES (1)').run();
+  }
+
+  db.exec(`
+    DROP TABLE IF EXISTS tax_settings;
+    ALTER TABLE tax_settings_v2 RENAME TO tax_settings;
+  `);
+
+  // 6. Add deleted_lesson_slots if missing (legacy)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS deleted_lesson_slots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_id INTEGER NOT NULL,
+      datetime   TEXT    NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_deleted_slots_student
+      ON deleted_lesson_slots (student_id, datetime);
+  `);
+
+  db.pragma('foreign_keys = ON');
+
+  logger.info('Migration v2 complete');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STUDENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
 function getStudents() {
-  logger.debug('Fetching all students');
-
-  try {
-    const stmt = db.prepare(`
-            SELECT
-                s.*,
-                COUNT(CASE WHEN l.is_completed = 1 THEN 1 END) as completed_lessons_count
-            FROM students s
-                     LEFT JOIN lessons l ON s.id = l.student_id
-            GROUP BY s.id
-            ORDER BY s.name
-        `);
-    const students = stmt.all();
-
-    logger.debug('Students fetched successfully', { count: students.length });
-    return students;
-  } catch (error) {
-    logger.error('Failed to fetch students', { error: error.message });
-    throw error;
-  }
+  return db
+    .prepare(
+      `
+    SELECT
+      s.*,
+      COUNT(CASE WHEN l.is_completed = 1 THEN 1 END) AS completed_lessons_count,
+      (SELECT lp.price FROM lesson_prices lp
+       WHERE lp.student_id = s.id ORDER BY lp.valid_from DESC LIMIT 1) AS current_price
+    FROM students s
+    LEFT JOIN lessons l ON s.id = l.student_id
+    GROUP BY s.id
+    ORDER BY s.name
+  `,
+    )
+    .all();
 }
 
-function addStudent(name, balance) {
-  logger.info('Adding student', { name, balance });
-
-  try {
-    const stmt = db.prepare('INSERT INTO students (name, balance) VALUES (?, ?)');
-    const result = stmt.run(name, balance);
-
-    logger.info('Student added successfully', {
-      id: result.lastInsertRowid,
-      name,
-      balance,
-    });
-
-    return { id: result.lastInsertRowid, name, balance: balance };
-  } catch (error) {
-    logger.error('Failed to add student', {
-      name,
-      balance,
-      error: error.message,
-    });
-    throw error;
+function addStudent(name, balance, priceKopiyky = null) {
+  const result = db
+    .prepare('INSERT INTO students (name, balance) VALUES (?, ?)')
+    .run(name, balance);
+  const studentId = result.lastInsertRowid;
+  if (priceKopiyky !== null && priceKopiyky > 0) {
+    setStudentPrice(studentId, priceKopiyky);
   }
+  return { id: studentId, name, balance };
 }
 
-function getUnpaidCompletedLessons(studentId) {
-  logger.debug('Fetching unpaid completed lessons', { studentId });
+/**
+ * Delete a student.
+ * Completed lessons are preserved (student_id set to NULL, name cached).
+ * Incomplete lessons are deleted.
+ */
+function deleteStudent(studentId) {
+  // Preserve completed lessons
+  db.prepare(
+    `
+    UPDATE lessons SET student_id = NULL
+    WHERE student_id = ? AND is_completed = 1
+  `,
+  ).run(studentId);
 
-  const stmt = db.prepare(`
-        SELECT id
-        FROM lessons
-        WHERE student_id = ?
-          AND is_completed = 1
-          AND is_paid = 0
-        ORDER BY datetime ASC
-    `);
-  return stmt.all(studentId);
-}
+  // Delete incomplete lessons
+  db.prepare(`DELETE FROM lessons WHERE student_id = ? AND is_completed = 0`).run(studentId);
 
-function markOldestUnpaidLessonsAsPaid(studentId, count) {
-  if (count <= 0) {
-    logger.debug('No lessons to mark as paid', { studentId, count });
-    return;
-  }
-
-  logger.info('Marking unpaid lessons as paid', { studentId, count });
-
-  const unpaidLessons = getUnpaidCompletedLessons(studentId);
-  const lessonsToMark = unpaidLessons.slice(0, count);
-
-  const markAsPaidStmt = db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?');
-
-  for (const lesson of lessonsToMark) {
-    markAsPaidStmt.run(lesson.id);
-  }
-
-  logger.info('Lessons marked as paid', {
-    studentId,
-    markedCount: lessonsToMark.length,
-  });
+  // Delete student (cascades schedules, lesson_prices, discounts, bundles, deleted_slots)
+  db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
+  logger.info('Student deleted', { studentId });
 }
 
 function updateStudentBalance(studentId, amount) {
-  logger.debug('Updating student balance', { studentId, amount });
-
-  try {
-    const stmt = db.prepare('UPDATE students SET balance = balance + ? WHERE id = ?');
-    stmt.run(amount, studentId);
-
-    logger.debug('Student balance updated', { studentId, amount });
-  } catch (error) {
-    logger.error('Failed to update student balance', {
-      studentId,
-      amount,
-      error: error.message,
-    });
-    throw error;
-  }
+  db.prepare('UPDATE students SET balance = balance + ? WHERE id = ?').run(amount, studentId);
 }
 
-function deleteStudent(studentId) {
-  logger.info('Deleting student', { studentId });
-
-  try {
-    const stmt = db.prepare('DELETE FROM students WHERE id = ?');
-    const result = stmt.run(studentId);
-
-    logger.info('Student deleted successfully', {
-      studentId,
-      changes: result.changes,
-    });
-  } catch (error) {
-    logger.error('Failed to delete student', {
-      studentId,
-      error: error.message,
-    });
-    throw error;
-  }
+function getUnpaidCompletedLessons(studentId) {
+  return db
+    .prepare(
+      `
+    SELECT id FROM lessons
+    WHERE student_id = ? AND is_completed = 1 AND is_paid = 0
+    ORDER BY datetime ASC
+  `,
+    )
+    .all(studentId);
 }
 
-// === LESSONS ===
+function markOldestUnpaidLessonsAsPaid(studentId, count) {
+  if (count <= 0) return;
+  const lessons = getUnpaidCompletedLessons(studentId).slice(0, count);
+  const stmt = db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?');
+  for (const l of lessons) stmt.run(l.id);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LESSON PRICES  (all values in kopiyky)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function setStudentPrice(studentId, priceKopiyky) {
+  return db
+    .prepare(
+      `
+    INSERT INTO lesson_prices (student_id, price, valid_from)
+    VALUES (?, ?, datetime('now'))
+  `,
+    )
+    .run(studentId, priceKopiyky);
+}
+
+function getStudentCurrentPrice(studentId) {
+  return (
+    db
+      .prepare(
+        `
+    SELECT * FROM lesson_prices WHERE student_id = ?
+    ORDER BY valid_from DESC LIMIT 1
+  `,
+      )
+      .get(studentId) || null
+  );
+}
+
+function getStudentPriceAt(studentId, datetime) {
+  const row = db
+    .prepare(
+      `
+    SELECT price FROM lesson_prices
+    WHERE student_id = ? AND valid_from <= ?
+    ORDER BY valid_from DESC LIMIT 1
+  `,
+    )
+    .get(studentId, datetime);
+  return row ? row.price : null;
+}
+
+function getStudentPriceHistory(studentId) {
+  return db
+    .prepare(
+      `
+    SELECT * FROM lesson_prices WHERE student_id = ?
+    ORDER BY valid_from DESC
+  `,
+    )
+    .all(studentId);
+}
+
+function deleteStudentPrice(priceId) {
+  db.prepare('DELETE FROM lesson_prices WHERE id = ?').run(priceId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENT BUNDLES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Create a payment bundle when teacher records a payment.
+ * Called automatically from updateBalance / payForLessons.
+ * @param {number} studentId
+ * @param {number} count     - number of lessons purchased
+ * @param {number|null} totalPriceKopiyky - if null, computed from current price
+ * @returns {number|null} bundle id or null if no price info
+ */
+function createPaymentBundle(studentId, count, totalPriceKopiyky = null) {
+  if (count <= 0) return null;
+
+  let total = totalPriceKopiyky;
+
+  if (total === null) {
+    // Try applicable discount first
+    const discount = findApplicableDiscount(studentId, count);
+    if (discount) {
+      total = discount.total_price;
+    } else {
+      // Fall back to current price × count
+      const priceRecord = getStudentCurrentPrice(studentId);
+      if (priceRecord) {
+        total = priceRecord.price * count;
+      }
+    }
+  }
+
+  if (total === null) return null; // no price info → no bundle
+
+  const result = db
+    .prepare(
+      `
+    INSERT INTO payment_bundles (student_id, total_price, lessons_count)
+    VALUES (?, ?, ?)
+  `,
+    )
+    .run(studentId, total, count);
+
+  logger.info('Payment bundle created', {
+    studentId,
+    count,
+    total,
+    bundleId: result.lastInsertRowid,
+  });
+  return result.lastInsertRowid;
+}
+
+/**
+ * Consume one lesson from the oldest active bundle for a student.
+ * Returns { price (kopiyky), bundleId } or null if no bundle available.
+ * Uses integer arithmetic to distribute total_price exactly:
+ *   - each lesson gets floor(total / count)
+ *   - the last lesson gets the remainder so sum == total exactly
+ */
+function consumeFromBundle(studentId) {
+  const bundle = db
+    .prepare(
+      `
+    SELECT * FROM payment_bundles
+    WHERE student_id = ? AND lessons_used < lessons_count
+    ORDER BY created_at ASC LIMIT 1
+  `,
+    )
+    .get(studentId);
+
+  if (!bundle) return null;
+
+  const base = Math.floor(bundle.total_price / bundle.lessons_count);
+  const isLast = bundle.lessons_used + 1 === bundle.lessons_count;
+  const price = isLast
+    ? bundle.total_price - base * bundle.lessons_used // remainder for exact total
+    : base;
+
+  db.prepare('UPDATE payment_bundles SET lessons_used = lessons_used + 1 WHERE id = ?').run(
+    bundle.id,
+  );
+
+  return { price, bundleId: bundle.id };
+}
+
+/**
+ * Return one lesson to its bundle (called when a completed lesson is deleted).
+ */
+function returnLessonToBundle(bundleId) {
+  if (!bundleId) return;
+  db.prepare('UPDATE payment_bundles SET lessons_used = MAX(0, lessons_used - 1) WHERE id = ?').run(
+    bundleId,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISCOUNTS  (total_price in kopiyky)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getDiscounts(studentId) {
+  return db
+    .prepare(
+      `
+    SELECT * FROM discounts
+    WHERE student_id = ? OR student_id IS NULL
+    ORDER BY CASE WHEN student_id IS NULL THEN 1 ELSE 0 END ASC, lessons_count ASC
+  `,
+    )
+    .all(studentId);
+}
+
+function getGlobalDiscounts() {
+  return db
+    .prepare(`SELECT * FROM discounts WHERE student_id IS NULL ORDER BY lessons_count ASC`)
+    .all();
+}
+
+function addDiscount(studentId, lessonsCount, totalPriceKopiyky, description) {
+  const result = db
+    .prepare(
+      `
+    INSERT INTO discounts (student_id, lessons_count, total_price, description)
+    VALUES (?, ?, ?, ?)
+  `,
+    )
+    .run(studentId ?? null, lessonsCount, totalPriceKopiyky, description ?? null);
+  return { id: result.lastInsertRowid };
+}
+
+function deleteDiscount(discountId) {
+  db.prepare('DELETE FROM discounts WHERE id = ?').run(discountId);
+}
+
+function toggleDiscountActive(discountId) {
+  db.prepare('UPDATE discounts SET is_active = NOT is_active WHERE id = ?').run(discountId);
+}
+
+function findApplicableDiscount(studentId, count) {
+  return (
+    db
+      .prepare(
+        `
+    SELECT * FROM discounts
+    WHERE (student_id = ? OR student_id IS NULL) AND is_active = 1 AND lessons_count = ?
+    ORDER BY CASE WHEN student_id IS NULL THEN 1 ELSE 0 END ASC LIMIT 1
+  `,
+      )
+      .get(studentId, count) || null
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAX SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getTaxSettings() {
+  db.prepare('INSERT OR IGNORE INTO tax_settings (id) VALUES (1)').run();
+  return db.prepare('SELECT * FROM tax_settings WHERE id = 1').get();
+}
+
+function saveTaxSettings(s) {
+  db.prepare(
+    `
+    UPDATE tax_settings SET
+      esv_type             = ?,
+      esv_fixed            = ?,
+      military_tax_enabled = ?,
+      military_tax_rate    = ?,
+      updated_at           = datetime('now')
+    WHERE id = 1
+  `,
+  ).run(s.esv_type, s.esv_fixed, s.military_tax_enabled ? 1 : 0, s.military_tax_rate);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FINANCIAL STATS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getEarningsStats(startDate, endDate) {
+  return db
+    .prepare(
+      `
+    SELECT
+      COALESCE(SUM(price), 0)                       AS total,
+      COUNT(CASE WHEN price IS NOT NULL THEN 1 END)  AS lessons_with_price,
+      COUNT(*)                                        AS lessons_total
+    FROM lessons
+    WHERE is_completed = 1 AND datetime >= ? AND datetime < ?
+  `,
+    )
+    .get(startDate, endDate);
+}
+
+function getEarningsByDay(startDate, endDate) {
+  return db
+    .prepare(
+      `
+    SELECT DATE(datetime) AS day, COALESCE(SUM(price), 0) AS total, COUNT(*) AS count
+    FROM lessons
+    WHERE is_completed = 1 AND datetime >= ? AND datetime < ? AND price IS NOT NULL
+    GROUP BY DATE(datetime)
+    ORDER BY day ASC
+  `,
+    )
+    .all(startDate, endDate);
+}
+
+function getEarningsByStudent(startDate, endDate) {
+  return db
+    .prepare(
+      `
+    SELECT
+      COALESCE(s.id, -1)                              AS student_id,
+      COALESCE(s.name, l.student_name_cache, '?')    AS student_name,
+      COALESCE(SUM(l.price), 0)                       AS total,
+      COUNT(*)                                         AS count
+    FROM lessons l
+    LEFT JOIN students s ON s.id = l.student_id
+    WHERE l.is_completed = 1 AND l.datetime >= ? AND l.datetime < ? AND l.price IS NOT NULL
+    GROUP BY COALESCE(s.id, -1)
+    ORDER BY total DESC
+  `,
+    )
+    .all(startDate, endDate);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LESSONS
+// ─────────────────────────────────────────────────────────────────────────────
+
 function getLessons(startDate, endDate) {
-  logger.debug('Fetching lessons', { startDate, endDate });
-
-  try {
-    const stmt = db.prepare(`
-            SELECT l.*, s.name as student_name, s.balance
-            FROM lessons l
-                     JOIN students s ON l.student_id = s.id
-            WHERE l.datetime >= ? AND l.datetime < ?
-            ORDER BY l.datetime
-        `);
-    const lessons = stmt.all(startDate, endDate);
-
-    logger.debug('Lessons fetched successfully', { count: lessons.length });
-    return lessons;
-  } catch (error) {
-    logger.error('Failed to fetch lessons', {
-      startDate,
-      endDate,
-      error: error.message,
-    });
-    throw error;
-  }
+  return db
+    .prepare(
+      `
+    SELECT
+      l.*,
+      COALESCE(s.name, l.student_name_cache, 'Видалений учень') AS student_name,
+      COALESCE(s.balance, 0) AS balance,
+      (SELECT lp.price FROM lesson_prices lp
+       WHERE lp.student_id = l.student_id
+       ORDER BY lp.valid_from DESC LIMIT 1) AS student_current_price
+    FROM lessons l
+    LEFT JOIN students s ON s.id = l.student_id
+    WHERE l.datetime >= ? AND l.datetime < ?
+    ORDER BY l.datetime
+  `,
+    )
+    .all(startDate, endDate);
 }
 
 function addLesson(studentId, datetime, isPaid, isCompleted) {
-  logger.info('Adding lesson', { studentId, datetime, isPaid, isCompleted });
+  // Get student name for cache
+  const student = studentId
+    ? db.prepare('SELECT name FROM students WHERE id = ?').get(studentId)
+    : null;
+  const studentNameCache = student ? student.name : null;
 
-  try {
-    const stmt = db.prepare(`
-            INSERT INTO lessons (student_id, datetime, is_paid, is_completed)
-            VALUES (?, ?, ?, ?)
-        `);
-    const result = stmt.run(studentId, datetime, isPaid ? 1 : 0, isCompleted ? 1 : 0);
+  let price = null;
+  let bundleId = null;
 
-    // If lesson was completed, deduct 1 from student balance
-    if (isCompleted) {
-      updateStudentBalance(studentId, -1);
-      logger.debug('Deducted balance for completed lesson', { studentId });
+  if (isCompleted && studentId) {
+    const bundleResult = consumeFromBundle(studentId);
+    if (bundleResult) {
+      price = bundleResult.price;
+      bundleId = bundleResult.bundleId;
+    } else {
+      price = getStudentPriceAt(studentId, datetime);
     }
-
-    logger.info('Lesson added successfully', {
-      id: result.lastInsertRowid,
-      studentId,
-      datetime,
-    });
-
-    return { id: result.lastInsertRowid };
-  } catch (error) {
-    logger.error('Failed to add lesson', {
-      studentId,
-      datetime,
-      error: error.message,
-    });
-    throw error;
   }
+
+  const result = db
+    .prepare(
+      `
+    INSERT INTO lessons
+      (student_id, student_name_cache, datetime, is_paid, is_completed, price, payment_bundle_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `,
+    )
+    .run(
+      studentId,
+      studentNameCache,
+      datetime,
+      isPaid ? 1 : 0,
+      isCompleted ? 1 : 0,
+      price,
+      bundleId,
+    );
+
+  if (isCompleted && studentId) {
+    updateStudentBalance(studentId, -1);
+  }
+
+  return { id: result.lastInsertRowid };
 }
 
 function updateLesson(lessonId, updates) {
-  logger.info('Updating lesson', { lessonId, updates });
-
-  try {
-    const current = db
-      .prepare(
-        `
-                SELECT l.datetime, l.previous_datetime, l.student_id, l.is_completed, l.is_paid, s.balance
-                FROM lessons l
-                JOIN students s ON l.student_id = s.id
-                WHERE l.id = ?
-            `,
-      )
-      .get(lessonId);
-
-    if (!current) {
-      logger.warn('Lesson not found for update', { lessonId });
-      return;
-    }
-
-    const fields = [];
-    const values = [];
-
-    if (updates.is_completed !== undefined) {
-      fields.push('is_completed = ?');
-      values.push(updates.is_completed ? 1 : 0);
-      logger.debug('Updating completion status', {
-        lessonId,
-        is_completed: updates.is_completed,
-      });
-    }
-
-    if (updates.is_paid !== undefined) {
-      fields.push('is_paid = ?');
-      values.push(updates.is_paid ? 1 : 0);
-
-      const completedButNoBalance = current && current.balance <= 0 && updates.is_completed;
-
-      if (updates.is_paid || completedButNoBalance) {
-        updateStudentBalance(current.student_id, -1);
-        logger.debug('Decreased student balance', { studentId: current.student_id });
-      } else {
-        updateStudentBalance(current.student_id, 1);
-        logger.debug('Increased student balance', { studentId: current.student_id });
-      }
-    }
-
-    if (updates.datetime !== undefined) {
-      // Store old datetime as previous_datetime only if not already set
-      if (!current.previous_datetime) {
-        fields.push('previous_datetime = ?');
-        values.push(current.datetime);
-      }
-
-      fields.push('datetime = ?');
-      values.push(updates.datetime);
-
-      logger.info('Lesson rescheduled', {
-        lessonId,
-        oldDatetime: current.datetime,
-        newDatetime: updates.datetime,
-      });
-    }
-
-    if (fields.length === 0) {
-      logger.debug('No fields to update', { lessonId });
-      return;
-    }
-
-    values.push(lessonId);
-    const stmt = db.prepare(`UPDATE lessons SET ${fields.join(', ')} WHERE id = ?`);
-    stmt.run(...values);
-
-    logger.info('Lesson updated successfully', { lessonId });
-  } catch (error) {
-    logger.error('Failed to update lesson', {
-      lessonId,
-      updates,
-      error: error.message,
-    });
-    throw error;
-  }
-}
-
-function toggleLessonPayment(lessonId) {
-  logger.info('Toggling lesson payment', { lessonId });
-
-  const lessonData = db
+  const current = db
     .prepare(
       `
-            SELECT l.id, l.is_completed, l.student_id, s.balance
-            FROM lessons l
-            JOIN students s ON l.student_id = s.id
-            WHERE l.id = ?
-        `,
+    SELECT l.*, s.balance FROM lessons l
+    LEFT JOIN students s ON l.student_id = s.id
+    WHERE l.id = ?
+  `,
     )
     .get(lessonId);
 
-  if (!lessonData || !lessonData.is_completed) {
-    logger.warn('Cannot toggle payment: lesson not found or not completed', {
-      lessonId,
-    });
-    throw new Error('Lesson not found or not completed');
-  }
+  if (!current) return;
 
-  try {
-    // Update payment status
-    const updateStmt = db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?');
-    updateStmt.run(lessonId);
+  const fields = [];
+  const values = [];
 
-    // Update balance only when marking as paid and balance < 0
-    if (lessonData.balance < 0) {
-      updateStudentBalance(lessonData.student_id, 1);
-      logger.debug('Increased balance after payment', {
-        studentId: lessonData.student_id,
-      });
+  if (updates.is_completed !== undefined) {
+    fields.push('is_completed = ?');
+    values.push(updates.is_completed ? 1 : 0);
+
+    // Snapshot price when marking completed for the first time
+    if (
+      updates.is_completed &&
+      !current.is_completed &&
+      current.price === null &&
+      current.student_id
+    ) {
+      const bundleResult = consumeFromBundle(current.student_id);
+      if (bundleResult) {
+        fields.push('price = ?');
+        values.push(bundleResult.price);
+        fields.push('payment_bundle_id = ?');
+        values.push(bundleResult.bundleId);
+      } else {
+        const p = getStudentPriceAt(current.student_id, current.datetime);
+        if (p !== null) {
+          fields.push('price = ?');
+          values.push(p);
+        }
+      }
     }
-
-    logger.info('Lesson payment toggled successfully', { lessonId });
-  } catch (error) {
-    logger.error('Failed to toggle lesson payment', {
-      lessonId,
-      error: error.message,
-    });
-    throw error;
   }
+
+  if (updates.is_paid !== undefined) {
+    fields.push('is_paid = ?');
+    values.push(updates.is_paid ? 1 : 0);
+    const noBalance = current.balance <= 0 && updates.is_completed;
+    if (updates.is_paid || noBalance) updateStudentBalance(current.student_id, -1);
+    else updateStudentBalance(current.student_id, 1);
+  }
+
+  if (updates.datetime !== undefined) {
+    if (!current.previous_datetime) {
+      fields.push('previous_datetime = ?');
+      values.push(current.datetime);
+    }
+    fields.push('datetime = ?');
+    values.push(updates.datetime);
+  }
+
+  if (fields.length === 0) return;
+  values.push(lessonId);
+  db.prepare(`UPDATE lessons SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+}
+
+function toggleLessonPayment(lessonId) {
+  const lesson = db
+    .prepare(
+      `
+    SELECT l.*, s.balance FROM lessons l
+    LEFT JOIN students s ON l.student_id = s.id WHERE l.id = ?
+  `,
+    )
+    .get(lessonId);
+  if (!lesson || !lesson.is_completed) throw new Error('Lesson not found or not completed');
+  db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?').run(lessonId);
+  if (lesson.balance < 0 && lesson.student_id) updateStudentBalance(lesson.student_id, 1);
 }
 
 function deleteLesson(lessonId) {
-  logger.info('Deleting lesson', { lessonId });
+  const lesson = db.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId);
+  if (!lesson) return;
 
-  try {
-    const lessonStmt = db.prepare('SELECT * FROM lessons WHERE id = ?');
-    const lesson = lessonStmt.get(lessonId);
+  db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
 
-    if (!lesson) {
-      logger.warn('Lesson not found for deletion', { lessonId });
-      return;
-    }
+  if (lesson.is_completed) {
+    // Restore balance
+    if (lesson.student_id) updateStudentBalance(lesson.student_id, 1);
+    // Return lesson to its payment bundle
+    if (lesson.payment_bundle_id) returnLessonToBundle(lesson.payment_bundle_id);
+  }
 
-    const deleteStmt = db.prepare('DELETE FROM lessons WHERE id = ?');
-    deleteStmt.run(lessonId);
-
-    if (lesson.is_completed) {
-      updateStudentBalance(lesson.student_id, 1);
-      logger.debug('Returned balance after lesson deletion', {
-        studentId: lesson.student_id,
-      });
-    }
-
+  // Record deleted slot to prevent auto-recreation
+  if (lesson.student_id) {
     db.prepare(
-      `
-            INSERT OR IGNORE INTO deleted_lesson_slots (student_id, datetime)
-            VALUES (?, ?)
-        `,
+      `INSERT OR IGNORE INTO deleted_lesson_slots (student_id, datetime) VALUES (?, ?)`,
     ).run(lesson.student_id, lesson.datetime);
-
-    logger.info('Lesson deleted successfully', { lessonId });
-  } catch (error) {
-    logger.error('Failed to delete lesson', {
-      lessonId,
-      error: error.message,
-    });
-    throw error;
   }
 }
 
 function cleanupExpiredDeletedSlots() {
-  logger.debug('Cleaning up expired deleted lesson slots');
-
-  const now = new Date();
-  const thresholdTime = new Date(now.getTime() - LESSON_DURATION_MINUTES * 60 * 1000);
-  const thresholdISO = thresholdTime.toISOString();
-
-  try {
-    const result = db
-      .prepare(
-        `
-            DELETE FROM deleted_lesson_slots
-            WHERE datetime < ?
-        `,
-      )
-      .run(thresholdISO);
-
-    logger.debug('Expired deleted slots cleaned up', { count: result.changes });
-    return result.changes;
-  } catch (error) {
-    logger.error('Failed to cleanup expired deleted slots', { error: error.message });
-    throw error;
-  }
+  const threshold = new Date(Date.now() - LESSON_DURATION_MINUTES * 60 * 1000).toISOString();
+  return db.prepare('DELETE FROM deleted_lesson_slots WHERE datetime < ?').run(threshold).changes;
 }
 
-// === AUTO SYNC ===
-function syncCompletedLessons() {
-  const startTime = Date.now();
-  logger.info('Starting lesson synchronization');
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTO SYNC
+// ─────────────────────────────────────────────────────────────────────────────
 
+function syncCompletedLessons() {
   cleanupExpiredDeletedSlots();
 
-  const now = new Date();
-  const thresholdTime = new Date(now.getTime() - LESSON_DURATION_MINUTES * 60 * 1000);
-  const thresholdISO = thresholdTime.toISOString();
+  const threshold = new Date(Date.now() - LESSON_DURATION_MINUTES * 60 * 1000).toISOString();
 
   const sync = db.transaction(() => {
-    const stmt = db.prepare(`
-            SELECT l.id, l.student_id, s.balance
-            FROM lessons l
-            JOIN students s ON l.student_id = s.id
-            WHERE l.datetime < ? AND l.is_completed = 0
-            ORDER BY l.datetime ASC
-        `);
-    const lessons = stmt.all(thresholdISO);
+    const lessons = db
+      .prepare(
+        `
+      SELECT l.id, l.student_id, l.datetime, s.balance
+      FROM lessons l
+      LEFT JOIN students s ON l.student_id = s.id
+      WHERE l.datetime < ? AND l.is_completed = 0 AND l.student_id IS NOT NULL
+      ORDER BY l.datetime ASC
+    `,
+      )
+      .all(threshold);
 
-    if (lessons.length === 0) {
-      logger.debug('No lessons to sync');
-      return 0;
-    }
+    if (lessons.length === 0) return 0;
 
-    logger.info('Syncing completed lessons', { count: lessons.length });
-
-    const lessonsWithBalance = [];
-    const lessonsWithoutBalance = [];
-
-    // Track current balance for each student as we process lessons
+    const withBalance = [];
+    const withoutBalance = [];
     const studentBalances = {};
     const balanceUpdates = {};
 
     lessons.forEach(({ id, student_id, balance }) => {
-      // Initialize student balance if not yet tracked
-      if (studentBalances[student_id] === undefined) {
-        studentBalances[student_id] = balance;
-      }
-
-      // Check if student has balance at this moment (after previous lessons)
+      if (studentBalances[student_id] === undefined) studentBalances[student_id] = balance ?? 0;
       if (studentBalances[student_id] > 0) {
-        lessonsWithBalance.push(id);
-        studentBalances[student_id] -= 1;
+        withBalance.push(id);
+        studentBalances[student_id]--;
       } else {
-        lessonsWithoutBalance.push(id);
+        withoutBalance.push(id);
       }
-
-      // Track total balance change for this student
       balanceUpdates[student_id] = (balanceUpdates[student_id] || 0) - 1;
     });
 
-    if (lessonsWithBalance.length > 0) {
-      const placeholders = lessonsWithBalance.map(() => '?').join(',');
-      const updatePaidStmt = db.prepare(`
-                UPDATE lessons 
-                SET is_completed = 1, is_paid = 1 
-                WHERE id IN (${placeholders})
-            `);
-      updatePaidStmt.run(...lessonsWithBalance);
-      logger.debug('Marked lessons as paid', { count: lessonsWithBalance.length });
+    if (withBalance.length) {
+      const ph = withBalance.map(() => '?').join(',');
+      db.prepare(`UPDATE lessons SET is_completed = 1, is_paid = 1 WHERE id IN (${ph})`).run(
+        ...withBalance,
+      );
+    }
+    if (withoutBalance.length) {
+      const ph = withoutBalance.map(() => '?').join(',');
+      db.prepare(`UPDATE lessons SET is_completed = 1 WHERE id IN (${ph})`).run(...withoutBalance);
     }
 
-    if (lessonsWithoutBalance.length > 0) {
-      const placeholders = lessonsWithoutBalance.map(() => '?').join(',');
-      const updateCompletedStmt = db.prepare(`
-                UPDATE lessons 
-                SET is_completed = 1 
-                WHERE id IN (${placeholders})
-            `);
-      updateCompletedStmt.run(...lessonsWithoutBalance);
-      logger.debug('Marked lessons as completed (unpaid)', {
-        count: lessonsWithoutBalance.length,
-      });
+    // Snapshot price for each newly completed lesson
+    const priceStmt = db.prepare(`UPDATE lessons SET
+      price = CASE
+        WHEN payment_bundle_id IS NOT NULL THEN price
+        ELSE (
+          SELECT lp.price FROM lesson_prices lp
+          WHERE lp.student_id = lessons.student_id AND lp.valid_from <= lessons.datetime
+          ORDER BY lp.valid_from DESC LIMIT 1
+        )
+      END
+      WHERE id = ? AND price IS NULL
+    `);
+    for (const { id, student_id } of lessons) {
+      // Try bundle first
+      const bundleResult = consumeFromBundle(student_id);
+      if (bundleResult) {
+        db.prepare('UPDATE lessons SET price = ?, payment_bundle_id = ? WHERE id = ?').run(
+          bundleResult.price,
+          bundleResult.bundleId,
+          id,
+        );
+      } else {
+        priceStmt.run(id);
+      }
     }
 
-    const updateBalanceStmt = db.prepare('UPDATE students SET balance = balance + ? WHERE id = ?');
-
-    for (const [studentId, amount] of Object.entries(balanceUpdates)) {
-      updateBalanceStmt.run(amount, parseInt(studentId));
+    const balStmt = db.prepare('UPDATE students SET balance = balance + ? WHERE id = ?');
+    for (const [sid, amt] of Object.entries(balanceUpdates)) {
+      balStmt.run(amt, parseInt(sid));
     }
 
     return lessons.length;
   });
 
-  const count = sync();
-  const duration = Date.now() - startTime;
-
-  logger.info('Lesson synchronization completed', {
-    count,
-    durationMs: duration,
-  });
-
-  return count;
+  return sync();
 }
 
-// === SCHEDULES ===
+// ─────────────────────────────────────────────────────────────────────────────
+// SCHEDULES
+// ─────────────────────────────────────────────────────────────────────────────
+
 function getSchedules(studentId) {
-  logger.debug('Fetching schedules', { studentId });
-
-  try {
-    const stmt = db.prepare(`
-            SELECT * FROM schedules
-            WHERE student_id = ?
-            ORDER BY is_active DESC, day_of_week, time
-        `);
-    const schedules = stmt.all(studentId);
-
-    logger.debug('Schedules fetched successfully', {
-      studentId,
-      count: schedules.length,
-    });
-
-    return schedules;
-  } catch (error) {
-    logger.error('Failed to fetch schedules', {
-      studentId,
-      error: error.message,
-    });
-    throw error;
-  }
+  return db
+    .prepare(
+      `
+    SELECT * FROM schedules WHERE student_id = ?
+    ORDER BY is_active DESC, day_of_week, time
+  `,
+    )
+    .all(studentId);
 }
 
 function addSchedule(studentId, dayOfWeek, time) {
-  logger.info('Adding schedule', { studentId, dayOfWeek, time });
-
-  const existingStmt = db.prepare(`
-        SELECT id, is_active FROM schedules
-        WHERE student_id = ? AND day_of_week = ? AND time = ?
-    `);
-  const existing = existingStmt.get(studentId, dayOfWeek, time);
+  const existing = db
+    .prepare(
+      `
+    SELECT id, is_active FROM schedules WHERE student_id = ? AND day_of_week = ? AND time = ?
+  `,
+    )
+    .get(studentId, dayOfWeek, time);
 
   if (existing) {
-    // If inactive schedule exists, reactivate it
     if (!existing.is_active) {
-      try {
-        const reactivateStmt = db.prepare('UPDATE schedules SET is_active = 1 WHERE id = ?');
-        reactivateStmt.run(existing.id);
-        logger.info('Reactivated existing schedule', { id: existing.id });
-        return { id: existing.id };
-      } catch (error) {
-        logger.error('Failed to reactivate schedule', {
-          scheduleId: existing.id,
-          error: error.message,
-        });
-        throw error;
-      }
+      db.prepare('UPDATE schedules SET is_active = 1 WHERE id = ?').run(existing.id);
+      return { id: existing.id };
     }
-    // If active schedule exists, throw error
-    logger.warn('Schedule already exists', { studentId, dayOfWeek, time });
     throw new Error('Schedule with same day and time already exists');
   }
 
-  try {
-    const stmt = db.prepare(`
-            INSERT INTO schedules (student_id, day_of_week, time, is_active)
-            VALUES (?, ?, ?, 1)
-        `);
-    const result = stmt.run(studentId, dayOfWeek, time);
-
-    logger.info('Schedule added successfully', {
-      id: result.lastInsertRowid,
-      studentId,
-      dayOfWeek,
-      time,
-    });
-
-    return { id: result.lastInsertRowid };
-  } catch (error) {
-    logger.error('Failed to add schedule', {
-      studentId,
-      dayOfWeek,
-      time,
-      error: error.message,
-    });
-    throw error;
-  }
+  const result = db
+    .prepare(
+      `
+    INSERT INTO schedules (student_id, day_of_week, time, is_active) VALUES (?, ?, ?, 1)
+  `,
+    )
+    .run(studentId, dayOfWeek, time);
+  return { id: result.lastInsertRowid };
 }
 
 function deleteSchedule(scheduleId) {
-  logger.info('Deleting schedule', { scheduleId });
-
-  try {
-    const stmt = db.prepare('DELETE FROM schedules WHERE id = ?');
-    const result = stmt.run(scheduleId);
-
-    logger.info('Schedule deleted successfully', {
-      scheduleId,
-      changes: result.changes,
-    });
-  } catch (error) {
-    logger.error('Failed to delete schedule', {
-      scheduleId,
-      error: error.message,
-    });
-    throw error;
-  }
+  db.prepare('DELETE FROM schedules WHERE id = ?').run(scheduleId);
 }
 
 function toggleScheduleActive(scheduleId) {
-  logger.info('Toggling schedule active status', { scheduleId });
-
-  try {
-    const stmt = db.prepare('UPDATE schedules SET is_active = NOT is_active WHERE id = ?');
-    const result = stmt.run(scheduleId);
-
-    logger.info('Schedule active status toggled', {
-      scheduleId,
-      changes: result.changes,
-    });
-  } catch (error) {
-    logger.error('Failed to toggle schedule active status', {
-      scheduleId,
-      error: error.message,
-    });
-    throw error;
-  }
+  db.prepare('UPDATE schedules SET is_active = NOT is_active WHERE id = ?').run(scheduleId);
 }
 
-// === AUTO CREATE LESSONS ===
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTO CREATE LESSONS
+// ─────────────────────────────────────────────────────────────────────────────
+
 function autoCreateLessons(studentId) {
-  const startTime = Date.now();
-  logger.info('Auto-creating lessons', { studentId });
+  const schedules = getSchedules(studentId).filter((s) => s.is_active);
+  if (!schedules.length) return 0;
 
-  const schedules = getSchedules(studentId);
-  if (schedules.length === 0) {
-    logger.debug('No schedules found for student', { studentId });
-    return 0;
-  }
-
-  // Filter only active schedules
-  const activeSchedules = schedules.filter((s) => s.is_active);
-  if (activeSchedules.length === 0) {
-    logger.debug('No active schedules for student', { studentId });
-    return 0;
-  }
-
-  let created = 0;
   const now = new Date();
-
-  // Calculate the start of the current week (Monday)
   const startOfWeek = new Date(now);
-  const currentDay = startOfWeek.getDay();
-  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-  startOfWeek.setDate(startOfWeek.getDate() - daysFromMonday);
+  const dow = startOfWeek.getDay();
+  startOfWeek.setDate(startOfWeek.getDate() - (dow === 0 ? 6 : dow - 1));
   startOfWeek.setHours(0, 0, 0, 0);
 
-  // Calculate the end: current week + 1 full week = 2 weeks total
   const endDate = new Date(startOfWeek);
   endDate.setDate(endDate.getDate() + 14);
   endDate.setHours(23, 59, 59, 999);
 
-  // Generate lesson dates for current week + 1 week ahead
+  const student = db.prepare('SELECT name FROM students WHERE id = ?').get(studentId);
+  const studentName = student ? student.name : null;
+
+  let created = 0;
   const possibleLessons = [];
 
   for (let week = 0; week < 2; week++) {
-    for (const schedule of activeSchedules) {
-      const lessonDate = new Date(startOfWeek);
-      const targetDay = schedule.day_of_week;
-
-      const daysToAdd = targetDay + week * 7;
-
-      lessonDate.setDate(lessonDate.getDate() + daysToAdd);
-
-      const [hours, minutes] = schedule.time.split(':');
-      lessonDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-
-      // Only include lessons that are in the future and within the period
-      if (lessonDate <= now || lessonDate > endDate) continue;
-
-      possibleLessons.push({
-        datetime: lessonDate,
-        schedule: schedule,
-      });
+    for (const sched of schedules) {
+      const d = new Date(startOfWeek);
+      d.setDate(d.getDate() + sched.day_of_week + week * 7);
+      const [h, m] = sched.time.split(':');
+      d.setHours(parseInt(h), parseInt(m), 0, 0);
+      if (d <= now || d > endDate) continue;
+      possibleLessons.push(d.toISOString());
     }
   }
 
-  // Sort lessons chronologically
-  possibleLessons.sort((a, b) => a.datetime - b.datetime);
+  possibleLessons.sort();
 
-  logger.debug('Generated possible lessons', {
-    studentId,
-    count: possibleLessons.length,
-  });
-
-  // Create lessons
-  for (const lesson of possibleLessons) {
-    const iso = lesson.datetime.toISOString();
-    const existing = db
+  for (const iso of possibleLessons) {
+    const exists = db
       .prepare(
         `
-                    SELECT id FROM lessons
-                    WHERE student_id = ? AND (datetime = ? OR previous_datetime = ?)
-                `,
+      SELECT id FROM lessons WHERE student_id = ? AND (datetime = ? OR previous_datetime = ?)
+    `,
       )
       .get(studentId, iso, iso);
-
-    if (existing) {
-      continue;
-    }
+    if (exists) continue;
 
     const deleted = db
       .prepare(
         `
-                    SELECT id FROM deleted_lesson_slots
-                    WHERE student_id = ? AND datetime = ?
-                `,
+      SELECT id FROM deleted_lesson_slots WHERE student_id = ? AND datetime = ?
+    `,
       )
       .get(studentId, iso);
-
-    if (deleted) {
-      continue;
-    }
+    if (deleted) continue;
 
     db.prepare(
       `
-                INSERT INTO lessons (student_id, datetime, is_paid, is_completed)
-                VALUES (?, ?, 0, 0)
-            `,
-    ).run(studentId, lesson.datetime.toISOString());
-
+      INSERT INTO lessons (student_id, student_name_cache, datetime, is_paid, is_completed)
+      VALUES (?, ?, ?, 0, 0)
+    `,
+    ).run(studentId, studentName, iso);
     created++;
   }
-
-  const duration = Date.now() - startTime;
-  logger.info('Auto-create lessons completed', {
-    studentId,
-    created,
-    durationMs: duration,
-  });
 
   return created;
 }
 
 function autoCreateLessonsForAllStudents() {
-  const startTime = Date.now();
-  logger.info('Auto-creating lessons for all students');
+  const students = db.prepare('SELECT id FROM students').all();
+  let total = 0;
+  for (const s of students) total += autoCreateLessons(s.id);
+  return total;
+}
 
-  try {
-    const students = db.prepare('SELECT id FROM students').all();
-    let totalCreated = 0;
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORTS
+// ─────────────────────────────────────────────────────────────────────────────
 
-    for (const student of students) {
-      const created = autoCreateLessons(student.id);
-      totalCreated += created;
-    }
-
-    const duration = Date.now() - startTime;
-    logger.info('Auto-create lessons for all students completed', {
-      totalCreated,
-      studentCount: students.length,
-      durationMs: duration,
-    });
-
-    return totalCreated;
-  } catch (error) {
-    logger.error('Failed to auto-create lessons for all students', {
-      error: error.message,
-    });
-    throw error;
-  }
+function getEarningsDateRange() {
+  return db
+    .prepare(
+      `
+    SELECT
+      MIN(datetime)                                          AS min_date,
+      MAX(datetime)                                          AS max_date,
+      COUNT(DISTINCT strftime('%Y-%m', datetime))            AS months_count
+    FROM lessons
+    WHERE is_completed = 1 AND price IS NOT NULL
+  `,
+    )
+    .get();
 }
 
 module.exports = {
   initDatabase,
+  // Students
   getStudents,
   addStudent,
   updateStudentBalance,
   markOldestUnpaidLessonsAsPaid,
   deleteStudent,
+  // Lesson prices
+  setStudentPrice,
+  getStudentCurrentPrice,
+  getStudentPriceAt,
+  getStudentPriceHistory,
+  deleteStudentPrice,
+  // Payment bundles
+  createPaymentBundle,
+  consumeFromBundle,
+  // Discounts
+  getDiscounts,
+  getGlobalDiscounts,
+  addDiscount,
+  deleteDiscount,
+  toggleDiscountActive,
+  findApplicableDiscount,
+  // Tax
+  getTaxSettings,
+  saveTaxSettings,
+  // Financial stats
+  getEarningsStats,
+  getEarningsByDay,
+  getEarningsByStudent,
+  getEarningsDateRange,
+  // Lessons
   getLessons,
   addLesson,
   updateLesson,
   toggleLessonPayment,
   deleteLesson,
   syncCompletedLessons,
+  // Schedules
   getSchedules,
   addSchedule,
   deleteSchedule,

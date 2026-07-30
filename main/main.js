@@ -6,9 +6,6 @@ const logger = require('./logger');
 let mainWindow;
 
 function createWindow() {
-  logger.info('Creating main window');
-
-  // Use appropriate icon format for each platform
   const iconPath =
     process.platform === 'win32'
       ? path.join(__dirname, '../build/icon.ico')
@@ -28,37 +25,28 @@ function createWindow() {
   mainWindow.maximize();
 
   if (process.env.NODE_ENV === 'development') {
-    logger.debug('Loading development URL');
-    mainWindow.loadURL('http://localhost:5173').catch((error) => {
-      logger.error('Failed to load development URL', { error: error.message });
-    });
+    mainWindow
+      .loadURL('http://localhost:5173')
+      .catch((e) => logger.error('Failed to load dev URL', { error: e.message }));
     mainWindow.webContents.openDevTools();
   } else {
-    logger.debug('Loading production file');
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html')).catch((error) => {
-      logger.error('Failed to load production file', { error: error.message });
-    });
+    mainWindow
+      .loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+      .catch((e) => logger.error('Failed to load prod file', { error: e.message }));
   }
 
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    logger.error('Window failed to load', { errorCode, errorDescription });
-  });
-
-  mainWindow.webContents.on('render-process-gone', (_event, details) => {
-    logger.error('Renderer process gone', {
-      reason: details.reason,
-      exitCode: details.exitCode,
-    });
-  });
-
-  logger.info('Main window created successfully');
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc) =>
+    logger.error('Window failed to load', { code, desc }),
+  );
+  mainWindow.webContents.on('render-process-gone', (_e, details) =>
+    logger.error('Renderer process gone', details),
+  );
 }
 
 app.whenReady().then(() => {
   logger.info('Application ready', {
     version: app.getVersion(),
     platform: process.platform,
-    arch: process.arch,
     nodeVersion: process.versions.node,
     electronVersion: process.versions.electron,
   });
@@ -68,11 +56,7 @@ app.whenReady().then(() => {
     db.syncCompletedLessons();
     db.autoCreateLessonsForAllStudents();
   } catch (error) {
-    logger.error('Startup initialization failed', {
-      error: error.message,
-      stack: error.stack,
-    });
-
+    logger.error('Startup initialization failed', { error: error.message });
     const { dialog } = require('electron');
     dialog.showErrorBox('Database Error', `Failed to initialize database: ${error.message}`);
   }
@@ -81,240 +65,104 @@ app.whenReady().then(() => {
   createWindow();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      logger.info('Reactivating application (macOS)');
-      createWindow();
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
 app.on('window-all-closed', () => {
-  logger.info('All windows closed');
-  if (process.platform !== 'darwin') {
-    logger.info('Quitting application');
-    app.quit();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
 
 process.on('uncaughtException', (error) => {
-  logger.error('Uncaught exception', {
-    error: error.message,
-    stack: error.stack,
-  });
-
+  logger.error('Uncaught exception', { error: error.message, stack: error.stack });
   const { dialog } = require('electron');
   dialog.showErrorBox('Error', `An error occurred: ${error.message}`);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled promise rejection', {
-    reason: reason,
-    promise: promise,
-  });
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection', { reason });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+
 function registerIpcHandlers() {
-  logger.debug('Registering IPC handlers');
+  const handle = (channel, fn) => {
+    ipcMain.handle(channel, async (...args) => {
+      try {
+        return fn(...args);
+      } catch (e) {
+        logger.error(`IPC ${channel} failed`, { error: e.message });
+        throw e;
+      }
+    });
+  };
 
-  // Students
-  ipcMain.handle('db:get-students', async () => {
-    logger.debug('IPC: get-students');
-    try {
-      const result = db.getStudents();
-      logger.debug('IPC: get-students completed', { count: result.length });
-      return result;
-    } catch (error) {
-      logger.error('IPC: get-students failed', { error: error.message });
-      throw error;
-    }
+  // ── Students ──────────────────────────────────────────────────────────────
+  handle('db:get-students', () => db.getStudents());
+  handle('db:add-student', (_, name, balance, price) =>
+    db.addStudent(name, balance, price ?? null),
+  );
+  handle('db:update-balance', (_, studentId, amount) => {
+    db.updateStudentBalance(studentId, amount);
+    if (amount > 0) db.createPaymentBundle(studentId, amount);
   });
-
-  ipcMain.handle('db:add-student', async (_, name, balance) => {
-    logger.info('IPC: add-student', { name, balance });
-    try {
-      const result = db.addStudent(name, balance);
-      logger.info('IPC: add-student completed', { id: result.id });
-      return result;
-    } catch (error) {
-      logger.error('IPC: add-student failed', { name, error: error.message });
-      throw error;
-    }
+  handle('db:pay-for-lessons', (_, studentId, amount, totalPriceKopiyky) => {
+    // Explicit payment with known total (used when a discount applies)
+    db.updateStudentBalance(studentId, amount);
+    db.createPaymentBundle(studentId, amount, totalPriceKopiyky);
+    db.markOldestUnpaidLessonsAsPaid(studentId, amount);
   });
+  handle('db:mark-unpaid-lessons-paid', (_, studentId, count) =>
+    db.markOldestUnpaidLessonsAsPaid(studentId, count),
+  );
+  handle('db:delete-student', (_, studentId) => db.deleteStudent(studentId));
 
-  ipcMain.handle('db:update-balance', async (_, studentId, amount) => {
-    logger.info('IPC: update-balance', { studentId, amount });
-    try {
-      db.updateStudentBalance(studentId, amount);
-      logger.info('IPC: update-balance completed', { studentId, amount });
-    } catch (error) {
-      logger.error('IPC: update-balance failed', { studentId, amount, error: error.message });
-      throw error;
-    }
-  });
+  // ── Lesson prices ─────────────────────────────────────────────────────────
+  handle('db:set-student-price', (_, studentId, price) => db.setStudentPrice(studentId, price));
+  handle('db:get-student-current-price', (_, studentId) => db.getStudentCurrentPrice(studentId));
+  handle('db:get-student-price-history', (_, studentId) => db.getStudentPriceHistory(studentId));
+  handle('db:delete-student-price', (_, priceId) => db.deleteStudentPrice(priceId));
 
-  ipcMain.handle('db:mark-unpaid-lessons-paid', async (_, studentId, count) => {
-    logger.info('IPC: mark-unpaid-lessons-paid', { studentId, count });
-    try {
-      db.markOldestUnpaidLessonsAsPaid(studentId, count);
-      logger.info('IPC: mark-unpaid-lessons-paid completed', { studentId, count });
-    } catch (error) {
-      logger.error('IPC: mark-unpaid-lessons-paid failed', {
-        studentId,
-        count,
-        error: error.message,
-      });
-      throw error;
-    }
-  });
+  // ── Discounts ─────────────────────────────────────────────────────────────
+  handle('db:get-discounts', (_, studentId) => db.getDiscounts(studentId));
+  handle('db:get-global-discounts', () => db.getGlobalDiscounts());
+  handle('db:add-discount', (_, studentId, count, total, desc) =>
+    db.addDiscount(studentId, count, total, desc),
+  );
+  handle('db:delete-discount', (_, id) => db.deleteDiscount(id));
+  handle('db:toggle-discount-active', (_, id) => db.toggleDiscountActive(id));
+  handle('db:find-applicable-discount', (_, studentId, count) =>
+    db.findApplicableDiscount(studentId, count),
+  );
 
-  ipcMain.handle('db:delete-student', async (_, studentId) => {
-    logger.info('IPC: delete-student', { studentId });
-    try {
-      db.deleteStudent(studentId);
-      logger.info('IPC: delete-student completed', { studentId });
-    } catch (error) {
-      logger.error('IPC: delete-student failed', { studentId, error: error.message });
-      throw error;
-    }
-  });
+  // ── Tax settings ──────────────────────────────────────────────────────────
+  handle('db:get-tax-settings', () => db.getTaxSettings());
+  handle('db:save-tax-settings', (_, s) => db.saveTaxSettings(s));
 
-  // Lessons
-  ipcMain.handle('db:get-lessons', async (_, startDate, endDate) => {
-    logger.debug('IPC: get-lessons', { startDate, endDate });
-    try {
-      const result = db.getLessons(startDate, endDate);
-      logger.debug('IPC: get-lessons completed', { count: result.length });
-      return result;
-    } catch (error) {
-      logger.error('IPC: get-lessons failed', { startDate, endDate, error: error.message });
-      throw error;
-    }
-  });
+  // ── Financial stats ───────────────────────────────────────────────────────
+  handle('db:get-earnings-stats', (_, s, e) => db.getEarningsStats(s, e));
+  handle('db:get-earnings-by-day', (_, s, e) => db.getEarningsByDay(s, e));
+  handle('db:get-earnings-by-student', (_, s, e) => db.getEarningsByStudent(s, e));
+  handle('db:get-earnings-date-range', () => db.getEarningsDateRange());
 
-  ipcMain.handle('db:add-lesson', async (_, data) => {
-    logger.info('IPC: add-lesson', { data });
-    try {
-      const result = db.addLesson(data.studentId, data.datetime, data.isPaid, data.isCompleted);
-      logger.info('IPC: add-lesson completed', { id: result.id });
-      return result;
-    } catch (error) {
-      logger.error('IPC: add-lesson failed', { data, error: error.message });
-      throw error;
-    }
-  });
+  // ── Lessons ───────────────────────────────────────────────────────────────
+  handle('db:get-lessons', (_, s, e) => db.getLessons(s, e));
+  handle('db:add-lesson', (_, data) =>
+    db.addLesson(data.studentId, data.datetime, data.isPaid, data.isCompleted),
+  );
+  handle('db:update-lesson', (_, id, updates) => db.updateLesson(id, updates));
+  handle('db:toggle-lesson-payment', (_, id) => db.toggleLessonPayment(id));
+  handle('db:delete-lesson', (_, id) => db.deleteLesson(id));
 
-  ipcMain.handle('db:update-lesson', async (_, id, updates) => {
-    logger.info('IPC: update-lesson', { id, updates });
-    try {
-      db.updateLesson(id, updates);
-      logger.info('IPC: update-lesson completed', { id });
-    } catch (error) {
-      logger.error('IPC: update-lesson failed', { id, updates, error: error.message });
-      throw error;
-    }
-  });
+  // ── Schedules ─────────────────────────────────────────────────────────────
+  handle('db:get-schedules', (_, studentId) => db.getSchedules(studentId));
+  handle('db:add-schedule', (_, studentId, day, time) => db.addSchedule(studentId, day, time));
+  handle('db:delete-schedule', (_, id) => db.deleteSchedule(id));
+  handle('db:toggle-schedule-active', (_, id) => db.toggleScheduleActive(id));
+  handle('db:auto-create-lessons', (_, studentId) => db.autoCreateLessons(studentId));
 
-  ipcMain.handle('db:toggle-lesson-payment', async (_, id) => {
-    logger.info('IPC: toggle-lesson-payment', { id });
-    try {
-      db.toggleLessonPayment(id);
-      logger.info('IPC: toggle-lesson-payment completed', { id });
-    } catch (error) {
-      logger.error('IPC: toggle-lesson-payment failed', { id, error: error.message });
-      throw error;
-    }
-  });
+  // ── Sync ──────────────────────────────────────────────────────────────────
+  handle('db:sync-lessons', () => db.syncCompletedLessons());
 
-  ipcMain.handle('db:delete-lesson', async (_, id) => {
-    logger.info('IPC: delete-lesson', { id });
-    try {
-      db.deleteLesson(id);
-      logger.info('IPC: delete-lesson completed', { id });
-    } catch (error) {
-      logger.error('IPC: delete-lesson failed', { id, error: error.message });
-      throw error;
-    }
-  });
-
-  // Schedules
-  ipcMain.handle('db:get-schedules', async (_, studentId) => {
-    logger.debug('IPC: get-schedules', { studentId });
-    try {
-      const result = db.getSchedules(studentId);
-      logger.debug('IPC: get-schedules completed', { studentId, count: result.length });
-      return result;
-    } catch (error) {
-      logger.error('IPC: get-schedules failed', { studentId, error: error.message });
-      throw error;
-    }
-  });
-
-  ipcMain.handle('db:add-schedule', async (_, studentId, dayOfWeek, time) => {
-    logger.info('IPC: add-schedule', { studentId, dayOfWeek, time });
-    try {
-      const result = db.addSchedule(studentId, dayOfWeek, time);
-      logger.info('IPC: add-schedule completed', { id: result.id });
-      return result;
-    } catch (error) {
-      logger.error('IPC: add-schedule failed', {
-        studentId,
-        dayOfWeek,
-        time,
-        error: error.message,
-      });
-      throw error;
-    }
-  });
-
-  ipcMain.handle('db:delete-schedule', async (_, scheduleId) => {
-    logger.info('IPC: delete-schedule', { scheduleId });
-    try {
-      db.deleteSchedule(scheduleId);
-      logger.info('IPC: delete-schedule completed', { scheduleId });
-    } catch (error) {
-      logger.error('IPC: delete-schedule failed', { scheduleId, error: error.message });
-      throw error;
-    }
-  });
-
-  ipcMain.handle('db:toggle-schedule-active', async (_, scheduleId) => {
-    logger.info('IPC: toggle-schedule-active', { scheduleId });
-    try {
-      db.toggleScheduleActive(scheduleId);
-      logger.info('IPC: toggle-schedule-active completed', { scheduleId });
-    } catch (error) {
-      logger.error('IPC: toggle-schedule-active failed', {
-        scheduleId,
-        error: error.message,
-      });
-      throw error;
-    }
-  });
-
-  ipcMain.handle('db:auto-create-lessons', async (_, studentId) => {
-    logger.info('IPC: auto-create-lessons', { studentId });
-    try {
-      const result = db.autoCreateLessons(studentId);
-      logger.info('IPC: auto-create-lessons completed', { studentId, created: result });
-      return result;
-    } catch (error) {
-      logger.error('IPC: auto-create-lessons failed', { studentId, error: error.message });
-      throw error;
-    }
-  });
-
-  // Sync
-  ipcMain.handle('db:sync-lessons', async () => {
-    logger.info('IPC: sync-lessons');
-    try {
-      const result = db.syncCompletedLessons();
-      logger.info('IPC: sync-lessons completed', { syncedCount: result });
-      return result;
-    } catch (error) {
-      logger.error('IPC: sync-lessons failed', { error: error.message });
-      throw error;
-    }
-  });
-
-  logger.debug('IPC handlers registered successfully');
+  logger.debug('IPC handlers registered');
 }

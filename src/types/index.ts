@@ -1,7 +1,8 @@
-// ============= RE-EXPORTS =============
 export { LessonStatus } from '../utils/lessonStatus';
 
-// ============= DATABASE TYPES =============
+// ─────────────────────────────────────────────────────────────────────────────
+// DATABASE TYPES
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface Student {
   id: number;
@@ -9,31 +10,111 @@ export interface Student {
   balance: number;
   created_at: string;
   completed_lessons_count?: number;
+  current_price?: number | null; // kopiyky
 }
 
 export interface Lesson {
   id: number;
-  student_id: number;
+  student_id: number | null; // null if student was deleted
+  student_name_cache: string | null;
   datetime: string;
   previous_datetime: string | null;
-  is_completed: number; // SQLite boolean (0 or 1)
-  is_paid: number; // SQLite boolean (0 or 1)
+  is_completed: number;
+  is_paid: number;
+  price: number | null; // kopiyky; null until lesson completes
+  payment_bundle_id: number | null;
   created_at: string;
   // Joined fields
   student_name?: string;
   balance?: number;
+  student_current_price?: number | null; // kopiyky
 }
 
 export interface Schedule {
   id: number;
   student_id: number;
-  day_of_week: number; // 0-6 (Monday-Sunday)
-  time: string; // HH:mm format
-  is_active: number; // SQLite boolean (0 or 1)
+  day_of_week: number; // 0-6 Monday-Sunday
+  time: string; // HH:mm
+  is_active: number;
   created_at: string;
 }
 
-// ============= API TYPES =============
+export interface LessonPrice {
+  id: number;
+  student_id: number;
+  price: number; // kopiyky
+  valid_from: string;
+  created_at: string;
+}
+
+/** A bundle of N lessons paid at once with a fixed total price. */
+export interface PaymentBundle {
+  id: number;
+  student_id: number | null;
+  total_price: number; // kopiyky
+  lessons_count: number;
+  lessons_used: number;
+  created_at: string;
+}
+
+/**
+ * Discount bundle rule.
+ * student_id = null → global (applies to all students).
+ * Example: lessons_count=3, total_price=100000 kopiyky → 3 lessons for 1000.00 ₴
+ */
+export interface Discount {
+  id: number;
+  student_id: number | null;
+  lessons_count: number;
+  total_price: number; // kopiyky
+  description: string | null;
+  is_active: number;
+  created_at: string;
+}
+
+/**
+ * Tax settings — single row.
+ * esv_type: 'none' | 'fixed'
+ * esv_fixed: kopiyky/month
+ * military_tax_rate: percent (e.g. 1.0 = 1%)
+ */
+export interface TaxSettings {
+  id: 1;
+  esv_type: 'none' | 'fixed';
+  esv_fixed: number; // kopiyky/month
+  military_tax_enabled: number; // 0 | 1
+  military_tax_rate: number; // percent
+  updated_at: string;
+}
+
+export interface EarningsStats {
+  total: number; // kopiyky
+  lessons_with_price: number;
+  lessons_total: number;
+}
+
+export interface EarningsByDay {
+  day: string; // YYYY-MM-DD
+  total: number; // kopiyky
+  count: number;
+}
+
+export interface EarningsByStudent {
+  student_id: number;
+  student_name: string;
+  total: number; // kopiyky
+  count: number;
+}
+
+export interface EarningsDateRange {
+  min_date: string | null;
+  max_date: string | null;
+  months_count: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// API TYPES
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface AddLessonData {
   studentId: number;
@@ -48,15 +129,55 @@ export interface UpdateLessonData {
   is_paid?: number;
 }
 
-// ============= ELECTRON API =============
+// ─────────────────────────────────────────────────────────────────────────────
+// ELECTRON API
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface ElectronAPI {
   // Students
   getStudents: () => Promise<Student[]>;
-  addStudent: (name: string, balance: number) => Promise<Student>;
+  addStudent: (
+    name: string,
+    balance: number,
+    priceKopiyky?: number | null,
+  ) => Promise<{ id: number; name: string; balance: number }>;
   updateBalance: (studentId: number, amount: number) => Promise<void>;
+  payForLessons: (
+    studentId: number,
+    amount: number,
+    totalPriceKopiyky: number | null,
+  ) => Promise<void>;
   markUnpaidLessonsPaid: (studentId: number, count: number) => Promise<void>;
   deleteStudent: (studentId: number) => Promise<void>;
+
+  // Lesson prices (all in kopiyky)
+  setStudentPrice: (studentId: number, priceKopiyky: number) => Promise<{ id: number }>;
+  getStudentCurrentPrice: (studentId: number) => Promise<LessonPrice | null>;
+  getStudentPriceHistory: (studentId: number) => Promise<LessonPrice[]>;
+  deleteStudentPrice: (priceId: number) => Promise<void>;
+
+  // Discounts (total_price in kopiyky)
+  getDiscounts: (studentId: number) => Promise<Discount[]>;
+  getGlobalDiscounts: () => Promise<Discount[]>;
+  addDiscount: (
+    studentId: number | null,
+    lessonsCount: number,
+    totalPriceKopiyky: number,
+    description?: string | null,
+  ) => Promise<{ id: number }>;
+  deleteDiscount: (discountId: number) => Promise<void>;
+  toggleDiscountActive: (discountId: number) => Promise<void>;
+  findApplicableDiscount: (studentId: number, count: number) => Promise<Discount | null>;
+
+  // Tax settings
+  getTaxSettings: () => Promise<TaxSettings>;
+  saveTaxSettings: (settings: Omit<TaxSettings, 'id' | 'updated_at'>) => Promise<void>;
+
+  // Financial stats (totals in kopiyky)
+  getEarningsStats: (startDate: string, endDate: string) => Promise<EarningsStats>;
+  getEarningsByDay: (startDate: string, endDate: string) => Promise<EarningsByDay[]>;
+  getEarningsByStudent: (startDate: string, endDate: string) => Promise<EarningsByStudent[]>;
+  getEarningsDateRange: () => Promise<EarningsDateRange>;
 
   // Lessons
   getLessons: (startDate: string, endDate: string) => Promise<Lesson[]>;
@@ -82,7 +203,9 @@ declare global {
   }
 }
 
-// ============= MODAL TYPES =============
+// ─────────────────────────────────────────────────────────────────────────────
+// MODAL & STORE TYPES
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface ModalState {
   addStudent: boolean;
@@ -90,48 +213,46 @@ export interface ModalState {
   studentsList: boolean;
   editLesson: boolean;
   schedule: boolean;
+  taxSettings: boolean;
+  discounts: boolean;
 }
 
 export type ModalName = keyof ModalState;
-
 export type Theme = 'default' | 'purple';
-
-// ============= STORE TYPES =============
+export type AppView = 'calendar' | 'finance';
 
 export interface AppState {
-  // Students
   students: Student[];
   studentsLoading: boolean;
   studentsError: string | null;
 
-  // Lessons
   lessons: Lesson[];
   lessonsLoading: boolean;
   lessonsError: string | null;
 
-  // Schedules
   schedules: Schedule[];
   schedulesLoading: boolean;
   schedulesError: string | null;
 
-  // Current week
   currentWeek: Date;
+  currentView: AppView;
 
-  // Modals
   modals: ModalState;
   selectedLesson: Lesson | null;
   selectedStudentForSchedule: Student | null;
+  selectedStudentForDiscounts: Student | null;
   prefilledLessonDateTime: Date | null;
 
-  // Theme
   theme: Theme;
+  taxSettings: TaxSettings | null;
 
-  // Actions
+  // Actions — Students
   loadStudents: () => Promise<void>;
-  addStudent: (name: string, balance: number) => Promise<void>;
+  addStudent: (name: string, balance: number, priceKopiyky?: number | null) => Promise<void>;
   deleteStudent: (studentId: number) => Promise<void>;
   updateBalance: (studentId: number, amount: number) => Promise<void>;
 
+  // Actions — Lessons
   loadLessons: () => Promise<void>;
   addLesson: (data: AddLessonData) => Promise<void>;
   updateLesson: (lessonId: number, updates: UpdateLessonData) => Promise<void>;
@@ -139,22 +260,34 @@ export interface AppState {
   deleteLesson: (lessonId: number) => Promise<void>;
   syncLessons: () => Promise<void>;
 
+  // Actions — Schedules
   loadSchedules: (studentId: number) => Promise<void>;
   addSchedule: (studentId: number, dayOfWeek: number, time: string) => Promise<void>;
   deleteSchedule: (scheduleId: number) => Promise<void>;
   toggleScheduleActive: (scheduleId: number) => Promise<void>;
   autoCreateLessons: (studentId: number) => Promise<number>;
 
+  // Actions — Navigation
   nextWeek: () => void;
   prevWeek: () => void;
   goToToday: () => void;
 
+  // Actions — View
+  setView: (view: AppView) => void;
+
+  // Actions — Modals
   openModal: (modalName: ModalName) => void;
   openAddLessonModal: (datetime: Date) => void;
   closeModal: (modalName: ModalName) => void;
   selectLesson: (lesson: Lesson) => void;
   selectStudentForSchedule: (student: Student) => void;
+  selectStudentForDiscounts: (student: Student) => void;
 
+  // Actions — Tax settings
+  loadTaxSettings: () => Promise<void>;
+  saveTaxSettings: (settings: Omit<TaxSettings, 'id' | 'updated_at'>) => Promise<void>;
+
+  // App lifecycle
   initialize: () => Promise<void>;
   toggleTheme: () => void;
 }

@@ -3,11 +3,45 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electron', {
   // Students
   getStudents: () => ipcRenderer.invoke('db:get-students'),
-  addStudent: (name, balance) => ipcRenderer.invoke('db:add-student', name, balance),
+  addStudent: (name, balance, price) => ipcRenderer.invoke('db:add-student', name, balance, price),
   updateBalance: (studentId, amount) => ipcRenderer.invoke('db:update-balance', studentId, amount),
+  payForLessons: (studentId, amount, totalPriceKopiyky) =>
+    ipcRenderer.invoke('db:pay-for-lessons', studentId, amount, totalPriceKopiyky),
   markUnpaidLessonsPaid: (studentId, count) =>
     ipcRenderer.invoke('db:mark-unpaid-lessons-paid', studentId, count),
   deleteStudent: (studentId) => ipcRenderer.invoke('db:delete-student', studentId),
+
+  // Lesson prices
+  setStudentPrice: (studentId, priceKopiyky) =>
+    ipcRenderer.invoke('db:set-student-price', studentId, priceKopiyky),
+  getStudentCurrentPrice: (studentId) =>
+    ipcRenderer.invoke('db:get-student-current-price', studentId),
+  getStudentPriceHistory: (studentId) =>
+    ipcRenderer.invoke('db:get-student-price-history', studentId),
+  deleteStudentPrice: (priceId) => ipcRenderer.invoke('db:delete-student-price', priceId),
+
+  // Discounts
+  getDiscounts: (studentId) => ipcRenderer.invoke('db:get-discounts', studentId),
+  getGlobalDiscounts: () => ipcRenderer.invoke('db:get-global-discounts'),
+  addDiscount: (studentId, lessonsCount, totalPriceKopiyky, description) =>
+    ipcRenderer.invoke('db:add-discount', studentId, lessonsCount, totalPriceKopiyky, description),
+  deleteDiscount: (discountId) => ipcRenderer.invoke('db:delete-discount', discountId),
+  toggleDiscountActive: (discountId) => ipcRenderer.invoke('db:toggle-discount-active', discountId),
+  findApplicableDiscount: (studentId, count) =>
+    ipcRenderer.invoke('db:find-applicable-discount', studentId, count),
+
+  // Tax settings
+  getTaxSettings: () => ipcRenderer.invoke('db:get-tax-settings'),
+  saveTaxSettings: (settings) => ipcRenderer.invoke('db:save-tax-settings', settings),
+
+  // Financial stats
+  getEarningsStats: (startDate, endDate) =>
+    ipcRenderer.invoke('db:get-earnings-stats', startDate, endDate),
+  getEarningsByDay: (startDate, endDate) =>
+    ipcRenderer.invoke('db:get-earnings-by-day', startDate, endDate),
+  getEarningsByStudent: (startDate, endDate) =>
+    ipcRenderer.invoke('db:get-earnings-by-student', startDate, endDate),
+  getEarningsDateRange: () => ipcRenderer.invoke('db:get-earnings-date-range'),
 
   // Lessons
   getLessons: (startDate, endDate) => ipcRenderer.invoke('db:get-lessons', startDate, endDate),
