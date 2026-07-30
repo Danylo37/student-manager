@@ -1,6 +1,4 @@
--- ─────────────────────────────────────────────────────────────────────────────
--- STUDENTS
--- ─────────────────────────────────────────────────────────────────────────────
+-- # STUDENTS
 CREATE TABLE IF NOT EXISTS students (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -8,12 +6,10 @@ CREATE TABLE IF NOT EXISTS students (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
 -- PAYMENT BUNDLES
 -- Created when teacher adds balance (+N lessons).
 -- Tracks how many lessons from this payment have been consumed.
 -- total_price in KOPIYKY (1 hryvnia = 100 kopiyky).
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS payment_bundles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER,
@@ -24,13 +20,11 @@ CREATE TABLE IF NOT EXISTS payment_bundles (
   FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE SET NULL
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
 -- LESSONS
 -- student_id is nullable so completed lessons survive student deletion.
 -- student_name_cache preserves the name after deletion.
 -- price in KOPIYKY.
 -- payment_bundle_id links to the bundle that paid for this lesson.
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS lessons (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER,
@@ -46,9 +40,7 @@ CREATE TABLE IF NOT EXISTS lessons (
   FOREIGN KEY (payment_bundle_id) REFERENCES payment_bundles (id) ON DELETE SET NULL
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
--- SCHEDULES
--- ─────────────────────────────────────────────────────────────────────────────
+-- # SCHEDULES
 CREATE TABLE IF NOT EXISTS schedules (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER NOT NULL,
@@ -59,9 +51,7 @@ CREATE TABLE IF NOT EXISTS schedules (
   FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
--- DELETED LESSON SLOTS
--- ─────────────────────────────────────────────────────────────────────────────
+-- # DELETED LESSON SLOTS
 CREATE TABLE IF NOT EXISTS deleted_lesson_slots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER NOT NULL,
@@ -70,10 +60,8 @@ CREATE TABLE IF NOT EXISTS deleted_lesson_slots (
   FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
 -- LESSON PRICES
 -- price in KOPIYKY.
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS lesson_prices (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER NOT NULL,
@@ -83,11 +71,9 @@ CREATE TABLE IF NOT EXISTS lesson_prices (
   FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
 -- DISCOUNTS
 -- total_price in KOPIYKY.
 -- student_id = NULL means global discount.
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS discounts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER,
@@ -99,12 +85,10 @@ CREATE TABLE IF NOT EXISTS discounts (
   FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
 -- TAX SETTINGS (single row)
 -- esv_type: 'none' | 'fixed'
 -- esv_fixed: kopiyky/month
 -- military_tax_rate: percent (e.g. 1.0 means 1%)
--- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tax_settings (
   id INTEGER PRIMARY KEY DEFAULT 1,
   esv_type TEXT DEFAULT 'none',
@@ -119,9 +103,7 @@ OR IGNORE INTO tax_settings (id)
 VALUES
   (1);
 
--- ─────────────────────────────────────────────────────────────────────────────
--- INDEXES
--- ─────────────────────────────────────────────────────────────────────────────
+-- # INDEXES
 CREATE INDEX IF NOT EXISTS idx_lessons_datetime ON lessons (datetime);
 
 CREATE INDEX IF NOT EXISTS idx_lessons_student ON lessons (student_id);

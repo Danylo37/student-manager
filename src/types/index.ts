@@ -1,8 +1,6 @@
 export { LessonStatus } from '../utils/lessonStatus';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DATABASE TYPES
-// ─────────────────────────────────────────────────────────────────────────────
+// # DATABASE TYPES
 
 export interface Student {
   id: number;
@@ -90,6 +88,7 @@ export interface TaxSettings {
 export interface EarningsStats {
   total: number; // kopiyky
   lessons_with_price: number;
+  lessons_paid: number; // completed, paid and priced — the ones `total` is built from
   lessons_total: number;
 }
 
@@ -112,9 +111,7 @@ export interface EarningsDateRange {
   months_count: number;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// API TYPES
-// ─────────────────────────────────────────────────────────────────────────────
+// # API TYPES
 
 export interface AddLessonData {
   studentId: number;
@@ -129,9 +126,7 @@ export interface UpdateLessonData {
   is_paid?: number;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ELECTRON API
-// ─────────────────────────────────────────────────────────────────────────────
+// # ELECTRON API
 
 export interface ElectronAPI {
   // Students
@@ -203,9 +198,7 @@ declare global {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MODAL & STORE TYPES
-// ─────────────────────────────────────────────────────────────────────────────
+// # MODAL & STORE TYPES
 
 export interface ModalState {
   addStudent: boolean;

@@ -7,9 +7,7 @@ const logger = require('./logger');
 
 let db = null;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// INIT & MIGRATION
-// ─────────────────────────────────────────────────────────────────────────────
+// # INIT & MIGRATION
 
 function initDatabase() {
   logger.info('Initializing database');
@@ -192,9 +190,7 @@ function runMigrationV2() {
   logger.info('Migration v2 complete');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STUDENTS
-// ─────────────────────────────────────────────────────────────────────────────
+// # STUDENTS
 
 function getStudents() {
   return db
@@ -270,9 +266,7 @@ function markOldestUnpaidLessonsAsPaid(studentId, count) {
   for (const l of lessons) stmt.run(l.id);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LESSON PRICES  (all values in kopiyky)
-// ─────────────────────────────────────────────────────────────────────────────
+// # LESSON PRICES  (all values in kopiyky)
 
 function setStudentPrice(studentId, priceKopiyky) {
   return db
@@ -326,9 +320,7 @@ function deleteStudentPrice(priceId) {
   db.prepare('DELETE FROM lesson_prices WHERE id = ?').run(priceId);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PAYMENT BUNDLES
-// ─────────────────────────────────────────────────────────────────────────────
+// # PAYMENT BUNDLES
 
 /**
  * Create a payment bundle when teacher records a payment.
@@ -411,6 +403,21 @@ function consumeFromBundle(studentId) {
 }
 
 /**
+ * Price to record on a lesson that is being completed.
+ * Prefers a prepaid bundle so package deals stay exact, otherwise falls back to
+ * the price that was in effect at the lesson's date.
+ * @returns {{price: number|null, bundleId: number|null}}
+ */
+function resolveLessonPrice(studentId, datetime) {
+  if (!studentId) return { price: null, bundleId: null };
+
+  const bundle = consumeFromBundle(studentId);
+  if (bundle) return { price: bundle.price, bundleId: bundle.bundleId };
+
+  return { price: getStudentPriceAt(studentId, datetime), bundleId: null };
+}
+
+/**
  * Return one lesson to its bundle (called when a completed lesson is deleted).
  */
 function returnLessonToBundle(bundleId) {
@@ -420,9 +427,7 @@ function returnLessonToBundle(bundleId) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DISCOUNTS  (total_price in kopiyky)
-// ─────────────────────────────────────────────────────────────────────────────
+// # DISCOUNTS  (total_price in kopiyky)
 
 function getDiscounts(studentId) {
   return db
@@ -476,9 +481,7 @@ function findApplicableDiscount(studentId, count) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TAX SETTINGS
-// ─────────────────────────────────────────────────────────────────────────────
+// # TAX SETTINGS
 
 function getTaxSettings() {
   db.prepare('INSERT OR IGNORE INTO tax_settings (id) VALUES (1)').run();
@@ -499,9 +502,10 @@ function saveTaxSettings(s) {
   ).run(s.esv_type, s.esv_fixed, s.military_tax_enabled ? 1 : 0, s.military_tax_rate);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FINANCIAL STATS
-// ─────────────────────────────────────────────────────────────────────────────
+// # FINANCIAL STATS
+
+/** A lesson counts as income once it is completed, paid and has a price. */
+const IS_INCOME = (t = '') => `${t}is_completed = 1 AND ${t}is_paid = 1 AND ${t}price IS NOT NULL`;
 
 function getEarningsStats(startDate, endDate) {
   return db
@@ -510,7 +514,8 @@ function getEarningsStats(startDate, endDate) {
     SELECT
       COALESCE(SUM(CASE WHEN is_paid = 1 THEN price END), 0) AS total,
       COUNT(CASE WHEN price IS NOT NULL THEN 1 END)          AS lessons_with_price,
-      COUNT(*)                                                AS lessons_total
+      COUNT(CASE WHEN ${IS_INCOME()} THEN 1 END)             AS lessons_paid,
+      COUNT(*)                                               AS lessons_total
     FROM lessons
     WHERE is_completed = 1 AND datetime >= ? AND datetime < ?
   `,
@@ -522,9 +527,9 @@ function getEarningsByDay(startDate, endDate) {
   return db
     .prepare(
       `
-    SELECT DATE(datetime) AS day, COALESCE(SUM(price), 0) AS total, COUNT(*) AS count
+    SELECT DATE(datetime) AS day, SUM(price) AS total, COUNT(*) AS count
     FROM lessons
-    WHERE is_completed = 1 AND is_paid = 1 AND datetime >= ? AND datetime < ? AND price IS NOT NULL
+    WHERE ${IS_INCOME()} AND datetime >= ? AND datetime < ?
     GROUP BY DATE(datetime)
     ORDER BY day ASC
   `,
@@ -537,13 +542,13 @@ function getEarningsByStudent(startDate, endDate) {
     .prepare(
       `
     SELECT
-      COALESCE(s.id, -1)                              AS student_id,
-      COALESCE(s.name, l.student_name_cache, '?')    AS student_name,
-      COALESCE(SUM(l.price), 0)                       AS total,
-      COUNT(*)                                         AS count
+      COALESCE(s.id, -1)                           AS student_id,
+      COALESCE(s.name, l.student_name_cache, '?')  AS student_name,
+      SUM(l.price)                                 AS total,
+      COUNT(*)                                     AS count
     FROM lessons l
     LEFT JOIN students s ON s.id = l.student_id
-    WHERE l.is_completed = 1 AND l.is_paid = 1 AND l.datetime >= ? AND l.datetime < ? AND l.price IS NOT NULL
+    WHERE ${IS_INCOME('l.')} AND l.datetime >= ? AND l.datetime < ?
     GROUP BY COALESCE(s.id, -1)
     ORDER BY total DESC
   `,
@@ -551,9 +556,31 @@ function getEarningsByStudent(startDate, endDate) {
     .all(startDate, endDate);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LESSONS
-// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * First and last income, plus how many months actually had income.
+ *
+ * `min_date` is the moment the user really started using the finance features
+ * (first paid lesson with a price). Fixed monthly taxes (ЄСВ) are charged from
+ * that month onwards — including months without lessons, as a real ФОП pays —
+ * but never before it, so an existing install stays at zero tax until a price
+ * is set and such a lesson happens.
+ */
+function getEarningsDateRange() {
+  return db
+    .prepare(
+      `
+    SELECT
+      MIN(datetime)                                AS min_date,
+      MAX(datetime)                                AS max_date,
+      COUNT(DISTINCT strftime('%Y-%m', datetime))  AS months_count
+    FROM lessons
+    WHERE ${IS_INCOME()}
+  `,
+    )
+    .get();
+}
+
+// # LESSONS
 
 function getLessons(startDate, endDate) {
   return db
@@ -582,18 +609,10 @@ function addLesson(studentId, datetime, isPaid, isCompleted) {
     : null;
   const studentNameCache = student ? student.name : null;
 
-  let price = null;
-  let bundleId = null;
-
-  if (isCompleted && studentId) {
-    const bundleResult = consumeFromBundle(studentId);
-    if (bundleResult) {
-      price = bundleResult.price;
-      bundleId = bundleResult.bundleId;
-    } else {
-      price = getStudentPriceAt(studentId, datetime);
-    }
-  }
+  const { price, bundleId } =
+    isCompleted && studentId
+      ? resolveLessonPrice(studentId, datetime)
+      : { price: null, bundleId: null };
 
   const result = db
     .prepare(
@@ -647,18 +666,14 @@ function updateLesson(lessonId, updates) {
       current.price === null &&
       current.student_id
     ) {
-      const bundleResult = consumeFromBundle(current.student_id);
-      if (bundleResult) {
+      const { price, bundleId } = resolveLessonPrice(current.student_id, current.datetime);
+      if (price !== null) {
         fields.push('price = ?');
-        values.push(bundleResult.price);
+        values.push(price);
+      }
+      if (bundleId !== null) {
         fields.push('payment_bundle_id = ?');
-        values.push(bundleResult.bundleId);
-      } else {
-        const p = getStudentPriceAt(current.student_id, current.datetime);
-        if (p !== null) {
-          fields.push('price = ?');
-          values.push(p);
-        }
+        values.push(bundleId);
       }
     }
   }
@@ -725,9 +740,7 @@ function cleanupExpiredDeletedSlots() {
   return db.prepare('DELETE FROM deleted_lesson_slots WHERE datetime < ?').run(threshold).changes;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AUTO SYNC
-// ─────────────────────────────────────────────────────────────────────────────
+// # AUTO SYNC
 
 function syncCompletedLessons() {
   cleanupExpiredDeletedSlots();
@@ -738,7 +751,7 @@ function syncCompletedLessons() {
     const lessons = db
       .prepare(
         `
-      SELECT l.id, l.student_id, l.datetime, s.balance
+      SELECT l.id, l.student_id, l.datetime, l.price, s.balance
       FROM lessons l
       LEFT JOIN students s ON l.student_id = s.id
       WHERE l.datetime < ? AND l.is_completed = 0 AND l.student_id IS NOT NULL
@@ -776,30 +789,15 @@ function syncCompletedLessons() {
       db.prepare(`UPDATE lessons SET is_completed = 1 WHERE id IN (${ph})`).run(...withoutBalance);
     }
 
-    // Snapshot price for each newly completed lesson
-    const priceStmt = db.prepare(`UPDATE lessons SET
-      price = CASE
-        WHEN payment_bundle_id IS NOT NULL THEN price
-        ELSE (
-          SELECT lp.price FROM lesson_prices lp
-          WHERE lp.student_id = lessons.student_id AND lp.valid_from <= lessons.datetime
-          ORDER BY lp.valid_from DESC LIMIT 1
-        )
-      END
-      WHERE id = ? AND price IS NULL
-    `);
-    for (const { id, student_id } of lessons) {
-      // Try bundle first
-      const bundleResult = consumeFromBundle(student_id);
-      if (bundleResult) {
-        db.prepare('UPDATE lessons SET price = ?, payment_bundle_id = ? WHERE id = ?').run(
-          bundleResult.price,
-          bundleResult.bundleId,
-          id,
-        );
-      } else {
-        priceStmt.run(id);
-      }
+    // Snapshot the price of each newly completed lesson. Lessons that already
+    // carry a price are skipped so they do not consume a second bundle slot.
+    const priceStmt = db.prepare(
+      'UPDATE lessons SET price = ?, payment_bundle_id = ? WHERE id = ?',
+    );
+    for (const { id, student_id, datetime, price: existing } of lessons) {
+      if (existing !== null) continue;
+      const { price, bundleId } = resolveLessonPrice(student_id, datetime);
+      priceStmt.run(price, bundleId, id);
     }
 
     const balStmt = db.prepare('UPDATE students SET balance = balance + ? WHERE id = ?');
@@ -813,9 +811,7 @@ function syncCompletedLessons() {
   return sync();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SCHEDULES
-// ─────────────────────────────────────────────────────────────────────────────
+// # SCHEDULES
 
 function getSchedules(studentId) {
   return db
@@ -863,9 +859,7 @@ function toggleScheduleActive(scheduleId) {
   db.prepare('UPDATE schedules SET is_active = NOT is_active WHERE id = ?').run(scheduleId);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AUTO CREATE LESSONS
-// ─────────────────────────────────────────────────────────────────────────────
+// # AUTO CREATE LESSONS
 
 function autoCreateLessons(studentId) {
   const schedules = getSchedules(studentId).filter((s) => s.is_active);
@@ -938,33 +932,7 @@ function autoCreateLessonsForAllStudents() {
   return total;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EXPORTS
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * First/last income and the number of months that actually had income.
- *
- * `min_date` is the moment the user really started using the finance features
- * (first paid lesson with a price). Fixed monthly taxes (ЄСВ) are charged from
- * that month onwards — including months without lessons, as a real ФОП pays —
- * but never before it, so an existing install stays at zero tax until a price
- * is set and such a lesson happens.
- */
-function getEarningsDateRange() {
-  return db
-    .prepare(
-      `
-    SELECT
-      MIN(datetime)                                          AS min_date,
-      MAX(datetime)                                          AS max_date,
-      COUNT(DISTINCT strftime('%Y-%m', datetime))            AS months_count
-    FROM lessons
-    WHERE is_completed = 1 AND is_paid = 1 AND price IS NOT NULL
-  `,
-    )
-    .get();
-}
+// # EXPORTS
 
 module.exports = {
   initDatabase,
@@ -977,12 +945,10 @@ module.exports = {
   // Lesson prices
   setStudentPrice,
   getStudentCurrentPrice,
-  getStudentPriceAt,
   getStudentPriceHistory,
   deleteStudentPrice,
   // Payment bundles
   createPaymentBundle,
-  consumeFromBundle,
   // Discounts
   getDiscounts,
   getGlobalDiscounts,
