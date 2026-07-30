@@ -24,9 +24,9 @@ function Header() {
   const weekEnd = new Date(currentWeek);
   weekEnd.setDate(weekEnd.getDate() + 6);
 
-  // Weekly earnings in kopiyky (only completed lessons with price set)
+  // Weekly earnings in kopiyky (only paid, completed lessons with price set)
   const weekGrossKopiyky = lessons
-    .filter((l) => l.is_completed && l.price != null)
+    .filter((l) => l.is_completed && l.is_paid && l.price != null)
     .reduce((sum, l) => sum + (l.price ?? 0), 0);
 
   const { net: weekNetKopiyky } = calculateNetEarnings(weekGrossKopiyky, taxSettings, 'week');
