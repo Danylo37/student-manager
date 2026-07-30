@@ -54,16 +54,15 @@ export interface EarningsBreakdown {
  * @param grossKopiyky  - gross income in kopiyky
  * @param tax           - tax settings (null = no taxes configured)
  * @param period        - used to pro-rate fixed monthly taxes
- * @param monthsCount   - actual number of months with income inside the period.
- *                        For month/quarter/year/all the fixed monthly tax (ЄСВ) is
- *                        charged for the months that really happened, so a year
- *                        viewed in July shows ЄСВ × 7, not ЄСВ × 12.
+ * @param months        - how many months the fixed monthly tax (ЄСВ) is due for
+ *                        inside the period. Use countChargeableMonths() to get it.
+ *                        Omit to fall back to a whole calendar period.
  */
 export function calculateNetEarnings(
   grossKopiyky: number,
   tax: TaxSettings | null,
   period: EarningsPeriod = 'month',
-  monthsCount?: number,
+  months?: number,
 ): EarningsBreakdown {
   if (!tax) {
     return {
@@ -83,9 +82,8 @@ export function calculateNetEarnings(
   let percentageRate = 0;
   if (tax.military_tax_enabled) percentageRate += tax.military_tax_rate;
 
-  // Pro-rate fixed taxes to the period.
-  // Day/week are fractions of a month, so they stay proportional.
-  // Month/quarter/year/all are charged per actual month with income.
+  // Fixed monthly taxes are charged per chargeable month (see countChargeableMonths).
+  // Without that information, fall back to a whole calendar period.
   const fallbackMultiplier: Record<EarningsPeriod, number> = {
     day: 1 / 30,
     week: 1 / 4.33,
@@ -95,16 +93,78 @@ export function calculateNetEarnings(
     all: 0,
   };
 
-  const usesActualMonths = period === 'month' || period === 'quarter' || period === 'year' || period === 'all';
-  const multiplier =
-    usesActualMonths && monthsCount !== undefined ? monthsCount : fallbackMultiplier[period];
-
+  const multiplier = months ?? fallbackMultiplier[period];
   const fixedTaxAmount = Math.round(fixedMonthlyKopiyky * multiplier);
   const percentageTaxAmount = Math.round((grossKopiyky * percentageRate) / 100);
   const taxTotal = fixedTaxAmount + percentageTaxAmount;
   const net = Math.max(0, grossKopiyky - taxTotal);
 
   return { gross: grossKopiyky, net, taxTotal, percentageTaxAmount, fixedTaxAmount };
+}
+
+/** Calendar month as a comparable integer. */
+function monthIndex(date: Date): number {
+  return date.getFullYear() * 12 + date.getMonth();
+}
+
+/**
+ * How many months the fixed monthly tax (ЄСВ) is due for inside a period.
+ *
+ * A ФОП pays ЄСВ every month regardless of income, so months without lessons
+ * count too. Two limits keep the number honest:
+ *  - nothing is charged before `taxStart` (the first paid lesson with a price),
+ *    so the app shows zero tax until the user actually starts using finances;
+ *  - nothing is charged for months that have not happened yet, so a year viewed
+ *    in July charges 7 months, not 12.
+ *
+ * Day and week periods are shorter than a month and stay proportional instead.
+ *
+ * @param taxStart    - ISO date of the first income, or null if there is none yet
+ * @param periodStart - ISO start of the period (inclusive)
+ * @param periodEnd   - ISO end of the period (exclusive)
+ */
+export function countChargeableMonths(
+  taxStart: string | null | undefined,
+  periodStart: string,
+  periodEnd: string,
+  now: Date = new Date(),
+): number {
+  if (!taxStart) return 0;
+
+  // periodEnd is exclusive, so the last month inside the period is the one
+  // containing the day before it.
+  const lastDay = new Date(periodEnd);
+  lastDay.setDate(lastDay.getDate() - 1);
+
+  const first = Math.max(monthIndex(new Date(taxStart)), monthIndex(new Date(periodStart)));
+  const last = Math.min(monthIndex(lastDay), monthIndex(now));
+
+  return Math.max(0, last - first + 1);
+}
+
+/**
+ * Fixed-tax multiplier for a period: whole months for month/quarter/year/all,
+ * a fraction of a month for day/week. Returns 0 before the first income so an
+ * existing install shows no tax until prices and lessons exist.
+ */
+export function getFixedTaxMonths(
+  period: EarningsPeriod,
+  taxStart: string | null | undefined,
+  periodStart: string,
+  periodEnd: string,
+  now: Date = new Date(),
+): number {
+  if (!taxStart) return 0;
+
+  if (period === 'day' || period === 'week') {
+    // Only charge once the period has actually reached the tax start month.
+    const started = monthIndex(new Date(periodStart)) >= monthIndex(new Date(taxStart));
+    const notFuture = new Date(periodStart) <= now;
+    if (!started || !notFuture) return 0;
+    return period === 'day' ? 1 / 30 : 1 / 4.33;
+  }
+
+  return countChargeableMonths(taxStart, periodStart, periodEnd, now);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

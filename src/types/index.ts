@@ -177,7 +177,7 @@ export interface ElectronAPI {
   getEarningsStats: (startDate: string, endDate: string) => Promise<EarningsStats>;
   getEarningsByDay: (startDate: string, endDate: string) => Promise<EarningsByDay[]>;
   getEarningsByStudent: (startDate: string, endDate: string) => Promise<EarningsByStudent[]>;
-  getEarningsDateRange: (startDate?: string, endDate?: string) => Promise<EarningsDateRange>;
+  getEarningsDateRange: () => Promise<EarningsDateRange>;
 
   // Lessons
   getLessons: (startDate: string, endDate: string) => Promise<Lesson[]>;
@@ -245,6 +245,8 @@ export interface AppState {
 
   theme: Theme;
   taxSettings: TaxSettings | null;
+  /** ISO date of the first paid lesson with a price; null until finances are used. */
+  taxStart: string | null;
 
   // Actions — Students
   loadStudents: () => Promise<void>;
@@ -285,6 +287,7 @@ export interface AppState {
 
   // Actions — Tax settings
   loadTaxSettings: () => Promise<void>;
+  refreshTaxStart: () => Promise<void>;
   saveTaxSettings: (settings: Omit<TaxSettings, 'id' | 'updated_at'>) => Promise<void>;
 
   // App lifecycle

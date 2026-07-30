@@ -41,8 +41,7 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.invoke('db:get-earnings-by-day', startDate, endDate),
   getEarningsByStudent: (startDate, endDate) =>
     ipcRenderer.invoke('db:get-earnings-by-student', startDate, endDate),
-  getEarningsDateRange: (startDate = null, endDate = null) =>
-    ipcRenderer.invoke('db:get-earnings-date-range', startDate, endDate),
+  getEarningsDateRange: () => ipcRenderer.invoke('db:get-earnings-date-range'),
 
   // Lessons
   getLessons: (startDate, endDate) => ipcRenderer.invoke('db:get-lessons', startDate, endDate),
