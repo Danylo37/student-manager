@@ -54,12 +54,16 @@ export interface EarningsBreakdown {
  * @param grossKopiyky  - gross income in kopiyky
  * @param tax           - tax settings (null = no taxes configured)
  * @param period        - used to pro-rate fixed monthly taxes
+ * @param monthsCount   - actual number of months with income inside the period.
+ *                        For month/quarter/year/all the fixed monthly tax (ЄСВ) is
+ *                        charged for the months that really happened, so a year
+ *                        viewed in July shows ЄСВ × 7, not ЄСВ × 12.
  */
 export function calculateNetEarnings(
   grossKopiyky: number,
   tax: TaxSettings | null,
   period: EarningsPeriod = 'month',
-  monthsCount?: number, // used for 'all' period: actual months with lesson data
+  monthsCount?: number,
 ): EarningsBreakdown {
   if (!tax) {
     return {
@@ -79,17 +83,23 @@ export function calculateNetEarnings(
   let percentageRate = 0;
   if (tax.military_tax_enabled) percentageRate += tax.military_tax_rate;
 
-  // Pro-rate fixed taxes to the period
-  const fixedMultiplier: Record<EarningsPeriod, number> = {
+  // Pro-rate fixed taxes to the period.
+  // Day/week are fractions of a month, so they stay proportional.
+  // Month/quarter/year/all are charged per actual month with income.
+  const fallbackMultiplier: Record<EarningsPeriod, number> = {
     day: 1 / 30,
     week: 1 / 4.33,
     month: 1,
     quarter: 3,
     year: 12,
-    all: monthsCount ?? 0, // actual months with lesson data (0 if unknown)
+    all: 0,
   };
 
-  const fixedTaxAmount = Math.round(fixedMonthlyKopiyky * fixedMultiplier[period]);
+  const usesActualMonths = period === 'month' || period === 'quarter' || period === 'year' || period === 'all';
+  const multiplier =
+    usesActualMonths && monthsCount !== undefined ? monthsCount : fallbackMultiplier[period];
+
+  const fixedTaxAmount = Math.round(fixedMonthlyKopiyky * multiplier);
   const percentageTaxAmount = Math.round((grossKopiyky * percentageRate) / 100);
   const taxTotal = fixedTaxAmount + percentageTaxAmount;
   const net = Math.max(0, grossKopiyky - taxTotal);

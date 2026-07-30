@@ -15,6 +15,15 @@ import {
 } from '@/utils/financials';
 import type { EarningsStats, EarningsByDay, EarningsByStudent } from '@/types';
 
+/** Ukrainian plural for "місяць": 1 місяць, 2 місяці, 5 місяців. */
+function monthsWordUA(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'місяць';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'місяці';
+  return 'місяців';
+}
+
 // ─── Bar chart ────────────────────────────────────────────────────────────────
 function MiniBarChart({ data }: { data: EarningsByDay[] }) {
   if (!data.length) return null;
@@ -362,7 +371,8 @@ function FinanceView() {
   const [prevStats, setPrevStats] = useState<EarningsStats | null>(null);
   const [byDay, setByDay] = useState<EarningsByDay[]>([]);
   const [byStudent, setByStudent] = useState<EarningsByStudent[]>([]);
-  const [allTimeMonths, setAllTimeMonths] = useState(0);
+  // Actual months with income inside the active period (drives fixed ЄСВ)
+  const [actualMonths, setActualMonths] = useState<number | undefined>(undefined);
 
   // Reset offset when switching periods
   useEffect(() => {
@@ -389,23 +399,27 @@ function FinanceView() {
     try {
       const range = getActiveRange();
       const prevRange = getPrevRange();
-      const [s, byday, bystudent, ps] = await Promise.all([
+      // Fixed monthly taxes are charged per month that actually had income,
+      // so the period's real month count is needed for month/quarter/year/all.
+      const needsMonths =
+        period === 'month' || period === 'quarter' || period === 'year' || period === 'all';
+
+      const [s, byday, bystudent, ps, dr] = await Promise.all([
         window.electron.getEarningsStats(range.start, range.end),
         window.electron.getEarningsByDay(range.start, range.end),
         window.electron.getEarningsByStudent(range.start, range.end),
         prevRange
           ? window.electron.getEarningsStats(prevRange.start, prevRange.end)
           : Promise.resolve(null),
+        needsMonths
+          ? window.electron.getEarningsDateRange(range.start, range.end)
+          : Promise.resolve(null),
       ]);
       setStats(s);
       setByDay(byday);
       setByStudent(bystudent);
       setPrevStats(ps);
-
-      if (period === 'all') {
-        const dr = await window.electron.getEarningsDateRange();
-        setAllTimeMonths(Math.max(1, dr.months_count));
-      }
+      setActualMonths(dr ? dr.months_count : undefined);
     } catch (e) {
       console.error(e);
     } finally {
@@ -422,7 +436,7 @@ function FinanceView() {
     gross,
     taxSettings,
     period,
-    allTimeMonths,
+    actualMonths,
   );
   const change = formatChange(gross, prevStats?.total ?? 0);
 
@@ -431,7 +445,10 @@ function FinanceView() {
 
   const noPrice = (stats?.lessons_total ?? 0) > 0 && (stats?.lessons_with_price ?? 0) === 0;
   const showEsvNote =
-    period === 'quarter' && taxSettings?.esv_type === 'fixed' && taxSettings.esv_fixed > 0;
+    actualMonths !== undefined &&
+    actualMonths > 0 &&
+    taxSettings?.esv_type === 'fixed' &&
+    taxSettings.esv_fixed > 0;
 
   const activeRange = getActiveRange();
 
@@ -531,21 +548,13 @@ function FinanceView() {
               />
             </div>
 
-            {/* All-time ESV basis note */}
-            {period === 'all' && taxSettings?.esv_type === 'fixed' && taxSettings.esv_fixed > 0 && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-500 text-sm">
-                ℹ️ ЄСВ пораховано за {allTimeMonths}{' '}
-                {allTimeMonths === 1 ? 'місяць' : allTimeMonths < 5 ? 'місяці' : 'місяців'} — з
-                моменту першого уроку з встановленою ціною.
-              </div>
-            )}
-
-            {/* ESV quarter note */}
+            {/* ESV basis note — fixed ЄСВ is charged per month that actually had income */}
             {showEsvNote && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-blue-800 text-sm">
-                💡 ЄСВ за квартал: <strong>{formatUAH(taxSettings!.esv_fixed * 3)}</strong> (
-                {formatUAH(taxSettings!.esv_fixed)} × 3 місяці). Сплатити до 20 числа після
-                кварталу.
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-500 text-sm">
+                ℹ️ ЄСВ пораховано за {actualMonths}{' '}
+                {monthsWordUA(actualMonths!)} з доходом ({formatUAH(taxSettings!.esv_fixed)} ×{' '}
+                {actualMonths}), а не за весь період.
+                {period === 'quarter' && ' Сплатити до 20 числа після кварталу.'}
               </div>
             )}
 

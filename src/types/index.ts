@@ -177,7 +177,7 @@ export interface ElectronAPI {
   getEarningsStats: (startDate: string, endDate: string) => Promise<EarningsStats>;
   getEarningsByDay: (startDate: string, endDate: string) => Promise<EarningsByDay[]>;
   getEarningsByStudent: (startDate: string, endDate: string) => Promise<EarningsByStudent[]>;
-  getEarningsDateRange: () => Promise<EarningsDateRange>;
+  getEarningsDateRange: (startDate?: string, endDate?: string) => Promise<EarningsDateRange>;
 
   // Lessons
   getLessons: (startDate: string, endDate: string) => Promise<Lesson[]>;
