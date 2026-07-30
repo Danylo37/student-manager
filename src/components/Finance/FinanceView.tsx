@@ -25,7 +25,7 @@ function monthsWordUA(n: number): string {
   return 'місяців';
 }
 
-// ─── Bar chart ────────────────────────────────────────────────────────────────
+// # Bar chart
 function MiniBarChart({ data }: { data: EarningsByDay[] }) {
   if (!data.length) return null;
   const max = Math.max(...data.map((d) => d.total), 1);
@@ -56,7 +56,7 @@ function MiniBarChart({ data }: { data: EarningsByDay[] }) {
   );
 }
 
-// ─── Stat card ────────────────────────────────────────────────────────────────
+// # Stat card
 function StatCard({
   label,
   value,
@@ -90,7 +90,7 @@ function StatCard({
   );
 }
 
-// ─── Day navigator ────────────────────────────────────────────────────────────
+// # Day navigator
 function DayNavigator({
   selectedDate,
   onChange,
@@ -135,7 +135,7 @@ function DayNavigator({
   );
 }
 
-// ─── Period navigator (week / month / quarter / year) ────────────────────────
+// # Period navigator (week / month / quarter / year)
 function PeriodNavigator({
   offset,
   onOffset,
@@ -170,7 +170,7 @@ function PeriodNavigator({
   );
 }
 
-// ─── Income simulator ─────────────────────────────────────────────────────────
+// # Income simulator
 function IncomeSimulator() {
   const students = useAppStore((s) => s.students);
   const taxSettings = useAppStore((s) => s.taxSettings);
@@ -349,7 +349,7 @@ function IncomeSimulator() {
   );
 }
 
-// ─── FinanceView ──────────────────────────────────────────────────────────────
+// # FinanceView
 const PERIODS: { key: EarningsPeriod; label: string }[] = [
   { key: 'day', label: 'День' },
   { key: 'week', label: 'Тиждень' },
@@ -542,8 +542,9 @@ function FinanceView() {
                 label="Уроків проведено"
                 value={String(stats?.lessons_total ?? 0)}
                 sub={
-                  stats && stats.lessons_with_price < stats.lessons_total
-                    ? `${stats.lessons_with_price} з ціною`
+                  // Income only counts paid lessons, so say how many that is
+                  stats && stats.lessons_paid < stats.lessons_total
+                    ? `${stats.lessons_paid} оплачено — лише вони у доході`
                     : undefined
                 }
               />
