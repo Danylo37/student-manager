@@ -83,7 +83,6 @@ process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled promise rejection', { reason });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
 
 function registerIpcHandlers() {
   const handle = (channel, fn) => {
@@ -97,7 +96,7 @@ function registerIpcHandlers() {
     });
   };
 
-  // ── Students ──────────────────────────────────────────────────────────────
+  // # Students
   handle('db:get-students', () => db.getStudents());
   handle('db:add-student', (_, name, balance, price) =>
     db.addStudent(name, balance, price ?? null),
@@ -117,13 +116,13 @@ function registerIpcHandlers() {
   );
   handle('db:delete-student', (_, studentId) => db.deleteStudent(studentId));
 
-  // ── Lesson prices ─────────────────────────────────────────────────────────
+  // # Lesson prices
   handle('db:set-student-price', (_, studentId, price) => db.setStudentPrice(studentId, price));
   handle('db:get-student-current-price', (_, studentId) => db.getStudentCurrentPrice(studentId));
   handle('db:get-student-price-history', (_, studentId) => db.getStudentPriceHistory(studentId));
   handle('db:delete-student-price', (_, priceId) => db.deleteStudentPrice(priceId));
 
-  // ── Discounts ─────────────────────────────────────────────────────────────
+  // # Discounts
   handle('db:get-discounts', (_, studentId) => db.getDiscounts(studentId));
   handle('db:get-global-discounts', () => db.getGlobalDiscounts());
   handle('db:add-discount', (_, studentId, count, total, desc) =>
@@ -135,17 +134,17 @@ function registerIpcHandlers() {
     db.findApplicableDiscount(studentId, count),
   );
 
-  // ── Tax settings ──────────────────────────────────────────────────────────
+  // # Tax settings
   handle('db:get-tax-settings', () => db.getTaxSettings());
   handle('db:save-tax-settings', (_, s) => db.saveTaxSettings(s));
 
-  // ── Financial stats ───────────────────────────────────────────────────────
+  // # Financial stats
   handle('db:get-earnings-stats', (_, s, e) => db.getEarningsStats(s, e));
   handle('db:get-earnings-by-day', (_, s, e) => db.getEarningsByDay(s, e));
   handle('db:get-earnings-by-student', (_, s, e) => db.getEarningsByStudent(s, e));
   handle('db:get-earnings-date-range', () => db.getEarningsDateRange());
 
-  // ── Lessons ───────────────────────────────────────────────────────────────
+  // # Lessons
   handle('db:get-lessons', (_, s, e) => db.getLessons(s, e));
   handle('db:add-lesson', (_, data) =>
     db.addLesson(data.studentId, data.datetime, data.isPaid, data.isCompleted),
@@ -154,14 +153,14 @@ function registerIpcHandlers() {
   handle('db:toggle-lesson-payment', (_, id) => db.toggleLessonPayment(id));
   handle('db:delete-lesson', (_, id) => db.deleteLesson(id));
 
-  // ── Schedules ─────────────────────────────────────────────────────────────
+  // # Schedules
   handle('db:get-schedules', (_, studentId) => db.getSchedules(studentId));
   handle('db:add-schedule', (_, studentId, day, time) => db.addSchedule(studentId, day, time));
   handle('db:delete-schedule', (_, id) => db.deleteSchedule(id));
   handle('db:toggle-schedule-active', (_, id) => db.toggleScheduleActive(id));
   handle('db:auto-create-lessons', (_, studentId) => db.autoCreateLessons(studentId));
 
-  // ── Sync ──────────────────────────────────────────────────────────────────
+  // # Sync
   handle('db:sync-lessons', () => db.syncCompletedLessons());
 
   logger.debug('IPC handlers registered');

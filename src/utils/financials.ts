@@ -1,9 +1,7 @@
 import type { TaxSettings } from '@/types';
 
-// ─────────────────────────────────────────────────────────────────────────────
 // KOPIYKY HELPERS
 // All monetary values in the DB are stored as INTEGER kopiyky (1 ₴ = 100 копійок).
-// ─────────────────────────────────────────────────────────────────────────────
 
 /** Parse user text input ("350", "350.50", "350,50") to kopiyky integer. Returns null if invalid. */
 export function parseInputToKopiyky(str: string): number | null {
@@ -30,14 +28,7 @@ export function formatUAH(kopiyky: number): string {
   );
 }
 
-/** Format kopiyky as "1 234 ₴" (no decimals, for whole hryvnias). */
-export function formatUAHWhole(kopiyky: number): string {
-  return Math.round(kopiyky / 100).toLocaleString('uk-UA') + ' ₴';
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TAX CALCULATION  (all values in kopiyky)
-// ─────────────────────────────────────────────────────────────────────────────
+// # TAX CALCULATION  (all values in kopiyky)
 
 export type EarningsPeriod = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
 
@@ -123,7 +114,7 @@ function monthIndex(date: Date): number {
  * @param periodStart - ISO start of the period (inclusive)
  * @param periodEnd   - ISO end of the period (exclusive)
  */
-export function countChargeableMonths(
+function countChargeableMonths(
   taxStart: string | null | undefined,
   periodStart: string,
   periodEnd: string,
@@ -167,9 +158,7 @@ export function getFixedTaxMonths(
   return countChargeableMonths(taxStart, periodStart, periodEnd, now);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DATE RANGES
-// ─────────────────────────────────────────────────────────────────────────────
+// # DATE RANGES
 
 export interface DateRange {
   start: string; // ISO (inclusive)
@@ -306,9 +295,7 @@ function fmtShort(d: Date): string {
   return d.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MISC HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
+// # MISC HELPERS
 
 /** Format a percentage change: "+12%" or "−5%" */
 export function formatChange(

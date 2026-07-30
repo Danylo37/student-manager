@@ -11,7 +11,7 @@ import type {
 } from '@/types';
 
 const useAppStore = create<AppState>((set, get) => ({
-  // ── State ──────────────────────────────────────────────────────────────────
+  // # State
   students: [],
   studentsLoading: false,
   studentsError: null,
@@ -46,7 +46,7 @@ const useAppStore = create<AppState>((set, get) => ({
   taxSettings: null,
   taxStart: null,
 
-  // ── Students ───────────────────────────────────────────────────────────────
+  // # Students
 
   loadStudents: async () => {
     set({ studentsLoading: true, studentsError: null });
@@ -84,7 +84,7 @@ const useAppStore = create<AppState>((set, get) => ({
     await get().loadLessons();
   },
 
-  // ── Lessons ────────────────────────────────────────────────────────────────
+  // # Lessons
 
   loadLessons: async () => {
     set({ lessonsLoading: true, lessonsError: null });
@@ -134,7 +134,7 @@ const useAppStore = create<AppState>((set, get) => ({
     await get().loadStudents();
   },
 
-  // ── Schedules ──────────────────────────────────────────────────────────────
+  // # Schedules
 
   loadSchedules: async (studentId) => {
     set({ schedulesLoading: true, schedulesError: null });
@@ -173,7 +173,7 @@ const useAppStore = create<AppState>((set, get) => ({
     return created;
   },
 
-  // ── Tax settings ───────────────────────────────────────────────────────────
+  // # Tax settings
 
   loadTaxSettings: async () => {
     try {
@@ -203,7 +203,7 @@ const useAppStore = create<AppState>((set, get) => ({
     await get().loadTaxSettings();
   },
 
-  // ── Navigation ─────────────────────────────────────────────────────────────
+  // # Navigation
 
   nextWeek: () => {
     const next = new Date(get().currentWeek);
@@ -226,7 +226,7 @@ const useAppStore = create<AppState>((set, get) => ({
 
   setView: (view) => set({ currentView: view }),
 
-  // ── Modals ─────────────────────────────────────────────────────────────────
+  // # Modals
 
   openModal: (modalName) => set((state) => ({ modals: { ...state.modals, [modalName]: true } })),
 
@@ -255,7 +255,7 @@ const useAppStore = create<AppState>((set, get) => ({
     get().openModal('discounts');
   },
 
-  // ── App lifecycle ──────────────────────────────────────────────────────────
+  // # App lifecycle
 
   initialize: async () => {
     await get().syncLessons();

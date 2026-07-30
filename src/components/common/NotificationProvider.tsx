@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// # Types
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -29,7 +29,7 @@ interface NotificationContextValue {
   showConfirm: (options: ConfirmOptions) => Promise<boolean>;
 }
 
-// ─── Context ────────────────────────────────────────────────────────────────
+// # Context
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 
@@ -39,7 +39,7 @@ export function useNotification(): NotificationContextValue {
   return ctx;
 }
 
-// ─── Toast icons ────────────────────────────────────────────────────────────
+// # Toast icons
 
 const icons: Record<ToastType, React.ReactNode> = {
   success: (
@@ -103,7 +103,7 @@ const toastStyles: Record<ToastType, { wrapper: string; icon: string; bar: strin
   },
 };
 
-// ─── Single Toast ────────────────────────────────────────────────────────────
+// # Single Toast
 
 function ToastItem({ toast, onClose }: { toast: Toast; onClose: (id: string) => void }) {
   const style = toastStyles[toast.type];
@@ -145,7 +145,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: (id: string) => 
   );
 }
 
-// ─── Confirm Dialog ──────────────────────────────────────────────────────────
+// # Confirm Dialog
 
 function ConfirmDialog({
   state,
@@ -258,7 +258,7 @@ function ConfirmDialog({
   );
 }
 
-// ─── Provider ────────────────────────────────────────────────────────────────
+// # Provider
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
