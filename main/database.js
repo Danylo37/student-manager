@@ -942,19 +942,24 @@ function autoCreateLessonsForAllStudents() {
 // EXPORTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function getEarningsDateRange() {
-  return db
-    .prepare(
-      `
+/**
+ * Date range and number of distinct months that actually have income.
+ * Optional startDate/endDate scope it to a period, so fixed monthly taxes (ЄСВ)
+ * can be charged for the months that really happened, not the full calendar period.
+ */
+function getEarningsDateRange(startDate = null, endDate = null) {
+  const scoped = startDate != null && endDate != null;
+  const sql = `
     SELECT
       MIN(datetime)                                          AS min_date,
       MAX(datetime)                                          AS max_date,
       COUNT(DISTINCT strftime('%Y-%m', datetime))            AS months_count
     FROM lessons
     WHERE is_completed = 1 AND is_paid = 1 AND price IS NOT NULL
-  `,
-    )
-    .get();
+    ${scoped ? 'AND datetime >= ? AND datetime < ?' : ''}
+  `;
+  const stmt = db.prepare(sql);
+  return scoped ? stmt.get(startDate, endDate) : stmt.get();
 }
 
 module.exports = {
