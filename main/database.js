@@ -824,6 +824,22 @@ function getSchedules(studentId) {
     .all(studentId);
 }
 
+/**
+ * Active weekly slots per student. This is the planned load, so income
+ * projections use it instead of looking back at lessons already given.
+ */
+function getWeeklyScheduleCounts() {
+  return db
+    .prepare(
+      `
+    SELECT student_id, COUNT(*) AS per_week
+    FROM schedules WHERE is_active = 1
+    GROUP BY student_id
+  `,
+    )
+    .all();
+}
+
 function addSchedule(studentId, dayOfWeek, time) {
   const existing = db
     .prepare(
@@ -973,6 +989,7 @@ module.exports = {
   syncCompletedLessons,
   // Schedules
   getSchedules,
+  getWeeklyScheduleCounts,
   addSchedule,
   deleteSchedule,
   toggleScheduleActive,

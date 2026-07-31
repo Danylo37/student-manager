@@ -37,6 +37,12 @@ export interface Schedule {
   created_at: string;
 }
 
+/** How many lessons a student has booked in a normal week (active slots only). */
+export interface WeeklyScheduleCount {
+  student_id: number;
+  per_week: number;
+}
+
 export interface LessonPrice {
   id: number;
   student_id: number;
@@ -183,6 +189,7 @@ export interface ElectronAPI {
 
   // Schedules
   getSchedules: (studentId: number) => Promise<Schedule[]>;
+  getWeeklyScheduleCounts: () => Promise<WeeklyScheduleCount[]>;
   addSchedule: (studentId: number, dayOfWeek: number, time: string) => Promise<{ id: number }>;
   deleteSchedule: (scheduleId: number) => Promise<void>;
   toggleScheduleActive: (scheduleId: number) => Promise<void>;
