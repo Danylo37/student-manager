@@ -11,6 +11,7 @@ import {
   toInputDate,
   fromInputDate,
   parseInputToKopiyky,
+  WEEKS_PER_MONTH,
   type EarningsPeriod,
   type DateRange,
 } from '@/utils/financials';
@@ -174,57 +175,60 @@ function PeriodNavigator({
 function IncomeSimulator() {
   const students = useAppStore((s) => s.students);
   const taxSettings = useAppStore((s) => s.taxSettings);
-  const [avgLessons, setAvgLessons] = useState<Record<number, number>>({});
+  const [weeklyLessons, setWeeklyLessons] = useState<Record<number, number>>({});
   const [simulatedPrices, setSimulatedPrices] = useState<Record<number, string>>({});
   const [open, setOpen] = useState(false);
-  const [loaded, setLoaded] = useState(false);
 
-  const loadAvg = useCallback(async () => {
-    if (loaded) return;
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    const start = new Date(end);
-    start.setMonth(start.getMonth() - 3);
-    start.setHours(0, 0, 0, 0);
+  /**
+   * The projection is based on the weekly schedule — the lessons actually
+   * booked for each student — not on how many lessons happened in the past.
+   */
+  const loadWeekly = useCallback(async () => {
     try {
-      const data = await window.electron.getEarningsByStudent(
-        start.toISOString(),
-        end.toISOString(),
-      );
+      const data = await window.electron.getWeeklyScheduleCounts();
       const map: Record<number, number> = {};
       data.forEach((s) => {
-        map[s.student_id] = Math.round((s.count / 3) * 10) / 10;
+        map[s.student_id] = s.per_week;
       });
-      setAvgLessons(map);
-      const priceMap: Record<number, string> = {};
-      students.forEach((s) => {
-        priceMap[s.id] = s.current_price ? (s.current_price / 100).toFixed(2) : '';
+      setWeeklyLessons(map);
+      // Keep prices the user has already typed; fill in the rest from current ones.
+      setSimulatedPrices((prev) => {
+        const next = { ...prev };
+        students.forEach((s) => {
+          if (next[s.id] === undefined) {
+            next[s.id] = s.current_price ? (s.current_price / 100).toFixed(2) : '';
+          }
+        });
+        return next;
       });
-      setSimulatedPrices(priceMap);
-      setLoaded(true);
     } catch (e) {
       console.error(e);
     }
-  }, [students, loaded]);
+  }, [students]);
 
   const handleToggle = () => {
-    if (!open) void loadAvg();
+    if (!open) void loadWeekly();
     setOpen((v) => !v);
   };
 
-  const currentMonthly = students.reduce(
-    (sum, s) => sum + (s.current_price ?? 0) * (avgLessons[s.id] ?? 0),
-    0,
+  /** Lessons per month implied by the weekly schedule. */
+  const monthlyLessons = (studentId: number) => (weeklyLessons[studentId] ?? 0) * WEEKS_PER_MONTH;
+
+  // Monthly lesson counts are fractional, so round the money back to whole kopiyky.
+  const currentMonthly = Math.round(
+    students.reduce((sum, s) => sum + (s.current_price ?? 0) * monthlyLessons(s.id), 0),
   );
-  const simulatedMonthly = students.reduce((sum, s) => {
-    const simK = parseInputToKopiyky(simulatedPrices[s.id] ?? '') ?? s.current_price ?? 0;
-    return sum + simK * (avgLessons[s.id] ?? 0);
-  }, 0);
+  const simulatedMonthly = Math.round(
+    students.reduce((sum, s) => {
+      const simK = parseInputToKopiyky(simulatedPrices[s.id] ?? '') ?? s.current_price ?? 0;
+      return sum + simK * monthlyLessons(s.id);
+    }, 0),
+  );
   const diff = simulatedMonthly - currentMonthly;
   const { net: currentNet } = calculateNetEarnings(currentMonthly, taxSettings, 'month');
   const { net: simulatedNet } = calculateNetEarnings(simulatedMonthly, taxSettings, 'month');
   const netDiff = simulatedNet - currentNet;
-  const studentsWithData = students.filter((s) => s.current_price || avgLessons[s.id]);
+  const studentsWithData = students.filter((s) => s.current_price || weeklyLessons[s.id]);
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -244,9 +248,14 @@ function IncomeSimulator() {
       </button>
       {open && (
         <div className="border-t border-gray-100 p-5 space-y-4">
-          <p className="text-xs text-gray-400">Середня кількість уроків — за останні 3 місяці.</p>
+          <p className="text-xs text-gray-400">
+            Розрахунок за активним розкладом на тиждень (1 тиждень ≈ {WEEKS_PER_MONTH.toFixed(2)}{' '}
+            разів на місяць).
+          </p>
           {studentsWithData.length === 0 ? (
-            <div className="text-center py-6 text-gray-400 text-sm">Немає даних.</div>
+            <div className="text-center py-6 text-gray-400 text-sm">
+              Немає даних. Додайте учням розклад і ціну.
+            </div>
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -254,7 +263,7 @@ function IncomeSimulator() {
                   <thead>
                     <tr className="text-xs text-gray-400 border-b border-gray-100">
                       <th className="text-left pb-2 font-medium">Учень</th>
-                      <th className="text-right pb-2 font-medium">Уроків/міс</th>
+                      <th className="text-right pb-2 font-medium">Уроків/тиж</th>
                       <th className="text-right pb-2 font-medium">Поточна</th>
                       <th className="text-right pb-2 font-medium">Нова ціна</th>
                       <th className="text-right pb-2 font-medium">Поточно</th>
@@ -263,14 +272,15 @@ function IncomeSimulator() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {studentsWithData.map((s) => {
-                      const lessons = avgLessons[s.id] ?? 0;
+                      const perWeek = weeklyLessons[s.id] ?? 0;
+                      const lessons = monthlyLessons(s.id);
                       const curK = s.current_price ?? 0;
                       const simK = parseInputToKopiyky(simulatedPrices[s.id] ?? '') ?? curK;
                       const changed = simK !== curK;
                       return (
                         <tr key={s.id} className={changed ? 'bg-yellow-50' : ''}>
                           <td className="py-2 font-medium text-gray-800">{s.name}</td>
-                          <td className="py-2 text-right text-gray-600">{lessons || '—'}</td>
+                          <td className="py-2 text-right text-gray-600">{perWeek || '—'}</td>
                           <td className="py-2 text-right text-gray-500">
                             {curK ? formatUAH(curK) : '—'}
                           </td>
@@ -291,12 +301,12 @@ function IncomeSimulator() {
                             </div>
                           </td>
                           <td className="py-2 text-right text-gray-600">
-                            {curK && lessons ? formatUAH(curK * lessons) : '—'}
+                            {curK && lessons ? formatUAH(Math.round(curK * lessons)) : '—'}
                           </td>
                           <td
                             className={`py-2 text-right font-medium ${simK > curK ? 'text-green-600' : simK < curK ? 'text-red-500' : 'text-gray-600'}`}
                           >
-                            {simK && lessons ? formatUAH(simK * lessons) : '—'}
+                            {simK && lessons ? formatUAH(Math.round(simK * lessons)) : '—'}
                           </td>
                         </tr>
                       );

@@ -83,7 +83,6 @@ process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled promise rejection', { reason });
 });
 
-
 function registerIpcHandlers() {
   const handle = (channel, fn) => {
     ipcMain.handle(channel, async (...args) => {
@@ -155,6 +154,7 @@ function registerIpcHandlers() {
 
   // # Schedules
   handle('db:get-schedules', (_, studentId) => db.getSchedules(studentId));
+  handle('db:get-weekly-schedule-counts', () => db.getWeeklyScheduleCounts());
   handle('db:add-schedule', (_, studentId, day, time) => db.addSchedule(studentId, day, time));
   handle('db:delete-schedule', (_, id) => db.deleteSchedule(id));
   handle('db:toggle-schedule-active', (_, id) => db.toggleScheduleActive(id));

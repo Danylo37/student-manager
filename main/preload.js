@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Schedules
   getSchedules: (studentId) => ipcRenderer.invoke('db:get-schedules', studentId),
+  getWeeklyScheduleCounts: () => ipcRenderer.invoke('db:get-weekly-schedule-counts'),
   addSchedule: (studentId, dayOfWeek, time) =>
     ipcRenderer.invoke('db:add-schedule', studentId, dayOfWeek, time),
   deleteSchedule: (scheduleId) => ipcRenderer.invoke('db:delete-schedule', scheduleId),

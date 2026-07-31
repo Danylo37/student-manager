@@ -32,6 +32,9 @@ export function formatUAH(kopiyky: number): string {
 
 export type EarningsPeriod = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
 
+/** Average weeks in a month (52 / 12) — converts a weekly rate to a monthly one. */
+export const WEEKS_PER_MONTH = 52 / 12;
+
 export interface EarningsBreakdown {
   gross: number; // kopiyky
   net: number; // kopiyky
@@ -77,7 +80,7 @@ export function calculateNetEarnings(
   // Without that information, fall back to a whole calendar period.
   const fallbackMultiplier: Record<EarningsPeriod, number> = {
     day: 1 / 30,
-    week: 1 / 4.33,
+    week: 1 / WEEKS_PER_MONTH,
     month: 1,
     quarter: 3,
     year: 12,
@@ -152,7 +155,7 @@ export function getFixedTaxMonths(
     const started = monthIndex(new Date(periodStart)) >= monthIndex(new Date(taxStart));
     const notFuture = new Date(periodStart) <= now;
     if (!started || !notFuture) return 0;
-    return period === 'day' ? 1 / 30 : 1 / 4.33;
+    return period === 'day' ? 1 / 30 : 1 / WEEKS_PER_MONTH;
   }
 
   return countChargeableMonths(taxStart, periodStart, periodEnd, now);
