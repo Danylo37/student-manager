@@ -464,7 +464,7 @@ function FinanceView() {
   const financesNotStarted = !taxStart;
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
+    <div className="finance-view flex-1 overflow-y-auto bg-gray-50 p-6">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
