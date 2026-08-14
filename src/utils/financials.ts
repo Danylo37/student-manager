@@ -35,11 +35,19 @@ export type EarningsPeriod = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'al
 /** Average weeks in a month (52 / 12) — converts a weekly rate to a monthly one. */
 export const WEEKS_PER_MONTH = 52 / 12;
 
+/** Єдиний податок rate for ФОП group 3 — the default offered in settings. */
+export const DEFAULT_SINGLE_TAX_RATE = 5;
+
+/** Військовий збір rate — the default offered in settings. */
+export const DEFAULT_MILITARY_TAX_RATE = 1;
+
 export interface EarningsBreakdown {
   gross: number; // kopiyky
   net: number; // kopiyky
   taxTotal: number; // kopiyky
-  percentageTaxAmount: number; // kopiyky (military)
+  percentageTaxAmount: number; // kopiyky (єдиний податок + military)
+  singleTaxAmount: number; // kopiyky (єдиний податок)
+  militaryTaxAmount: number; // kopiyky (military)
   fixedTaxAmount: number; // kopiyky (ESV)
 }
 
@@ -64,6 +72,8 @@ export function calculateNetEarnings(
       net: grossKopiyky,
       taxTotal: 0,
       percentageTaxAmount: 0,
+      singleTaxAmount: 0,
+      militaryTaxAmount: 0,
       fixedTaxAmount: 0,
     };
   }
@@ -73,8 +83,8 @@ export function calculateNetEarnings(
   if (tax.esv_type === 'fixed') fixedMonthlyKopiyky += tax.esv_fixed;
 
   // Percentage taxes (applied to gross)
-  let percentageRate = 0;
-  if (tax.military_tax_enabled) percentageRate += tax.military_tax_rate;
+  const singleRate = tax.single_tax_enabled ? (tax.single_tax_rate ?? 0) : 0;
+  const militaryRate = tax.military_tax_enabled ? (tax.military_tax_rate ?? 0) : 0;
 
   // Fixed monthly taxes are charged per chargeable month (see countChargeableMonths).
   // Without that information, fall back to a whole calendar period.
@@ -89,11 +99,21 @@ export function calculateNetEarnings(
 
   const multiplier = months ?? fallbackMultiplier[period];
   const fixedTaxAmount = Math.round(fixedMonthlyKopiyky * multiplier);
-  const percentageTaxAmount = Math.round((grossKopiyky * percentageRate) / 100);
+  const singleTaxAmount = Math.round((grossKopiyky * singleRate) / 100);
+  const militaryTaxAmount = Math.round((grossKopiyky * militaryRate) / 100);
+  const percentageTaxAmount = singleTaxAmount + militaryTaxAmount;
   const taxTotal = fixedTaxAmount + percentageTaxAmount;
   const net = Math.max(0, grossKopiyky - taxTotal);
 
-  return { gross: grossKopiyky, net, taxTotal, percentageTaxAmount, fixedTaxAmount };
+  return {
+    gross: grossKopiyky,
+    net,
+    taxTotal,
+    percentageTaxAmount,
+    singleTaxAmount,
+    militaryTaxAmount,
+    fixedTaxAmount,
+  };
 }
 
 /** Calendar month as a comparable integer. */

@@ -43,11 +43,42 @@ function initDatabase() {
       runMigrationV2();
     }
 
+    // CREATE TABLE IF NOT EXISTS leaves older tables untouched, so columns
+    // added after a table first shipped have to be filled in separately.
+    addMissingColumns();
+
     logger.info('Database initialized successfully');
     return db;
   } catch (error) {
     logger.error('Database initialization failed', { error: error.message });
     throw error;
+  }
+}
+
+/**
+ * Add columns that were introduced after a table already existed in the wild.
+ * Each entry is applied only when the column is missing, so this is a no-op
+ * on a freshly created database.
+ */
+function addMissingColumns() {
+  const additions = [
+    ['tax_settings', 'single_tax_enabled', 'INTEGER DEFAULT 0'],
+    ['tax_settings', 'single_tax_rate', 'REAL DEFAULT 5.0'],
+  ];
+
+  for (const [table, column, definition] of additions) {
+    try {
+      const cols = db
+        .prepare(`PRAGMA table_info(${table})`)
+        .all()
+        .map((c) => c.name);
+      if (cols.length === 0 || cols.includes(column)) continue;
+
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      logger.info(`Added column ${table}.${column}`);
+    } catch (error) {
+      logger.error(`Failed to add column ${table}.${column}`, { error: error.message });
+    }
   }
 }
 
@@ -143,6 +174,8 @@ function runMigrationV2() {
       id                   INTEGER PRIMARY KEY DEFAULT 1,
       esv_type             TEXT    DEFAULT 'none',
       esv_fixed            INTEGER DEFAULT 0,
+      single_tax_enabled   INTEGER DEFAULT 0,
+      single_tax_rate      REAL    DEFAULT 5.0,
       military_tax_enabled INTEGER DEFAULT 0,
       military_tax_rate    REAL    DEFAULT 1.0,
       updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -494,12 +527,21 @@ function saveTaxSettings(s) {
     UPDATE tax_settings SET
       esv_type             = ?,
       esv_fixed            = ?,
+      single_tax_enabled   = ?,
+      single_tax_rate      = ?,
       military_tax_enabled = ?,
       military_tax_rate    = ?,
       updated_at           = datetime('now')
     WHERE id = 1
   `,
-  ).run(s.esv_type, s.esv_fixed, s.military_tax_enabled ? 1 : 0, s.military_tax_rate);
+  ).run(
+    s.esv_type,
+    s.esv_fixed,
+    s.single_tax_enabled ? 1 : 0,
+    s.single_tax_rate,
+    s.military_tax_enabled ? 1 : 0,
+    s.military_tax_rate,
+  );
 }
 
 // # FINANCIAL STATS
