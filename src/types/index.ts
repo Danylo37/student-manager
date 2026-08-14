@@ -80,12 +80,15 @@ export interface Discount {
  * Tax settings — single row.
  * esv_type: 'none' | 'fixed'
  * esv_fixed: kopiyky/month
+ * single_tax_rate: percent (єдиний податок, 5.0 = 5% for ФОП group 3)
  * military_tax_rate: percent (e.g. 1.0 = 1%)
  */
 export interface TaxSettings {
   id: 1;
   esv_type: 'none' | 'fixed';
   esv_fixed: number; // kopiyky/month
+  single_tax_enabled: number; // 0 | 1
+  single_tax_rate: number; // percent
   military_tax_enabled: number; // 0 | 1
   military_tax_rate: number; // percent
   updated_at: string;

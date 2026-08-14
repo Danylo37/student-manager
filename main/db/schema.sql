@@ -88,11 +88,14 @@ CREATE TABLE IF NOT EXISTS discounts (
 -- TAX SETTINGS (single row)
 -- esv_type: 'none' | 'fixed'
 -- esv_fixed: kopiyky/month
+-- single_tax_rate: percent (єдиний податок, 5.0 = 5% — ФОП 3 group default)
 -- military_tax_rate: percent (e.g. 1.0 means 1%)
 CREATE TABLE IF NOT EXISTS tax_settings (
   id INTEGER PRIMARY KEY DEFAULT 1,
   esv_type TEXT DEFAULT 'none',
   esv_fixed INTEGER DEFAULT 0, -- kopiyky/month
+  single_tax_enabled INTEGER DEFAULT 0,
+  single_tax_rate REAL DEFAULT 5.0,
   military_tax_enabled INTEGER DEFAULT 0,
   military_tax_rate REAL DEFAULT 1.0,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

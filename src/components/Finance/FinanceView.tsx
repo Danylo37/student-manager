@@ -439,16 +439,22 @@ function FinanceView() {
   const taxMonths = getFixedTaxMonths(period, taxStart, activeRange.start, activeRange.end);
 
   const gross = stats?.total ?? 0;
-  const { net, taxTotal, fixedTaxAmount, percentageTaxAmount } = calculateNetEarnings(
-    gross,
-    taxSettings,
-    period,
-    taxMonths,
-  );
+  const { net, taxTotal, fixedTaxAmount, singleTaxAmount, militaryTaxAmount } =
+    calculateNetEarnings(gross, taxSettings, period, taxMonths);
+
+  // Breakdown line under the tax card: only the taxes that actually charged something
+  const taxParts = [
+    singleTaxAmount > 0 ? `ЄП: ${formatUAH(singleTaxAmount)}` : null,
+    militaryTaxAmount > 0 ? `ВЗ: ${formatUAH(militaryTaxAmount)}` : null,
+    fixedTaxAmount > 0 ? `ЄСВ: ${formatUAH(fixedTaxAmount)}` : null,
+  ].filter(Boolean);
   const change = formatChange(gross, prevStats?.total ?? 0);
 
   const hasTax =
-    taxSettings && (taxSettings.esv_type !== 'none' || !!taxSettings.military_tax_enabled);
+    taxSettings &&
+    (taxSettings.esv_type !== 'none' ||
+      !!taxSettings.single_tax_enabled ||
+      !!taxSettings.military_tax_enabled);
 
   const noPrice = (stats?.lessons_total ?? 0) > 0 && (stats?.lessons_with_price ?? 0) === 0;
 
@@ -538,13 +544,7 @@ function FinanceView() {
                 <StatCard
                   label="Податки"
                   value={formatUAH(taxTotal)}
-                  sub={
-                    fixedTaxAmount > 0 && percentageTaxAmount > 0
-                      ? `${formatUAH(fixedTaxAmount)} фікс. + ${formatUAH(percentageTaxAmount)} %`
-                      : fixedTaxAmount > 0
-                        ? `ЄСВ: ${formatUAH(fixedTaxAmount)}`
-                        : undefined
-                  }
+                  sub={taxParts.length > 0 ? taxParts.join(' + ') : undefined}
                 />
               )}
               {hasTax && <StatCard label="Нетто" value={formatUAH(net)} accent={net > 0} />}

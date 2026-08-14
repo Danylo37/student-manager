@@ -42,7 +42,10 @@ function Header() {
   );
 
   const hasTax =
-    taxSettings && (taxSettings.esv_type !== 'none' || !!taxSettings.military_tax_enabled);
+    taxSettings &&
+    (taxSettings.esv_type !== 'none' ||
+      !!taxSettings.single_tax_enabled ||
+      !!taxSettings.military_tax_enabled);
 
   const handleSync = async () => {
     setSyncing(true);
