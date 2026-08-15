@@ -20,6 +20,19 @@ CREATE TABLE IF NOT EXISTS payment_bundles (
   FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE SET NULL
 );
 
+-- BALANCE HISTORY
+-- One row per balance change made by the teacher (payment or manual correction).
+-- lessons is signed (+N paid, -N removed); amount in KOPIYKY, NULL when no price was known.
+CREATE TABLE IF NOT EXISTS balance_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER,
+  student_name_cache TEXT,
+  lessons INTEGER NOT NULL,
+  amount INTEGER, -- kopiyky
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE SET NULL
+);
+
 -- LESSONS
 -- student_id is nullable so completed lessons survive student deletion.
 -- student_name_cache preserves the name after deletion.
@@ -120,3 +133,5 @@ CREATE INDEX IF NOT EXISTS idx_lesson_prices_student ON lesson_prices (student_i
 CREATE INDEX IF NOT EXISTS idx_discounts_student ON discounts (student_id);
 
 CREATE INDEX IF NOT EXISTS idx_bundles_student ON payment_bundles (student_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_balance_history_created ON balance_history (created_at);

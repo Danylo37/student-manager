@@ -15,16 +15,19 @@ import {
   type EarningsPeriod,
   type DateRange,
 } from '@/utils/financials';
-import type { EarningsStats, EarningsByDay, EarningsByStudent } from '@/types';
+import type { EarningsStats, EarningsByDay, EarningsByStudent, BalanceHistoryEntry } from '@/types';
 
-/** Ukrainian plural for "місяць": 1 місяць, 2 місяці, 5 місяців. */
-function monthsWordUA(n: number): string {
+/** Ukrainian plural: pluralUA(2, 'урок', 'уроки', 'уроків') → 'уроки'. */
+function pluralUA(n: number, one: string, few: string, many: string): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'місяць';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'місяці';
-  return 'місяців';
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
 }
+
+const monthsWordUA = (n: number) => pluralUA(n, 'місяць', 'місяці', 'місяців');
+const lessonsWordUA = (n: number) => pluralUA(n, 'урок', 'уроки', 'уроків');
 
 // # Bar chart
 function MiniBarChart({ data }: { data: EarningsByDay[] }) {
@@ -87,6 +90,57 @@ function StatCard({
           {change.text} vs попередній
         </div>
       )}
+    </div>
+  );
+}
+
+// # Balance history
+function BalanceHistory({ entries }: { entries: BalanceHistoryEntry[] }) {
+  const paid = entries.filter((e) => e.lessons > 0);
+  const totalLessons = paid.reduce((sum, e) => sum + e.lessons, 0);
+  const totalAmount = paid.reduce((sum, e) => sum + (e.amount ?? 0), 0);
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5">
+      <div className="flex items-baseline justify-between mb-4">
+        <h2 className="text-sm font-semibold text-gray-600">Історія оплат</h2>
+        {paid.length > 0 && (
+          <span className="text-xs text-gray-400">
+            {totalLessons} {lessonsWordUA(totalLessons)} на {formatUAH(totalAmount)}
+          </span>
+        )}
+      </div>
+      <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+        {entries.map((e) => {
+          const isPayment = e.lessons > 0;
+          return (
+            <div key={e.id} className="flex items-center gap-3 py-2 text-sm">
+              <div className="w-28 text-xs text-gray-400 flex-shrink-0">
+                {new Date(e.created_at).toLocaleString('uk-UA', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </div>
+              <div className="flex-1 min-w-0 font-medium text-gray-800 truncate">
+                {e.student_name}
+              </div>
+              <div className={`w-28 text-right ${isPayment ? 'text-gray-600' : 'text-red-500'}`}>
+                {isPayment ? '+' : '−'}
+                {Math.abs(e.lessons)} {lessonsWordUA(Math.abs(e.lessons))}
+              </div>
+              <div className="w-28 text-right font-semibold text-gray-700">
+                {e.amount != null ? (
+                  formatUAH(e.amount)
+                ) : (
+                  <span className="text-xs font-normal text-gray-400">без ціни</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -383,6 +437,7 @@ function FinanceView() {
   const [prevStats, setPrevStats] = useState<EarningsStats | null>(null);
   const [byDay, setByDay] = useState<EarningsByDay[]>([]);
   const [byStudent, setByStudent] = useState<EarningsByStudent[]>([]);
+  const [history, setHistory] = useState<BalanceHistoryEntry[]>([]);
 
   // Reset offset when switching periods
   useEffect(() => {
@@ -409,18 +464,20 @@ function FinanceView() {
     try {
       const range = getActiveRange();
       const prevRange = getPrevRange();
-      const [s, byday, bystudent, ps] = await Promise.all([
+      const [s, byday, bystudent, ps, hist] = await Promise.all([
         window.electron.getEarningsStats(range.start, range.end),
         window.electron.getEarningsByDay(range.start, range.end),
         window.electron.getEarningsByStudent(range.start, range.end),
         prevRange
           ? window.electron.getEarningsStats(prevRange.start, prevRange.end)
           : Promise.resolve(null),
+        window.electron.getBalanceHistory(range.start, range.end),
       ]);
       setStats(s);
       setByDay(byday);
       setByStudent(bystudent);
       setPrevStats(ps);
+      setHistory(hist);
     } catch (e) {
       console.error(e);
     } finally {
@@ -617,7 +674,10 @@ function FinanceView() {
               </div>
             )}
 
-            {gross === 0 && !noPrice && (
+            {/* Balance history — who paid, for how many lessons, for how much */}
+            {history.length > 0 && <BalanceHistory entries={history} />}
+
+            {gross === 0 && !noPrice && history.length === 0 && (
               <div className="text-center py-12 text-gray-400">
                 <div className="text-4xl mb-3">📊</div>
                 <div className="font-medium">Немає даних за цей період</div>

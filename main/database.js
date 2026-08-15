@@ -46,6 +46,7 @@ function initDatabase() {
     // CREATE TABLE IF NOT EXISTS leaves older tables untouched, so columns
     // added after a table first shipped have to be filled in separately.
     addMissingColumns();
+    backfillBalanceHistory();
 
     logger.info('Database initialized successfully');
     return db;
@@ -79,6 +80,33 @@ function addMissingColumns() {
     } catch (error) {
       logger.error(`Failed to add column ${table}.${column}`, { error: error.message });
     }
+  }
+}
+
+/**
+ * Balance history shipped after payment bundles, so an existing install has no
+ * rows for payments it already recorded. Bundles hold the same facts (student,
+ * lessons, money), so seed the history from them once.
+ */
+function backfillBalanceHistory() {
+  try {
+    const { count } = db.prepare('SELECT COUNT(*) AS count FROM balance_history').get();
+    if (count > 0) return;
+
+    const inserted = db
+      .prepare(
+        `
+      INSERT INTO balance_history (student_id, student_name_cache, lessons, amount, created_at)
+      SELECT b.student_id, s.name, b.lessons_count, b.total_price, b.created_at
+      FROM payment_bundles b
+      LEFT JOIN students s ON s.id = b.student_id
+    `,
+      )
+      .run().changes;
+
+    if (inserted > 0) logger.info('Balance history backfilled from payment bundles', { inserted });
+  } catch (error) {
+    logger.error('Balance history backfill failed', { error: error.message });
   }
 }
 
@@ -361,7 +389,7 @@ function deleteStudentPrice(priceId) {
  * @param {number} studentId
  * @param {number} count     - number of lessons purchased
  * @param {number|null} totalPriceKopiyky - if null, computed from current price
- * @returns {number|null} bundle id or null if no price info
+ * @returns {{id: number, total: number}|null} the bundle, or null if no price info
  */
 function createPaymentBundle(studentId, count, totalPriceKopiyky = null) {
   if (count <= 0) return null;
@@ -399,7 +427,7 @@ function createPaymentBundle(studentId, count, totalPriceKopiyky = null) {
     total,
     bundleId: result.lastInsertRowid,
   });
-  return result.lastInsertRowid;
+  return { id: result.lastInsertRowid, total };
 }
 
 /**
@@ -458,6 +486,54 @@ function returnLessonToBundle(bundleId) {
   db.prepare('UPDATE payment_bundles SET lessons_used = MAX(0, lessons_used - 1) WHERE id = ?').run(
     bundleId,
   );
+}
+
+// # BALANCE HISTORY
+
+/**
+ * Log a payment or balance correction made by the teacher. Only called from the
+ * IPC layer: the -1 per completed lesson is bookkeeping, not something the
+ * teacher did, and would flood the history.
+ * @param {number} studentId
+ * @param {number} lessons  - signed (+N paid for, -N removed)
+ * @param {number|null} amountKopiyky - what it was worth, null if no price is known
+ */
+function recordBalanceChange(studentId, lessons, amountKopiyky = null) {
+  if (!studentId || !lessons) return;
+
+  const student = db.prepare('SELECT name FROM students WHERE id = ?').get(studentId);
+
+  db.prepare(
+    `
+    INSERT INTO balance_history (student_id, student_name_cache, lessons, amount)
+    VALUES (?, ?, ?, ?)
+  `,
+  ).run(studentId, student ? student.name : null, lessons, amountKopiyky ?? null);
+}
+
+/**
+ * Balance changes inside a period, newest first.
+ * created_at is stored as UTC without a timezone marker, so both the comparison
+ * and the returned value are normalised to make it unambiguous.
+ */
+function getBalanceHistory(startDate, endDate) {
+  return db
+    .prepare(
+      `
+    SELECT
+      h.id,
+      h.student_id,
+      COALESCE(s.name, h.student_name_cache, 'Видалений учень') AS student_name,
+      h.lessons,
+      h.amount,
+      strftime('%Y-%m-%dT%H:%M:%SZ', h.created_at)             AS created_at
+    FROM balance_history h
+    LEFT JOIN students s ON s.id = h.student_id
+    WHERE datetime(h.created_at) >= datetime(?) AND datetime(h.created_at) < datetime(?)
+    ORDER BY h.created_at DESC, h.id DESC
+  `,
+    )
+    .all(startDate, endDate);
 }
 
 // # DISCOUNTS  (total_price in kopiyky)
@@ -754,6 +830,7 @@ function toggleLessonPayment(lessonId) {
   if (!lesson || !lesson.is_completed) throw new Error('Lesson not found or not completed');
   db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?').run(lessonId);
   if (lesson.balance < 0 && lesson.student_id) updateStudentBalance(lesson.student_id, 1);
+  return { studentId: lesson.student_id, price: lesson.price };
 }
 
 function deleteLesson(lessonId) {
@@ -1007,6 +1084,9 @@ module.exports = {
   deleteStudentPrice,
   // Payment bundles
   createPaymentBundle,
+  // Balance history
+  recordBalanceChange,
+  getBalanceHistory,
   // Discounts
   getDiscounts,
   getGlobalDiscounts,

@@ -114,6 +114,16 @@ export interface EarningsByStudent {
   count: number;
 }
 
+/** One balance change made by the teacher: who paid, for how many lessons, for how much. */
+export interface BalanceHistoryEntry {
+  id: number;
+  student_id: number | null;
+  student_name: string;
+  lessons: number; // signed: +N paid, -N removed
+  amount: number | null; // kopiyky; null when no price was known
+  created_at: string; // ISO (UTC)
+}
+
 export interface EarningsDateRange {
   min_date: string | null;
   max_date: string | null;
@@ -182,6 +192,7 @@ export interface ElectronAPI {
   getEarningsByDay: (startDate: string, endDate: string) => Promise<EarningsByDay[]>;
   getEarningsByStudent: (startDate: string, endDate: string) => Promise<EarningsByStudent[]>;
   getEarningsDateRange: () => Promise<EarningsDateRange>;
+  getBalanceHistory: (startDate: string, endDate: string) => Promise<BalanceHistoryEntry[]>;
 
   // Lessons
   getLessons: (startDate: string, endDate: string) => Promise<Lesson[]>;

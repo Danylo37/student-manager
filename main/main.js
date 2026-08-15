@@ -102,12 +102,14 @@ function registerIpcHandlers() {
   );
   handle('db:update-balance', (_, studentId, amount) => {
     db.updateStudentBalance(studentId, amount);
-    if (amount > 0) db.createPaymentBundle(studentId, amount);
+    const bundle = amount > 0 ? db.createPaymentBundle(studentId, amount) : null;
+    db.recordBalanceChange(studentId, amount, bundle && bundle.total);
   });
   handle('db:pay-for-lessons', (_, studentId, amount, totalPriceKopiyky) => {
     // Explicit payment with known total (used when a discount applies)
     db.updateStudentBalance(studentId, amount);
-    db.createPaymentBundle(studentId, amount, totalPriceKopiyky);
+    const bundle = db.createPaymentBundle(studentId, amount, totalPriceKopiyky);
+    db.recordBalanceChange(studentId, amount, bundle && bundle.total);
     db.markOldestUnpaidLessonsAsPaid(studentId, amount);
   });
   handle('db:mark-unpaid-lessons-paid', (_, studentId, count) =>
@@ -142,6 +144,7 @@ function registerIpcHandlers() {
   handle('db:get-earnings-by-day', (_, s, e) => db.getEarningsByDay(s, e));
   handle('db:get-earnings-by-student', (_, s, e) => db.getEarningsByStudent(s, e));
   handle('db:get-earnings-date-range', () => db.getEarningsDateRange());
+  handle('db:get-balance-history', (_, s, e) => db.getBalanceHistory(s, e));
 
   // # Lessons
   handle('db:get-lessons', (_, s, e) => db.getLessons(s, e));
@@ -149,7 +152,11 @@ function registerIpcHandlers() {
     db.addLesson(data.studentId, data.datetime, data.isPaid, data.isCompleted),
   );
   handle('db:update-lesson', (_, id, updates) => db.updateLesson(id, updates));
-  handle('db:toggle-lesson-payment', (_, id) => db.toggleLessonPayment(id));
+  handle('db:toggle-lesson-payment', (_, id) => {
+    // Paying for a single lesson after the fact — a payment like any other
+    const { studentId, price } = db.toggleLessonPayment(id);
+    db.recordBalanceChange(studentId, 1, price);
+  });
   handle('db:delete-lesson', (_, id) => db.deleteLesson(id));
 
   // # Schedules
