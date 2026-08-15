@@ -114,6 +114,13 @@ export interface EarningsByStudent {
   count: number;
 }
 
+/** Money actually received in a period — the tax base (касовий метод). */
+export interface CashStats {
+  total: number; // kopiyky
+  lessons: number; // lessons bought
+  payments: number; // number of payments
+}
+
 /** One balance change made by the teacher: who paid, for how many lessons, for how much. */
 export interface BalanceHistoryEntry {
   id: number;
@@ -192,6 +199,10 @@ export interface ElectronAPI {
   getEarningsByDay: (startDate: string, endDate: string) => Promise<EarningsByDay[]>;
   getEarningsByStudent: (startDate: string, endDate: string) => Promise<EarningsByStudent[]>;
   getEarningsDateRange: () => Promise<EarningsDateRange>;
+  getCashStats: (startDate: string, endDate: string) => Promise<CashStats>;
+  getCashByDay: (startDate: string, endDate: string) => Promise<EarningsByDay[]>;
+  getCashByStudent: (startDate: string, endDate: string) => Promise<EarningsByStudent[]>;
+  getUnearnedTotal: (asOf: string) => Promise<number>;
   getBalanceHistory: (startDate: string, endDate: string) => Promise<BalanceHistoryEntry[]>;
 
   // Lessons

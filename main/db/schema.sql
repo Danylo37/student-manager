@@ -7,15 +7,20 @@ CREATE TABLE IF NOT EXISTS students (
 );
 
 -- PAYMENT BUNDLES
--- Created when teacher adds balance (+N lessons).
+-- The cash ledger: one row per payment received (+N lessons).
 -- Tracks how many lessons from this payment have been consumed.
 -- total_price in KOPIYKY (1 hryvnia = 100 kopiyky).
+-- paid_at is when the money was actually received — taxes are calculated on it,
+-- because a ФОП declares income by payment date, not by lesson date.
+-- A refund is a row with negative lessons_count and total_price; it is never
+-- consumed by lessons and simply reduces the cash of its period.
 CREATE TABLE IF NOT EXISTS payment_bundles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER,
   total_price INTEGER NOT NULL, -- kopiyky
   lessons_count INTEGER NOT NULL,
   lessons_used INTEGER DEFAULT 0,
+  paid_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE SET NULL
 );
@@ -133,5 +138,7 @@ CREATE INDEX IF NOT EXISTS idx_lesson_prices_student ON lesson_prices (student_i
 CREATE INDEX IF NOT EXISTS idx_discounts_student ON discounts (student_id);
 
 CREATE INDEX IF NOT EXISTS idx_bundles_student ON payment_bundles (student_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_bundles_paid_at ON payment_bundles (paid_at);
 
 CREATE INDEX IF NOT EXISTS idx_balance_history_created ON balance_history (created_at);

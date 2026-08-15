@@ -65,9 +65,11 @@ function addMissingColumns() {
   const additions = [
     ['tax_settings', 'single_tax_enabled', 'INTEGER DEFAULT 0'],
     ['tax_settings', 'single_tax_rate', 'REAL DEFAULT 5.0'],
+    // Payments made before paid_at existed happened when they were recorded.
+    ['payment_bundles', 'paid_at', 'DATETIME', 'UPDATE payment_bundles SET paid_at = created_at'],
   ];
 
-  for (const [table, column, definition] of additions) {
+  for (const [table, column, definition, backfill] of additions) {
     try {
       const cols = db
         .prepare(`PRAGMA table_info(${table})`)
@@ -76,6 +78,7 @@ function addMissingColumns() {
       if (cols.length === 0 || cols.includes(column)) continue;
 
       db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      if (backfill) db.exec(backfill);
       logger.info(`Added column ${table}.${column}`);
     } catch (error) {
       logger.error(`Failed to add column ${table}.${column}`, { error: error.message });
@@ -334,7 +337,7 @@ function getUnpaidCompletedLessons(studentId) {
   return db
     .prepare(
       `
-    SELECT id FROM lessons
+    SELECT id, datetime, price, payment_bundle_id FROM lessons
     WHERE student_id = ? AND is_completed = 1 AND is_paid = 0
     ORDER BY datetime ASC
   `,
@@ -342,11 +345,25 @@ function getUnpaidCompletedLessons(studentId) {
     .all(studentId);
 }
 
+/**
+ * Close the oldest unpaid lessons with a payment that has just been recorded.
+ * Each one takes its slot in the bundle it is paid from, so the advance left on
+ * that payment stays correct.
+ */
 function markOldestUnpaidLessonsAsPaid(studentId, count) {
   if (count <= 0) return;
   const lessons = getUnpaidCompletedLessons(studentId).slice(0, count);
-  const stmt = db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?');
-  for (const l of lessons) stmt.run(l.id);
+  const stmt = db.prepare(
+    'UPDATE lessons SET is_paid = 1, price = ?, payment_bundle_id = ? WHERE id = ?',
+  );
+  for (const l of lessons) {
+    if (l.payment_bundle_id) {
+      db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?').run(l.id);
+      continue;
+    }
+    const { price, bundleId } = resolveLessonPrice(studentId, l.datetime);
+    stmt.run(price ?? l.price, bundleId, l.id);
+  }
 }
 
 // # LESSON PRICES  (all values in kopiyky)
@@ -408,48 +425,58 @@ function deleteStudentPrice(priceId) {
 /**
  * Create a payment bundle when teacher records a payment.
  * Called automatically from updateBalance / payForLessons.
+ *
+ * Bundles are the cash ledger, so every payment has to end up here: taxes are
+ * calculated on money received, not on lessons given.
+ *
  * @param {number} studentId
- * @param {number} count     - number of lessons purchased
+ * @param {number} count     - lessons purchased; negative for a refund
  * @param {number|null} totalPriceKopiyky - if null, computed from current price
+ * @param {string|null} paidAt - when the money arrived (default: now)
  * @returns {{id: number, total: number}|null} the bundle, or null if no price info
  */
-function createPaymentBundle(studentId, count, totalPriceKopiyky = null) {
-  if (count <= 0) return null;
+function createPaymentBundle(studentId, count, totalPriceKopiyky = null, paidAt = null) {
+  if (count === 0) return null;
 
+  const lessons = Math.abs(count);
   let total = totalPriceKopiyky;
 
   if (total === null) {
     // Try applicable discount first
-    const discount = findApplicableDiscount(studentId, count);
+    const discount = findApplicableDiscount(studentId, lessons);
     if (discount) {
       total = discount.total_price;
     } else {
       // Fall back to current price × count
       const priceRecord = getStudentCurrentPrice(studentId);
       if (priceRecord) {
-        total = priceRecord.price * count;
+        total = priceRecord.price * lessons;
       }
     }
   }
 
   if (total === null) return null; // no price info → no bundle
 
+  // A refund is stored as a negative bundle: it lowers the cash of its period
+  // and is never consumed by a lesson.
+  const sign = count < 0 ? -1 : 1;
+
   const result = db
     .prepare(
       `
-    INSERT INTO payment_bundles (student_id, total_price, lessons_count)
-    VALUES (?, ?, ?)
+    INSERT INTO payment_bundles (student_id, total_price, lessons_count, paid_at)
+    VALUES (?, ?, ?, COALESCE(?, datetime('now')))
   `,
     )
-    .run(studentId, total, count);
+    .run(studentId, sign * Math.abs(total), sign * lessons, paidAt);
 
   logger.info('Payment bundle created', {
     studentId,
     count,
-    total,
+    total: sign * Math.abs(total),
     bundleId: result.lastInsertRowid,
   });
-  return { id: result.lastInsertRowid, total };
+  return { id: result.lastInsertRowid, total: sign * Math.abs(total) };
 }
 
 /**
@@ -464,8 +491,8 @@ function consumeFromBundle(studentId) {
     .prepare(
       `
     SELECT * FROM payment_bundles
-    WHERE student_id = ? AND lessons_used < lessons_count
-    ORDER BY created_at ASC LIMIT 1
+    WHERE student_id = ? AND lessons_count > 0 AND lessons_used < lessons_count
+    ORDER BY COALESCE(paid_at, created_at) ASC, id ASC LIMIT 1
   `,
     )
     .get(studentId);
@@ -643,9 +670,93 @@ function saveTaxSettings(s) {
 }
 
 // # FINANCIAL STATS
+//
+// Two views of the same money, and they legitimately differ inside a period:
+//  - CASH     — what was paid (payment_bundles by paid_at). This is the tax base:
+//               a ФОП declares income on the date the money arrives, so a month
+//               paid upfront in June belongs to Q2 even if the lessons are in Q3.
+//  - EARNED   — what was worked off (lessons by datetime). Shows real load.
+// cash = earned + change in unearned advances (see getUnearnedTotal).
 
-/** A lesson counts as income once it is completed, paid and has a price. */
+/** A lesson counts as earned once it is completed, paid and has a price. */
 const IS_INCOME = (t = '') => `${t}is_completed = 1 AND ${t}is_paid = 1 AND ${t}price IS NOT NULL`;
+
+/** Payment date, falling back to the row's creation for pre-paid_at bundles. */
+const PAID_AT = (t = '') => `datetime(COALESCE(${t}paid_at, ${t}created_at))`;
+
+function getCashStats(startDate, endDate) {
+  return db
+    .prepare(
+      `
+    SELECT
+      COALESCE(SUM(total_price), 0)   AS total,
+      COALESCE(SUM(lessons_count), 0) AS lessons,
+      COUNT(*)                        AS payments
+    FROM payment_bundles
+    WHERE ${PAID_AT()} >= datetime(?) AND ${PAID_AT()} < datetime(?)
+  `,
+    )
+    .get(startDate, endDate);
+}
+
+function getCashByDay(startDate, endDate) {
+  return db
+    .prepare(
+      `
+    SELECT
+      DATE(COALESCE(paid_at, created_at)) AS day,
+      SUM(total_price)                    AS total,
+      SUM(lessons_count)                  AS count
+    FROM payment_bundles
+    WHERE ${PAID_AT()} >= datetime(?) AND ${PAID_AT()} < datetime(?)
+    GROUP BY day
+    ORDER BY day ASC
+  `,
+    )
+    .all(startDate, endDate);
+}
+
+function getCashByStudent(startDate, endDate) {
+  return db
+    .prepare(
+      `
+    SELECT
+      COALESCE(s.id, -1)                              AS student_id,
+      COALESCE(s.name, 'Видалений учень')             AS student_name,
+      SUM(b.total_price)                              AS total,
+      SUM(b.lessons_count)                            AS count
+    FROM payment_bundles b
+    LEFT JOIN students s ON s.id = b.student_id
+    WHERE ${PAID_AT('b.')} >= datetime(?) AND ${PAID_AT('b.')} < datetime(?)
+    GROUP BY COALESCE(s.id, -1)
+    ORDER BY total DESC
+  `,
+    )
+    .all(startDate, endDate);
+}
+
+/**
+ * Advances still owed as lessons at a moment in time: money already received
+ * minus the part of it already worked off. This is the bridge between the two
+ * views — cash of a period equals earned plus the change in this number.
+ * @param {string} asOf - ISO moment (exclusive)
+ */
+function getUnearnedTotal(asOf) {
+  const { unearned } = db
+    .prepare(
+      `
+    SELECT
+      (SELECT COALESCE(SUM(total_price), 0) FROM payment_bundles
+        WHERE ${PAID_AT()} < datetime(?))
+      -
+      (SELECT COALESCE(SUM(price), 0) FROM lessons
+        WHERE payment_bundle_id IS NOT NULL AND price IS NOT NULL AND datetime < ?)
+      AS unearned
+  `,
+    )
+    .get(asOf, asOf);
+  return unearned;
+}
 
 function getEarningsStats(startDate, endDate) {
   return db
@@ -699,14 +810,14 @@ function getEarningsByStudent(startDate, endDate) {
 /**
  * First and last income, plus how many months actually had income.
  *
- * `min_date` is the moment the user really started using the finance features
- * (first paid lesson with a price). Fixed monthly taxes (ЄСВ) are charged from
- * that month onwards — including months without lessons, as a real ФОП pays —
- * but never before it, so an existing install stays at zero tax until a price
- * is set and such a lesson happens.
+ * `min_date` is the moment the user really started using the finance features:
+ * the earlier of the first recorded payment and the first paid lesson with a
+ * price. Fixed monthly taxes (ЄСВ) are charged from that month onwards —
+ * including months without lessons, as a real ФОП pays — but never before it,
+ * so an existing install stays at zero tax until finances are actually used.
  */
 function getEarningsDateRange() {
-  return db
+  const row = db
     .prepare(
       `
     SELECT
@@ -718,6 +829,21 @@ function getEarningsDateRange() {
   `,
     )
     .get();
+
+  const { first_payment, last_payment } = db
+    .prepare(
+      `
+    SELECT MIN(COALESCE(paid_at, created_at)) AS first_payment,
+           MAX(COALESCE(paid_at, created_at)) AS last_payment
+    FROM payment_bundles WHERE total_price > 0
+  `,
+    )
+    .get();
+
+  const earliest = [row.min_date, first_payment].filter(Boolean).sort()[0] ?? null;
+  const latest = [row.max_date, last_payment].filter(Boolean).sort().pop() ?? null;
+
+  return { ...row, min_date: earliest, max_date: latest };
 }
 
 // # LESSONS
@@ -850,9 +976,28 @@ function toggleLessonPayment(lessonId) {
     )
     .get(lessonId);
   if (!lesson || !lesson.is_completed) throw new Error('Lesson not found or not completed');
-  db.prepare('UPDATE lessons SET is_paid = 1 WHERE id = ?').run(lessonId);
+
+  // Money arrives now, so it needs its own row in the cash ledger. The lesson is
+  // attached to it right away — it is exactly what that payment bought.
+  let price = lesson.price;
+  let bundleId = lesson.payment_bundle_id;
+  if (lesson.student_id && !bundleId) {
+    if (price === null) price = getStudentPriceAt(lesson.student_id, lesson.datetime);
+    const bundle = createPaymentBundle(lesson.student_id, 1, price);
+    if (bundle) {
+      bundleId = bundle.id;
+      price = bundle.total;
+      db.prepare('UPDATE payment_bundles SET lessons_used = 1 WHERE id = ?').run(bundleId);
+    }
+  }
+
+  db.prepare('UPDATE lessons SET is_paid = 1, price = ?, payment_bundle_id = ? WHERE id = ?').run(
+    price,
+    bundleId,
+    lessonId,
+  );
   if (lesson.balance < 0 && lesson.student_id) updateStudentBalance(lesson.student_id, 1);
-  return { studentId: lesson.student_id, price: lesson.price };
+  return { studentId: lesson.student_id, price };
 }
 
 function deleteLesson(lessonId) {
@@ -1124,6 +1269,10 @@ module.exports = {
   getEarningsByDay,
   getEarningsByStudent,
   getEarningsDateRange,
+  getCashStats,
+  getCashByDay,
+  getCashByStudent,
+  getUnearnedTotal,
   // Lessons
   getLessons,
   addLesson,

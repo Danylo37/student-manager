@@ -102,7 +102,9 @@ function registerIpcHandlers() {
   );
   handle('db:update-balance', (_, studentId, amount) => {
     db.updateStudentBalance(studentId, amount);
-    const bundle = amount > 0 ? db.createPaymentBundle(studentId, amount) : null;
+    // Both directions hit the cash ledger: a negative change is money given back
+    // or a payment entered by mistake, and either way the period must show it.
+    const bundle = db.createPaymentBundle(studentId, amount);
     db.recordBalanceChange(studentId, amount, bundle && bundle.total);
   });
   handle('db:pay-for-lessons', (_, studentId, amount, totalPriceKopiyky) => {
@@ -144,6 +146,10 @@ function registerIpcHandlers() {
   handle('db:get-earnings-by-day', (_, s, e) => db.getEarningsByDay(s, e));
   handle('db:get-earnings-by-student', (_, s, e) => db.getEarningsByStudent(s, e));
   handle('db:get-earnings-date-range', () => db.getEarningsDateRange());
+  handle('db:get-cash-stats', (_, s, e) => db.getCashStats(s, e));
+  handle('db:get-cash-by-day', (_, s, e) => db.getCashByDay(s, e));
+  handle('db:get-cash-by-student', (_, s, e) => db.getCashByStudent(s, e));
+  handle('db:get-unearned-total', (_, asOf) => db.getUnearnedTotal(asOf));
   handle('db:get-balance-history', (_, s, e) => db.getBalanceHistory(s, e));
 
   // # Lessons

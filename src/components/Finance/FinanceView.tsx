@@ -15,7 +15,13 @@ import {
   type EarningsPeriod,
   type DateRange,
 } from '@/utils/financials';
-import type { EarningsStats, EarningsByDay, EarningsByStudent, BalanceHistoryEntry } from '@/types';
+import type {
+  EarningsStats,
+  EarningsByDay,
+  EarningsByStudent,
+  BalanceHistoryEntry,
+  CashStats,
+} from '@/types';
 
 /** Ukrainian plural: pluralUA(2, 'урок', 'уроки', 'уроків') → 'уроки'. */
 function pluralUA(n: number, one: string, few: string, many: string): string {
@@ -414,6 +420,28 @@ function IncomeSimulator() {
 }
 
 // # FinanceView
+
+/**
+ * Which money the view shows.
+ *  - cash    — what was received in the period. Taxes are due on this: a ФОП
+ *              declares income by payment date, so lessons paid a month ahead
+ *              belong to the quarter of the payment, not of the lesson.
+ *  - accrual — what was worked off in the period. Real load, no tax meaning.
+ */
+type IncomeBasis = 'cash' | 'accrual';
+
+const BASES: { key: IncomeBasis; label: string; hint: string }[] = [
+  { key: 'cash', label: 'Каса', hint: 'гроші, отримані в періоді — база для податків' },
+  { key: 'accrual', label: 'Зароблено', hint: 'вартість проведених уроків періоду' },
+];
+
+const GRID_COLS: Record<number, string> = {
+  2: 'grid-cols-2',
+  3: 'grid-cols-3',
+  4: 'grid-cols-4',
+  5: 'grid-cols-5',
+};
+
 const PERIODS: { key: EarningsPeriod; label: string }[] = [
   { key: 'day', label: 'День' },
   { key: 'week', label: 'Тиждень' },
@@ -431,6 +459,7 @@ function FinanceView() {
   const [period, setPeriod] = useState<EarningsPeriod>('month');
   const [offset, setOffset] = useState(0); // 0 = current, -1 = previous, etc.
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
+  const [basis, setBasis] = useState<IncomeBasis>('cash');
 
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<EarningsStats | null>(null);
@@ -438,6 +467,11 @@ function FinanceView() {
   const [byDay, setByDay] = useState<EarningsByDay[]>([]);
   const [byStudent, setByStudent] = useState<EarningsByStudent[]>([]);
   const [history, setHistory] = useState<BalanceHistoryEntry[]>([]);
+  const [cash, setCash] = useState<CashStats | null>(null);
+  const [prevCash, setPrevCash] = useState<CashStats | null>(null);
+  const [cashByDay, setCashByDay] = useState<EarningsByDay[]>([]);
+  const [cashByStudent, setCashByStudent] = useState<EarningsByStudent[]>([]);
+  const [unearned, setUnearned] = useState(0);
 
   // Reset offset when switching periods
   useEffect(() => {
@@ -464,20 +498,33 @@ function FinanceView() {
     try {
       const range = getActiveRange();
       const prevRange = getPrevRange();
-      const [s, byday, bystudent, ps, hist] = await Promise.all([
-        window.electron.getEarningsStats(range.start, range.end),
-        window.electron.getEarningsByDay(range.start, range.end),
-        window.electron.getEarningsByStudent(range.start, range.end),
-        prevRange
-          ? window.electron.getEarningsStats(prevRange.start, prevRange.end)
-          : Promise.resolve(null),
-        window.electron.getBalanceHistory(range.start, range.end),
-      ]);
+      const [s, byday, bystudent, ps, hist, c, cbyday, cbystudent, pc, unearnedTotal] =
+        await Promise.all([
+          window.electron.getEarningsStats(range.start, range.end),
+          window.electron.getEarningsByDay(range.start, range.end),
+          window.electron.getEarningsByStudent(range.start, range.end),
+          prevRange
+            ? window.electron.getEarningsStats(prevRange.start, prevRange.end)
+            : Promise.resolve(null),
+          window.electron.getBalanceHistory(range.start, range.end),
+          window.electron.getCashStats(range.start, range.end),
+          window.electron.getCashByDay(range.start, range.end),
+          window.electron.getCashByStudent(range.start, range.end),
+          prevRange
+            ? window.electron.getCashStats(prevRange.start, prevRange.end)
+            : Promise.resolve(null),
+          window.electron.getUnearnedTotal(range.end),
+        ]);
       setStats(s);
       setByDay(byday);
       setByStudent(bystudent);
       setPrevStats(ps);
       setHistory(hist);
+      setCash(c);
+      setCashByDay(cbyday);
+      setCashByStudent(cbystudent);
+      setPrevCash(pc);
+      setUnearned(unearnedTotal);
     } catch (e) {
       console.error(e);
     } finally {
@@ -495,9 +542,16 @@ function FinanceView() {
   // including months without lessons, but never before it or in the future.
   const taxMonths = getFixedTaxMonths(period, taxStart, activeRange.start, activeRange.end);
 
-  const gross = stats?.total ?? 0;
+  const isCash = basis === 'cash';
+  const gross = (isCash ? cash?.total : stats?.total) ?? 0;
+  const prevGross = (isCash ? prevCash?.total : prevStats?.total) ?? 0;
+  const activeByDay = isCash ? cashByDay : byDay;
+  const activeByStudent = isCash ? cashByStudent : byStudent;
+
+  // Taxes always follow the cash, whichever view is on screen.
+  const taxBase = cash?.total ?? 0;
   const { net, taxTotal, fixedTaxAmount, singleTaxAmount, militaryTaxAmount } =
-    calculateNetEarnings(gross, taxSettings, period, taxMonths);
+    calculateNetEarnings(taxBase, taxSettings, period, taxMonths);
 
   // Breakdown line under the tax card: only the taxes that actually charged something
   const taxParts = [
@@ -505,7 +559,7 @@ function FinanceView() {
     militaryTaxAmount > 0 ? `ВЗ: ${formatUAH(militaryTaxAmount)}` : null,
     fixedTaxAmount > 0 ? `ЄСВ: ${formatUAH(fixedTaxAmount)}` : null,
   ].filter(Boolean);
-  const change = formatChange(gross, prevStats?.total ?? 0);
+  const change = formatChange(gross, prevGross);
 
   const hasTax =
     taxSettings &&
@@ -525,6 +579,18 @@ function FinanceView() {
 
   // No prices anywhere yet → finances are not in use, so nothing is taxed
   const financesNotStarted = !taxStart;
+
+  // The two views differ by the advances that moved in or out of the period
+  const basisGap = (cash?.total ?? 0) - (stats?.total ?? 0);
+  const showUnearned = isCash && unearned !== 0;
+  const cardCount = 1 + (hasTax ? 2 : 0) + 1 + (showUnearned ? 1 : 0);
+
+  // The advances card is a balance at a moment, not a sum over the period:
+  // positive means paid ahead, negative means lessons given before the money came.
+  const asOfLabel = new Date(new Date(activeRange.end).getTime() - 1).toLocaleDateString('uk-UA', {
+    day: '2-digit',
+    month: '2-digit',
+  });
 
   return (
     <div className="finance-view flex-1 overflow-y-auto bg-gray-50 p-6">
@@ -567,6 +633,23 @@ function FinanceView() {
           {period !== 'day' && period !== 'all' && (
             <PeriodNavigator offset={offset} onOffset={setOffset} label={activeRange.label} />
           )}
+
+          <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1">
+            {BASES.map(({ key, label, hint }) => (
+              <button
+                key={key}
+                onClick={() => setBasis(key)}
+                title={hint}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  basis === key
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* No price warning */}
@@ -590,10 +673,15 @@ function FinanceView() {
         ) : (
           <>
             {/* Summary cards */}
-            <div className={`grid gap-4 ${hasTax ? 'grid-cols-4' : 'grid-cols-2'}`}>
+            <div className={`grid gap-4 ${GRID_COLS[cardCount] ?? 'grid-cols-4'}`}>
               <StatCard
-                label="Дохід (брутто)"
+                label={isCash ? 'Отримано (каса)' : 'Зароблено (брутто)'}
                 value={formatUAH(gross)}
+                sub={
+                  isCash
+                    ? `${cash?.payments ?? 0} ${pluralUA(cash?.payments ?? 0, 'оплата', 'оплати', 'оплат')} · база для податків`
+                    : 'вартість проведених уроків'
+                }
                 accent={gross > 0}
                 change={period !== 'all' ? change : undefined}
               />
@@ -605,17 +693,40 @@ function FinanceView() {
                 />
               )}
               {hasTax && <StatCard label="Нетто" value={formatUAH(net)} accent={net > 0} />}
+              {showUnearned && (
+                <StatCard
+                  label={unearned > 0 ? `Аванси на ${asOfLabel}` : `Уроки в борг на ${asOfLabel}`}
+                  value={formatUAH(Math.abs(unearned))}
+                  sub={
+                    unearned > 0
+                      ? 'оплачено наперед, ще не відпрацьовано'
+                      : 'проведено, але оплачено пізніше'
+                  }
+                />
+              )}
               <StatCard
                 label="Уроків проведено"
                 value={String(stats?.lessons_total ?? 0)}
                 sub={
-                  // Income only counts paid lessons, so say how many that is
+                  // Only paid lessons carry a price, so say how many that is
                   stats && stats.lessons_paid < stats.lessons_total
-                    ? `${stats.lessons_paid} оплачено — лише вони у доході`
+                    ? `${stats.lessons_paid} оплачено — лише вони у «зароблено»`
                     : undefined
                 }
               />
             </div>
+
+            {/* Why the two views disagree */}
+            {basisGap !== 0 && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-500 text-sm">
+                ℹ️ Каса {formatUAH(cash?.total ?? 0)}, зароблено {formatUAH(stats?.total ?? 0)}.
+                Різниця {formatUAH(Math.abs(basisGap))} — це{' '}
+                {basisGap > 0
+                  ? 'оплати наперед: уроки будуть у наступних періодах'
+                  : 'уроки, оплачені раніше: гроші зайшли в попередніх періодах'}
+                . Податки рахуються з каси, бо ФОП декларує дохід за датою отримання грошей.
+              </div>
+            )}
 
             {/* Finances not in use yet — nothing is taxed until a price and a lesson exist */}
             {financesNotStarted && hasTax && (
@@ -636,19 +747,21 @@ function FinanceView() {
             )}
 
             {/* Chart */}
-            {byDay.length > 0 && period !== 'day' && (
+            {activeByDay.length > 0 && period !== 'day' && (
               <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <h2 className="text-sm font-semibold text-gray-600 mb-4">Дохід по днях</h2>
-                <MiniBarChart data={byDay} />
+                <h2 className="text-sm font-semibold text-gray-600 mb-4">
+                  {isCash ? 'Оплати по днях' : 'Зароблено по днях'}
+                </h2>
+                <MiniBarChart data={activeByDay} />
               </div>
             )}
 
             {/* By student */}
-            {byStudent.length > 0 && (
+            {activeByStudent.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-xl p-5">
                 <h2 className="text-sm font-semibold text-gray-600 mb-4">По учнях</h2>
                 <div className="space-y-3">
-                  {byStudent.map((s) => {
+                  {activeByStudent.map((s) => {
                     const pct = gross > 0 ? Math.round((s.total / gross) * 100) : 0;
                     return (
                       <div key={s.student_id} className="flex items-center gap-3">
