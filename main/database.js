@@ -127,6 +127,22 @@ function runMigrationV2() {
   logger.info('Running database migration to v2');
 
   db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(migrateV2Steps)();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+
+  logger.info('Migration v2 complete');
+}
+
+function migrateV2Steps() {
+  // Leftovers from an interrupted earlier attempt would collide with the
+  // CREATE statements below.
+  db.exec(`
+    DROP TABLE IF EXISTS lessons_v2;
+    DROP TABLE IF EXISTS tax_settings_v2;
+  `);
 
   // 1. Ensure payment_bundles table exists (needed before recreating lessons)
   db.exec(`
@@ -144,6 +160,16 @@ function runMigrationV2() {
 
   // 2. Recreate lessons table: nullable student_id, student_name_cache, price in kopiyky,
   //    payment_bundle_id. Copy data, convert price hryvnias→kopiyky.
+  //    The pre-finance schema had no price column at all, so it is selected only
+  //    when it is actually there.
+  const lessonCols = db
+    .prepare('PRAGMA table_info(lessons)')
+    .all()
+    .map((c) => c.name);
+  const priceExpr = lessonCols.includes('price')
+    ? 'CASE WHEN l.price IS NOT NULL THEN CAST(ROUND(l.price * 100) AS INTEGER) ELSE NULL END'
+    : 'NULL';
+
   db.exec(`
     CREATE TABLE lessons_v2 (
       id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,7 +197,7 @@ function runMigrationV2() {
       l.previous_datetime,
       l.is_completed,
       l.is_paid,
-      CASE WHEN l.price IS NOT NULL THEN CAST(ROUND(l.price * 100) AS INTEGER) ELSE NULL END,
+      ${priceExpr},
       l.created_at
     FROM lessons l
     LEFT JOIN students s ON s.id = l.student_id;
@@ -245,10 +271,6 @@ function runMigrationV2() {
     CREATE INDEX IF NOT EXISTS idx_deleted_slots_student
       ON deleted_lesson_slots (student_id, datetime);
   `);
-
-  db.pragma('foreign_keys = ON');
-
-  logger.info('Migration v2 complete');
 }
 
 // # STUDENTS
