@@ -454,6 +454,7 @@ function FinanceView() {
   const openModal = useAppStore((s) => s.openModal);
   const taxSettings = useAppStore((s) => s.taxSettings);
   const taxStart = useAppStore((s) => s.taxStart);
+  const dataVersion = useAppStore((s) => s.dataVersion);
 
   const [period, setPeriod] = useState<EarningsPeriod>('month');
   const [offset, setOffset] = useState(0); // 0 = current, -1 = previous, etc.
@@ -529,7 +530,8 @@ function FinanceView() {
     } finally {
       setLoading(false);
     }
-  }, [getActiveRange, getPrevRange, period]);
+    // dataVersion refetches after a sync, a payment or any lesson change
+  }, [getActiveRange, getPrevRange, dataVersion]);
 
   useEffect(() => {
     void loadData();
@@ -671,7 +673,8 @@ function FinanceView() {
           </div>
         )}
 
-        {loading ? (
+        {/* Only the first load blanks the page; a refresh updates in place */}
+        {loading && !stats ? (
           <div className="flex items-center justify-center py-20 text-gray-400">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent mr-3" />
             Завантаження...

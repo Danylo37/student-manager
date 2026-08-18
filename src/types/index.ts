@@ -254,6 +254,8 @@ export interface AppState {
   lessons: Lesson[];
   lessonsLoading: boolean;
   lessonsError: string | null;
+  /** Counter bumped on every lessons reload; a refetch signal for views with own queries. */
+  dataVersion: number;
 
   schedules: Schedule[];
   schedulesLoading: boolean;

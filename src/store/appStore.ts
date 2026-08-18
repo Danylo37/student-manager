@@ -20,6 +20,10 @@ const useAppStore = create<AppState>((set, get) => ({
   lessonsLoading: false,
   lessonsError: null,
 
+  // Bumped on every lessons reload. Views that query the DB themselves
+  // (Finance) watch it to refetch after a sync or any lesson change.
+  dataVersion: 0,
+
   schedules: [],
   schedulesLoading: false,
   schedulesError: null,
@@ -92,7 +96,7 @@ const useAppStore = create<AppState>((set, get) => ({
       const { currentWeek } = get();
       const { start, end } = getWeekRange(currentWeek);
       const lessons = await window.electron.getLessons(start, end);
-      set({ lessons, lessonsLoading: false });
+      set((state) => ({ lessons, lessonsLoading: false, dataVersion: state.dataVersion + 1 }));
       // The first paid lesson with a price starts the tax clock, and any lesson
       // change can create it, so keep the anchor in sync.
       void get().refreshTaxStart();

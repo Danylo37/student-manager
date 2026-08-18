@@ -8,8 +8,6 @@ import useAppStore from '@/store/appStore';
  */
 function useBalanceSync(): void {
   const syncLessons = useAppStore((state) => state.syncLessons);
-  const loadStudents = useAppStore((state) => state.loadStudents);
-  const loadLessons = useAppStore((state) => state.loadLessons);
 
   const lastSyncTime = useRef<number>(0);
 
@@ -23,8 +21,6 @@ function useBalanceSync(): void {
       lastSyncTime.current = now;
 
       await syncLessons();
-      await loadStudents();
-      await loadLessons();
     } catch (error) {
       console.error('Sync error:', error);
     }
@@ -44,7 +40,7 @@ function useBalanceSync(): void {
     return () => {
       window.removeEventListener('focus', handleFocus);
     };
-  }, [syncLessons, loadStudents, loadLessons]);
+  }, [syncLessons]);
 }
 
 export default useBalanceSync;

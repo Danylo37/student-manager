@@ -9,8 +9,6 @@ function Header() {
   const { nextWeek, prevWeek, goToToday, lessonsLoading, lessons } = useLessons();
   const openModal = useAppStore((s) => s.openModal);
   const syncLessons = useAppStore((s) => s.syncLessons);
-  const loadStudents = useAppStore((s) => s.loadStudents);
-  const loadLessons = useAppStore((s) => s.loadLessons);
   const theme = useAppStore((s) => s.theme);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
   const currentView = useAppStore((s) => s.currentView);
@@ -47,12 +45,12 @@ function Header() {
       !!taxSettings.single_tax_enabled ||
       !!taxSettings.military_tax_enabled);
 
+  // syncLessons already reloads lessons and students, and the reload bumps
+  // dataVersion, which is what makes the finance view refetch.
   const handleSync = async () => {
     setSyncing(true);
     try {
       await syncLessons();
-      await loadStudents();
-      await loadLessons();
     } catch (e) {
       console.error('Sync failed:', e);
     } finally {
@@ -93,7 +91,7 @@ function Header() {
               onClick={handleSync}
               disabled={syncing}
               className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${accent}`}
-              title="Синхронізувати уроки"
+              title="Оновити дані"
             >
               <RefreshCw size={20} className={syncing ? 'animate-spin' : ''} />
             </button>

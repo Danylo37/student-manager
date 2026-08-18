@@ -174,7 +174,12 @@ function registerIpcHandlers() {
   handle('db:auto-create-lessons', (_, studentId) => db.autoCreateLessons(studentId));
 
   // # Sync
-  handle('db:sync-lessons', () => db.syncCompletedLessons());
+  handle('db:sync-lessons', () => {
+    const completed = db.syncCompletedLessons();
+    // Top up the two-week schedule too, otherwise it only grows on app start
+    db.autoCreateLessonsForAllStudents();
+    return completed;
+  });
 
   logger.debug('IPC handlers registered');
 }
