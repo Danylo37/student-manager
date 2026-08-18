@@ -102,17 +102,16 @@ function StatCard({
 
 // # Balance history
 function BalanceHistory({ entries }: { entries: BalanceHistoryEntry[] }) {
-  const paid = entries.filter((e) => e.lessons > 0);
-  const totalLessons = paid.reduce((sum, e) => sum + e.lessons, 0);
-  const totalAmount = paid.reduce((sum, e) => sum + (e.amount ?? 0), 0);
+  const totalLessons = entries.reduce((sum, e) => sum + e.lessons, 0);
+  const totalAmount = entries.reduce((sum, e) => sum + (e.amount ?? 0), 0);
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5">
       <div className="flex items-baseline justify-between mb-4">
         <h2 className="text-sm font-semibold text-gray-600">Історія оплат</h2>
-        {paid.length > 0 && (
+        {entries.length > 0 && (
           <span className="text-xs text-gray-400">
-            {totalLessons} {lessonsWordUA(totalLessons)} на {formatUAH(totalAmount)}
+            {totalLessons} {lessonsWordUA(Math.abs(totalLessons))} на {formatUAH(totalAmount)}
           </span>
         )}
       </div>
@@ -561,6 +560,13 @@ function FinanceView() {
   ].filter(Boolean);
   const change = formatChange(gross, prevGross);
 
+  // Net of the period: removed lessons cancel out paid ones, and nothing left
+  // over means there is no payment worth naming.
+  const cashLessons = cash?.lessons ?? 0;
+  const cashSub = cashLessons
+    ? `${cashLessons > 0 ? '' : '−'}${Math.abs(cashLessons)} ${lessonsWordUA(Math.abs(cashLessons))} оплачено · база для податків`
+    : 'база для податків';
+
   const hasTax =
     taxSettings &&
     (taxSettings.esv_type !== 'none' ||
@@ -677,11 +683,7 @@ function FinanceView() {
               <StatCard
                 label={isCash ? 'Отримано (каса)' : 'Зароблено (брутто)'}
                 value={formatUAH(gross)}
-                sub={
-                  isCash
-                    ? `${cash?.payments ?? 0} ${pluralUA(cash?.payments ?? 0, 'оплата', 'оплати', 'оплат')} · база для податків`
-                    : 'вартість проведених уроків'
-                }
+                sub={isCash ? cashSub : 'вартість проведених уроків'}
                 accent={gross > 0}
                 change={period !== 'all' ? change : undefined}
               />
@@ -762,7 +764,10 @@ function FinanceView() {
                 <h2 className="text-sm font-semibold text-gray-600 mb-4">По учнях</h2>
                 <div className="space-y-3">
                   {activeByStudent.map((s) => {
-                    const pct = gross > 0 ? Math.round((s.total / gross) * 100) : 0;
+                    const pct =
+                      gross > 0
+                        ? Math.min(100, Math.max(0, Math.round((s.total / gross) * 100)))
+                        : 0;
                     return (
                       <div key={s.student_id} className="flex items-center gap-3">
                         <div className="w-36 text-sm font-medium text-gray-800 truncate">
@@ -778,7 +783,7 @@ function FinanceView() {
                           {formatUAH(s.total)}
                         </div>
                         <div className="text-xs text-gray-400 w-16 text-right">
-                          {s.count} уроків
+                          {s.count} {lessonsWordUA(Math.abs(s.count))}
                         </div>
                       </div>
                     );

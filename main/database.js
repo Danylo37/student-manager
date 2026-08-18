@@ -710,6 +710,7 @@ function getCashByDay(startDate, endDate) {
     FROM payment_bundles
     WHERE ${PAID_AT()} >= datetime(?) AND ${PAID_AT()} < datetime(?)
     GROUP BY day
+    HAVING SUM(total_price) <> 0 OR SUM(lessons_count) <> 0
     ORDER BY day ASC
   `,
     )
@@ -729,6 +730,7 @@ function getCashByStudent(startDate, endDate) {
     LEFT JOIN students s ON s.id = b.student_id
     WHERE ${PAID_AT('b.')} >= datetime(?) AND ${PAID_AT('b.')} < datetime(?)
     GROUP BY COALESCE(s.id, -1)
+    HAVING SUM(b.total_price) <> 0 OR SUM(b.lessons_count) <> 0
     ORDER BY total DESC
   `,
     )
