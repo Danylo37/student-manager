@@ -7,6 +7,7 @@ import {
   DEFAULT_SINGLE_TAX_RATE,
   DEFAULT_MILITARY_TAX_RATE,
 } from '@/utils/financials';
+import { submitOnEnter } from '@/utils/keyboard';
 import Modal from './Modal';
 import type { TaxSettings } from '@/types';
 
@@ -37,6 +38,8 @@ function TaxSettingsModal() {
   }, [taxSettings, isOpen]);
 
   const handleSave = async () => {
+    if (saving) return;
+
     const esvFixed = esvType === 'fixed' ? (parseInputToKopiyky(esvFixedStr) ?? 0) : 0;
 
     const singleRate = parseFloat(singleRateStr.replace(',', '.')) || 0;
@@ -70,7 +73,7 @@ function TaxSettingsModal() {
       title="Налаштування податків"
       size="sm"
     >
-      <div className="space-y-5">
+      <div className="space-y-5" onKeyDown={submitOnEnter(() => void handleSave())}>
         {/* Single tax (єдиний податок) */}
         <div className="border border-gray-200 rounded-lg p-4 space-y-3">
           <h3 className="font-semibold text-gray-800">Єдиний податок</h3>

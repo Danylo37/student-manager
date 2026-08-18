@@ -4,6 +4,7 @@ import useAppStore from '@/store/appStore';
 import useStudents from '@/hooks/useStudents';
 import { useNotification } from '../common/NotificationProvider';
 import { formatUAH, parseInputToKopiyky, kopiykyToInput } from '@/utils/financials';
+import { submitOnEnter } from '@/utils/keyboard';
 import Modal from './Modal';
 import type { Discount } from '@/types';
 
@@ -152,6 +153,7 @@ function StudentsListModal() {
                             inputMode="numeric"
                             value={balanceStr}
                             onChange={(e) => setBalanceStr(e.target.value)}
+                            onKeyDown={submitOnEnter(() => void handleBalanceSubmit(student.id))}
                             onFocus={(e) => e.target.select()}
                             className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
                             placeholder="±0"
@@ -174,6 +176,7 @@ function StudentsListModal() {
                             inputMode="decimal"
                             value={priceStr}
                             onChange={(e) => setPriceStr(e.target.value)}
+                            onKeyDown={submitOnEnter(() => void handlePriceSubmit(student.id))}
                             onFocus={(e) => e.target.select()}
                             className="w-28 pl-2 pr-6 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
                             placeholder="350.00"

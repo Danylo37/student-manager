@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import useAppStore from '@/store/appStore';
 import { useNotification } from '../common/NotificationProvider';
 import { formatUAH, parseInputToKopiyky, pricePerLesson } from '@/utils/financials';
+import { submitOnEnter } from '@/utils/keyboard';
 import Modal from './Modal';
 import type { Discount } from '@/types';
 
@@ -36,6 +37,7 @@ function DiscountsModal() {
   }, [isOpen, student, loadDiscounts]);
 
   const handleAdd = async () => {
+    if (adding) return;
     setFormError(null);
     const count = parseInt(countStr);
     const totalKopiyky = parseInputToKopiyky(totalStr);
@@ -135,7 +137,10 @@ function DiscountsModal() {
         )}
 
         {/* Add form */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+        <div
+          className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3"
+          onKeyDown={submitOnEnter(() => void handleAdd())}
+        >
           <h3 className="font-semibold text-gray-700 text-sm">Новий пакет</h3>
           <div className="flex gap-2 items-start flex-wrap">
             <div className="flex flex-col gap-1">

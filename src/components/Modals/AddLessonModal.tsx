@@ -5,6 +5,7 @@ import useLessons from '@/hooks/useLessons';
 import { useNotification } from '../common/NotificationProvider';
 import { shouldBeCompleted } from '@/utils/lessonStatus';
 import { DatePickerInput, TimePickerInput } from '../common/DateTimePicker';
+import { submitOnEnter } from '@/utils/keyboard';
 import Modal from './Modal';
 
 /**
@@ -54,8 +55,10 @@ function AddLessonModal() {
     }
   };
 
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
+    e?.preventDefault();
+
+    if (loading) return;
 
     if (!studentId) {
       setError('Оберіть учня');
@@ -122,7 +125,11 @@ function AddLessonModal() {
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Додати урок" size="md">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        onKeyDown={submitOnEnter(() => void handleSubmit())}
+        className="space-y-4"
+      >
         {/* Student select */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Учень *</label>

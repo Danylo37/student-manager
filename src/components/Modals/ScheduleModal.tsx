@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import useAppStore from '@/store/appStore';
 import { TimePickerInput } from '../common/DateTimePicker';
 import { useNotification } from '../common/NotificationProvider';
+import { submitOnEnter } from '@/utils/keyboard';
 import Modal from './Modal';
 
 interface DayOfWeek {
@@ -60,9 +61,11 @@ function ScheduleModal() {
     })();
   }, [isOpen, selectedStudent, loadSchedules]);
 
-  const handleAdd = async (e: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
-    e.preventDefault();
+  const handleAdd = async (e?: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
+    e?.preventDefault();
     setError(null);
+
+    if (loading) return;
 
     if (!time || !selectedStudent) {
       setError('Оберіть час');
@@ -177,7 +180,11 @@ function ScheduleModal() {
         {/* Add new schedule */}
         <div className="bg-blue-50 p-4 rounded-lg">
           <h3 className="font-bold text-gray-800 mb-3">Додати день уроку</h3>
-          <form onSubmit={handleAdd} className="flex gap-3">
+          <form
+            onSubmit={handleAdd}
+            onKeyDown={submitOnEnter(() => void handleAdd())}
+            className="flex gap-3"
+          >
             <select
               value={dayOfWeek}
               onChange={(e) => setDayOfWeek(parseInt(e.target.value))}

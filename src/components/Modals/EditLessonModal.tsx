@@ -5,6 +5,7 @@ import useStudents from '@/hooks/useStudents';
 import { getLessonStatus, getStatusLabel, shouldBeCompleted } from '@/utils/lessonStatus';
 import { DatePickerInput, TimePickerInput } from '../common/DateTimePicker';
 import { useNotification } from '../common/NotificationProvider';
+import { submitOnEnter } from '@/utils/keyboard';
 import Modal from './Modal';
 
 /**
@@ -31,10 +32,10 @@ function EditLessonModal() {
     }
   }, [selectedLesson]);
 
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
+    e?.preventDefault();
 
-    if (!selectedLesson) return;
+    if (loading || !selectedLesson) return;
 
     if (!date || !time) {
       setError('Вкажіть дату та час');
@@ -113,7 +114,11 @@ function EditLessonModal() {
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Редагувати урок" size="md">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        onKeyDown={submitOnEnter(() => void handleSubmit())}
+        className="space-y-4"
+      >
         {/* Student info (read-only) */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <div className="text-sm text-gray-600">Учень</div>
