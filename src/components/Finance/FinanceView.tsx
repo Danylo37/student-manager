@@ -283,9 +283,35 @@ function IncomeSimulator() {
       return sum + simK * monthlyLessons(s.id);
     }, 0),
   );
+  // Students excluded from taxes still earn, they just stay out of the tax base.
+  const currentTaxable = Math.round(
+    students.reduce(
+      (sum, s) => (s.is_tax_exempt ? sum : sum + (s.current_price ?? 0) * monthlyLessons(s.id)),
+      0,
+    ),
+  );
+  const simulatedTaxable = Math.round(
+    students.reduce((sum, s) => {
+      if (s.is_tax_exempt) return sum;
+      const simK = parseInputToKopiyky(simulatedPrices[s.id] ?? '') ?? s.current_price ?? 0;
+      return sum + simK * monthlyLessons(s.id);
+    }, 0),
+  );
   const diff = simulatedMonthly - currentMonthly;
-  const { net: currentNet } = calculateNetEarnings(currentMonthly, taxSettings, 'month');
-  const { net: simulatedNet } = calculateNetEarnings(simulatedMonthly, taxSettings, 'month');
+  const { net: currentNet } = calculateNetEarnings(
+    currentMonthly,
+    taxSettings,
+    'month',
+    undefined,
+    currentTaxable,
+  );
+  const { net: simulatedNet } = calculateNetEarnings(
+    simulatedMonthly,
+    taxSettings,
+    'month',
+    undefined,
+    simulatedTaxable,
+  );
   const netDiff = simulatedNet - currentNet;
   const studentsWithData = students.filter((s) => s.current_price || weeklyLessons[s.id]);
 
@@ -549,10 +575,13 @@ function FinanceView() {
   const activeByDay = isCash ? cashByDay : byDay;
   const activeByStudent = isCash ? cashByStudent : byStudent;
 
-  // Taxes always follow the cash, whichever view is on screen.
-  const taxBase = cash?.total ?? 0;
+  // Taxes always follow the cash, whichever view is on screen. Money from students
+  // excluded from taxes is still cash, it simply carries no ЄП/ВЗ and lands in the net.
+  const cashTotal = cash?.total ?? 0;
+  const taxableCash = cash?.taxable ?? cashTotal;
+  const exemptCash = cashTotal - taxableCash;
   const { net, taxTotal, fixedTaxAmount, singleTaxAmount, militaryTaxAmount } =
-    calculateNetEarnings(taxBase, taxSettings, period, taxMonths);
+    calculateNetEarnings(cashTotal, taxSettings, period, taxMonths, taxableCash);
 
   // Breakdown line under the tax card: only the taxes that actually charged something
   const taxParts = [
@@ -730,6 +759,15 @@ function FinanceView() {
                   ? 'оплати наперед: уроки будуть у наступних періодах'
                   : 'уроки, оплачені раніше: гроші зайшли в попередніх періодах'}
                 . Податки рахуються з каси, бо ФОП декларує дохід за датою отримання грошей.
+              </div>
+            )}
+
+            {/* Income excluded from the tax base */}
+            {hasTax && exemptCash !== 0 && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-500 text-sm">
+                ℹ️ {formatUAH(exemptCash)} — оплати учнів без податків. ЄП і ВЗ рахуються з{' '}
+                {formatUAH(taxableCash)}, а ця сума йде в нетто повністю. ЄСВ не залежить від учнів
+                і нараховується як завжди.
               </div>
             )}
 

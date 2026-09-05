@@ -67,6 +67,9 @@ function addMissingColumns() {
     ['tax_settings', 'single_tax_rate', 'REAL DEFAULT 5.0'],
     // Payments made before paid_at existed happened when they were recorded.
     ['payment_bundles', 'paid_at', 'DATETIME', 'UPDATE payment_bundles SET paid_at = created_at'],
+    // Nobody was exempt before the flag existed, so the default already backfills it.
+    ['students', 'is_tax_exempt', 'INTEGER DEFAULT 0'],
+    ['payment_bundles', 'is_tax_exempt', 'INTEGER DEFAULT 0'],
   ];
 
   for (const [table, column, definition, backfill] of additions) {
@@ -333,6 +336,16 @@ function updateStudentBalance(studentId, amount) {
   db.prepare('UPDATE students SET balance = balance + ? WHERE id = ?').run(amount, studentId);
 }
 
+/**
+ * Keep a student's money out of the percentage tax base (єдиний податок + військовий
+ * збір). Each payment snapshots the flag when it is recorded, so this only affects
+ * payments made from now on.
+ */
+function setStudentTaxExempt(studentId, exempt) {
+  db.prepare('UPDATE students SET is_tax_exempt = ? WHERE id = ?').run(exempt ? 1 : 0, studentId);
+  logger.info('Student tax exemption changed', { studentId, exempt: exempt ? 1 : 0 });
+}
+
 function getUnpaidCompletedLessons(studentId) {
   return db
     .prepare(
@@ -461,14 +474,19 @@ function createPaymentBundle(studentId, count, totalPriceKopiyky = null, paidAt 
   // and is never consumed by a lesson.
   const sign = count < 0 ? -1 : 1;
 
+  // Snapshot the student's tax exemption: the tax base of a period is settled when
+  // the money arrives, so flipping the flag later must not rewrite it.
+  const student = db.prepare('SELECT is_tax_exempt FROM students WHERE id = ?').get(studentId);
+  const isTaxExempt = student && student.is_tax_exempt ? 1 : 0;
+
   const result = db
     .prepare(
       `
-    INSERT INTO payment_bundles (student_id, total_price, lessons_count, paid_at)
-    VALUES (?, ?, ?, COALESCE(?, datetime('now')))
+    INSERT INTO payment_bundles (student_id, total_price, lessons_count, is_tax_exempt, paid_at)
+    VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')))
   `,
     )
-    .run(studentId, sign * Math.abs(total), sign * lessons, paidAt);
+    .run(studentId, sign * Math.abs(total), sign * lessons, isTaxExempt, paidAt);
 
   logger.info('Payment bundle created', {
     studentId,
@@ -684,12 +702,16 @@ const IS_INCOME = (t = '') => `${t}is_completed = 1 AND ${t}is_paid = 1 AND ${t}
 /** Payment date, falling back to the row's creation for pre-paid_at bundles. */
 const PAID_AT = (t = '') => `datetime(COALESCE(${t}paid_at, ${t}created_at))`;
 
+/** A payment feeds the percentage tax base unless its student was exempt when it came in. */
+const IS_TAXABLE = (t = '') => `COALESCE(${t}is_tax_exempt, 0) = 0`;
+
 function getCashStats(startDate, endDate) {
   return db
     .prepare(
       `
     SELECT
       COALESCE(SUM(total_price), 0)   AS total,
+      COALESCE(SUM(CASE WHEN ${IS_TAXABLE()} THEN total_price END), 0) AS taxable,
       COALESCE(SUM(lessons_count), 0) AS lessons,
       COUNT(*)                        AS payments
     FROM payment_bundles
@@ -1244,6 +1266,7 @@ module.exports = {
   getStudents,
   addStudent,
   updateStudentBalance,
+  setStudentTaxExempt,
   markOldestUnpaidLessonsAsPaid,
   deleteStudent,
   // Lesson prices

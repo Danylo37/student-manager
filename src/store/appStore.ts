@@ -88,6 +88,11 @@ const useAppStore = create<AppState>((set, get) => ({
     await get().loadLessons();
   },
 
+  setStudentTaxExempt: async (studentId, exempt) => {
+    await window.electron.setStudentTaxExempt(studentId, exempt);
+    await get().loadStudents();
+  },
+
   // # Lessons
 
   loadLessons: async () => {

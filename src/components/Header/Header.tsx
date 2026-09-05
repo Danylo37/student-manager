@@ -16,6 +16,7 @@ function Header() {
   const taxSettings = useAppStore((s) => s.taxSettings);
   const taxStart = useAppStore((s) => s.taxStart);
   const currentWeek = useAppStore((s) => s.currentWeek);
+  const students = useAppStore((s) => s.students);
 
   const [syncing, setSyncing] = useState(false);
 
@@ -24,8 +25,14 @@ function Header() {
   weekEnd.setDate(weekEnd.getDate() + 6);
 
   // Weekly earnings in kopiyky (only paid, completed lessons with price set)
-  const weekGrossKopiyky = lessons
-    .filter((l) => l.is_completed && l.is_paid && l.price != null)
+  const weekPaidLessons = lessons.filter((l) => l.is_completed && l.is_paid && l.price != null);
+  const weekGrossKopiyky = weekPaidLessons.reduce((sum, l) => sum + (l.price ?? 0), 0);
+
+  // Students excluded from taxes stay out of the ЄП/ВЗ base. This badge counts lessons,
+  // not payments, so it follows the student's flag today rather than a payment snapshot.
+  const exemptStudentIds = new Set(students.filter((s) => s.is_tax_exempt).map((s) => s.id));
+  const weekTaxableKopiyky = weekPaidLessons
+    .filter((l) => l.student_id == null || !exemptStudentIds.has(l.student_id))
     .reduce((sum, l) => sum + (l.price ?? 0), 0);
 
   // Week end is exclusive for the tax helper
@@ -37,6 +44,7 @@ function Header() {
     taxSettings,
     'week',
     getFixedTaxMonths('week', taxStart, weekStart.toISOString(), weekEndExclusive.toISOString()),
+    weekTaxableKopiyky,
   );
 
   const hasTax =

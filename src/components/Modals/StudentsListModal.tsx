@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Calendar, DollarSign, Tag } from 'lucide-react';
+import { Calendar, DollarSign, Tag, Percent } from 'lucide-react';
 import useAppStore from '@/store/appStore';
 import useStudents from '@/hooks/useStudents';
 import { useNotification } from '../common/NotificationProvider';
 import { formatUAH, parseInputToKopiyky, kopiykyToInput } from '@/utils/financials';
 import { submitOnEnter } from '@/utils/keyboard';
 import Modal from './Modal';
-import type { Discount } from '@/types';
+import type { Discount, Student } from '@/types';
 
 type EditMode = 'balance' | 'price' | null;
 
@@ -17,6 +17,7 @@ function StudentsListModal() {
   const selectStudentForSchedule = useAppStore((s) => s.selectStudentForSchedule);
   const selectStudentForDiscounts = useAppStore((s) => s.selectStudentForDiscounts);
   const { students, searchStudents, deleteStudent, updateBalance } = useStudents();
+  const setStudentTaxExempt = useAppStore((s) => s.setStudentTaxExempt);
   const { showToast, showConfirm } = useNotification();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -89,6 +90,22 @@ function StudentsListModal() {
     }
   };
 
+  /** Only new payments follow the flag: each one snapshots it when it is recorded. */
+  const handleToggleTaxExempt = async (student: Student) => {
+    const exempt = !student.is_tax_exempt;
+    try {
+      await setStudentTaxExempt(student.id, exempt);
+      showToast(
+        exempt
+          ? `Нові оплати "${student.name}" не оподатковуються`
+          : `Нові оплати "${student.name}" знову оподатковуються`,
+        'success',
+      );
+    } catch {
+      showToast('Помилка при зміні податків!', 'error');
+    }
+  };
+
   const filteredStudents = searchStudents(searchQuery);
 
   const handleClose = () => {
@@ -139,6 +156,11 @@ function StudentsListModal() {
                         </span>
                       ) : (
                         <span className="text-gray-400 italic text-xs">Ціна не вказана</span>
+                      )}
+                      {!!student.is_tax_exempt && (
+                        <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs font-medium">
+                          🚫 без податків
+                        </span>
                       )}
                     </div>
                   </div>
@@ -206,6 +228,17 @@ function StudentsListModal() {
                           className="px-3 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded text-sm font-medium flex items-center gap-1"
                         >
                           <DollarSign size={14} /> Ціна
+                        </button>
+                        <button
+                          onClick={() => handleToggleTaxExempt(student)}
+                          title={
+                            student.is_tax_exempt
+                              ? 'Дохід не входить у базу податків. Натисніть, щоб повернути'
+                              : 'Виключити з бази податків (ЄП + ВЗ)'
+                          }
+                          className={`px-3 py-1 rounded text-sm font-medium ${student.is_tax_exempt ? 'bg-amber-100 hover:bg-amber-200 text-amber-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-500'}`}
+                        >
+                          <Percent size={14} />
                         </button>
                         <button
                           onClick={() => selectStudentForDiscounts(student)}

@@ -117,6 +117,9 @@ function registerIpcHandlers() {
   handle('db:mark-unpaid-lessons-paid', (_, studentId, count) =>
     db.markOldestUnpaidLessonsAsPaid(studentId, count),
   );
+  handle('db:set-student-tax-exempt', (_, studentId, exempt) =>
+    db.setStudentTaxExempt(studentId, exempt),
+  );
   handle('db:delete-student', (_, studentId) => db.deleteStudent(studentId));
 
   // # Lesson prices

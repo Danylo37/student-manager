@@ -1,8 +1,10 @@
 -- # STUDENTS
+-- is_tax_exempt: payments from this student stay out of the percentage tax base.
 CREATE TABLE IF NOT EXISTS students (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   balance INTEGER DEFAULT 0,
+  is_tax_exempt INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -14,12 +16,15 @@ CREATE TABLE IF NOT EXISTS students (
 -- because a ФОП declares income by payment date, not by lesson date.
 -- A refund is a row with negative lessons_count and total_price; it is never
 -- consumed by lessons and simply reduces the cash of its period.
+-- is_tax_exempt snapshots the student's flag when the payment is recorded, so the
+-- tax base of a past period never changes and survives the student's deletion.
 CREATE TABLE IF NOT EXISTS payment_bundles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER,
   total_price INTEGER NOT NULL, -- kopiyky
   lessons_count INTEGER NOT NULL,
   lessons_used INTEGER DEFAULT 0,
+  is_tax_exempt INTEGER DEFAULT 0,
   paid_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE SET NULL

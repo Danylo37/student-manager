@@ -59,12 +59,16 @@ export interface EarningsBreakdown {
  * @param months        - how many months the fixed monthly tax (ЄСВ) is due for
  *                        inside the period. Use countChargeableMonths() to get it.
  *                        Omit to fall back to a whole calendar period.
+ * @param taxableKopiyky - the part of the gross the percentage taxes are charged on.
+ *                        Money from tax-exempt students is left out of it and goes
+ *                        into the net whole. ЄСВ is fixed and stays untouched.
  */
 export function calculateNetEarnings(
   grossKopiyky: number,
   tax: TaxSettings | null,
   period: EarningsPeriod = 'month',
   months?: number,
+  taxableKopiyky: number = grossKopiyky,
 ): EarningsBreakdown {
   if (!tax) {
     return {
@@ -82,7 +86,7 @@ export function calculateNetEarnings(
   let fixedMonthlyKopiyky = 0;
   if (tax.esv_type === 'fixed') fixedMonthlyKopiyky += tax.esv_fixed;
 
-  // Percentage taxes (applied to gross)
+  // Percentage taxes (applied to the taxable part of the gross)
   const singleRate = tax.single_tax_enabled ? (tax.single_tax_rate ?? 0) : 0;
   const militaryRate = tax.military_tax_enabled ? (tax.military_tax_rate ?? 0) : 0;
 
@@ -99,8 +103,8 @@ export function calculateNetEarnings(
 
   const multiplier = months ?? fallbackMultiplier[period];
   const fixedTaxAmount = Math.round(fixedMonthlyKopiyky * multiplier);
-  const singleTaxAmount = Math.round((grossKopiyky * singleRate) / 100);
-  const militaryTaxAmount = Math.round((grossKopiyky * militaryRate) / 100);
+  const singleTaxAmount = Math.round((taxableKopiyky * singleRate) / 100);
+  const militaryTaxAmount = Math.round((taxableKopiyky * militaryRate) / 100);
   const percentageTaxAmount = singleTaxAmount + militaryTaxAmount;
   const taxTotal = fixedTaxAmount + percentageTaxAmount;
   const net = Math.max(0, grossKopiyky - taxTotal);

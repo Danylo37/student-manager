@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.invoke('db:pay-for-lessons', studentId, amount, totalPriceKopiyky),
   markUnpaidLessonsPaid: (studentId, count) =>
     ipcRenderer.invoke('db:mark-unpaid-lessons-paid', studentId, count),
+  setStudentTaxExempt: (studentId, exempt) =>
+    ipcRenderer.invoke('db:set-student-tax-exempt', studentId, exempt),
   deleteStudent: (studentId) => ipcRenderer.invoke('db:delete-student', studentId),
 
   // Lesson prices

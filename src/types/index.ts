@@ -6,6 +6,8 @@ export interface Student {
   id: number;
   name: string;
   balance: number;
+  /** 0 | 1 — payments from this student stay out of the percentage tax base. */
+  is_tax_exempt: number;
   created_at: string;
   completed_lessons_count?: number;
   current_price?: number | null; // kopiyky
@@ -117,6 +119,7 @@ export interface EarningsByStudent {
 /** Money actually received in a period — the tax base (касовий метод). */
 export interface CashStats {
   total: number; // kopiyky
+  taxable: number; // kopiyky; the part of total the percentage taxes are charged on
   lessons: number; // lessons bought
   payments: number; // number of payments
 }
@@ -169,6 +172,7 @@ export interface ElectronAPI {
     totalPriceKopiyky: number | null,
   ) => Promise<void>;
   markUnpaidLessonsPaid: (studentId: number, count: number) => Promise<void>;
+  setStudentTaxExempt: (studentId: number, exempt: boolean) => Promise<void>;
   deleteStudent: (studentId: number) => Promise<void>;
 
   // Lesson prices (all in kopiyky)
@@ -280,6 +284,7 @@ export interface AppState {
   addStudent: (name: string, balance: number, priceKopiyky?: number | null) => Promise<void>;
   deleteStudent: (studentId: number) => Promise<void>;
   updateBalance: (studentId: number, amount: number) => Promise<void>;
+  setStudentTaxExempt: (studentId: number, exempt: boolean) => Promise<void>;
 
   // Actions — Lessons
   loadLessons: () => Promise<void>;
