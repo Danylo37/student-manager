@@ -9,6 +9,8 @@ import type { Discount } from '@/types';
 function DiscountsModal() {
   const isOpen = useAppStore((s) => s.modals.discounts);
   const closeModal = useAppStore((s) => s.closeModal);
+  const openModal = useAppStore((s) => s.openModal);
+  const returnToList = useAppStore((s) => s.returnToStudentsList);
   const student = useAppStore((s) => s.selectedStudentForDiscounts);
   const { showToast, showConfirm } = useNotification();
 
@@ -124,7 +126,20 @@ function DiscountsModal() {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={() => closeModal('discounts')} title={`Знижки: ${student.name}`} size="md">
+    <Modal
+      isOpen={isOpen}
+      onClose={() => closeModal('discounts')}
+      onBack={
+        returnToList
+          ? () => {
+              closeModal('discounts');
+              openModal('studentsList');
+            }
+          : undefined
+      }
+      title={`Знижки: ${student.name}`}
+      size="md"
+    >
       <div className="space-y-5">
         {basePrice != null ? (
           <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">

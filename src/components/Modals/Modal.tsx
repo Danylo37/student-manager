@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { ArrowLeft } from 'lucide-react';
 
 interface ModalProps {
   isOpen: boolean;
@@ -6,12 +7,14 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** Shows a back arrow next to the title — for modals reached from another one. */
+  onBack?: () => void;
 }
 
 /**
  * Base modal component with overlay
  */
-function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
+function Modal({ isOpen, onClose, title, children, size = 'md', onBack }: ModalProps) {
   // Close on Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent): void => {
@@ -46,7 +49,18 @@ function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
+          <div className="flex items-center gap-3 min-w-0">
+            {onBack && (
+              <button
+                onClick={onBack}
+                title="Назад до списку учнів"
+                className="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 flex-shrink-0"
+              >
+                <ArrowLeft size={20} />
+              </button>
+            )}
+            <h2 className="text-2xl font-bold text-gray-800 truncate">{title}</h2>
+          </div>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center"

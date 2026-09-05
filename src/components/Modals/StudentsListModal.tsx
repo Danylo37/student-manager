@@ -25,6 +25,7 @@ function StudentsListModal() {
   const closeModal = useAppStore((s) => s.closeModal);
   const openModal = useAppStore((s) => s.openModal);
   const openAddLessonModal = useAppStore((s) => s.openAddLessonModal);
+  const setReturnToStudentsList = useAppStore((s) => s.setReturnToStudentsList);
   const selectStudentForSchedule = useAppStore((s) => s.selectStudentForSchedule);
   const selectStudentForDiscounts = useAppStore((s) => s.selectStudentForDiscounts);
   const { students, searchStudents, deleteStudent, updateBalance } = useStudents();
@@ -133,6 +134,7 @@ function StudentsListModal() {
       icon: <Calendar size={14} />,
       label: 'Розклад',
       onClick: () => {
+        setReturnToStudentsList(true);
         selectStudentForSchedule(student);
         handleClose();
         openModal('schedule');
@@ -142,6 +144,7 @@ function StudentsListModal() {
       icon: <CalendarPlus size={14} />,
       label: 'Створити урок',
       onClick: () => {
+        setReturnToStudentsList(true);
         handleClose();
         openAddLessonModal(null, student.id);
       },
@@ -158,7 +161,10 @@ function StudentsListModal() {
     {
       icon: <Tag size={14} />,
       label: 'Знижки',
-      onClick: () => selectStudentForDiscounts(student),
+      onClick: () => {
+        setReturnToStudentsList(true);
+        selectStudentForDiscounts(student);
+      },
     },
     // Pointless while every tax is off, so it stays out of the menu until one is on.
     ...(taxesOn

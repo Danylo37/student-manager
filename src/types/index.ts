@@ -274,6 +274,8 @@ export interface AppState {
   selectedStudentForDiscounts: Student | null;
   prefilledLessonDateTime: Date | null;
   prefilledLessonStudentId: number | null;
+  /** The open modal was reached from the students list, so it offers a way back. */
+  returnToStudentsList: boolean;
 
   theme: Theme;
   taxSettings: TaxSettings | null;
@@ -313,6 +315,7 @@ export interface AppState {
   // Actions — Modals
   openModal: (modalName: ModalName) => void;
   openAddLessonModal: (datetime: Date | null, studentId?: number) => void;
+  setReturnToStudentsList: (value: boolean) => void;
   closeModal: (modalName: ModalName) => void;
   selectLesson: (lesson: Lesson) => void;
   selectStudentForSchedule: (student: Student) => void;

@@ -46,6 +46,7 @@ const useAppStore = create<AppState>((set, get) => ({
   selectedStudentForDiscounts: null,
   prefilledLessonDateTime: null,
   prefilledLessonStudentId: null,
+  returnToStudentsList: false,
 
   theme: (localStorage.getItem('theme') as Theme) || 'default',
   taxSettings: null,
@@ -240,6 +241,8 @@ const useAppStore = create<AppState>((set, get) => ({
 
   openModal: (modalName) => set((state) => ({ modals: { ...state.modals, [modalName]: true } })),
 
+  setReturnToStudentsList: (value) => set({ returnToStudentsList: value }),
+
   openAddLessonModal: (datetime, studentId) => {
     set({ prefilledLessonDateTime: datetime, prefilledLessonStudentId: studentId ?? null });
     set((state) => ({ modals: { ...state.modals, addLesson: true } }));
@@ -247,6 +250,8 @@ const useAppStore = create<AppState>((set, get) => ({
 
   closeModal: (modalName) => {
     set((state) => ({ modals: { ...state.modals, [modalName]: false } }));
+    // Closing the list itself keeps the flag: it is set right before the list closes.
+    if (modalName !== 'studentsList') set({ returnToStudentsList: false });
     if (modalName === 'editLesson') set({ selectedLesson: null });
     if (modalName === 'schedule') set({ selectedStudentForSchedule: null, schedules: [] });
     if (modalName === 'discounts') set({ selectedStudentForDiscounts: null });

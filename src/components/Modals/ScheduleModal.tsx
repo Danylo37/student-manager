@@ -26,6 +26,8 @@ const DAYS_OF_WEEK: DayOfWeek[] = [
 function ScheduleModal() {
   const isOpen = useAppStore((state) => state.modals.schedule);
   const closeModal = useAppStore((state) => state.closeModal);
+  const openModal = useAppStore((state) => state.openModal);
+  const returnToList = useAppStore((state) => state.returnToStudentsList);
   const selectedStudent = useAppStore((state) => state.selectedStudentForSchedule);
   const loadSchedules = useAppStore((state) => state.loadSchedules);
   const addSchedule = useAppStore((state) => state.addSchedule);
@@ -151,6 +153,11 @@ function ScheduleModal() {
     closeModal('schedule');
   };
 
+  const handleBack = (): void => {
+    handleClose();
+    openModal('studentsList');
+  };
+
   if (!selectedStudent) return null;
 
   const activeSchedulesByDay = DAYS_OF_WEEK.map((day) => ({
@@ -173,6 +180,7 @@ function ScheduleModal() {
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
+      onBack={returnToList ? handleBack : undefined}
       title={`Розклад: ${selectedStudent.name}`}
       size="lg"
     >

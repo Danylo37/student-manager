@@ -14,6 +14,8 @@ import Modal from './Modal';
 function AddLessonModal() {
   const isOpen = useAppStore((state) => state.modals.addLesson);
   const closeModal = useAppStore((state) => state.closeModal);
+  const openModal = useAppStore((state) => state.openModal);
+  const returnToList = useAppStore((state) => state.returnToStudentsList);
   const prefilledDateTime = useAppStore((state) => state.prefilledLessonDateTime);
   const prefilledStudentId = useAppStore((state) => state.prefilledLessonStudentId);
   const { students } = useStudents();
@@ -114,6 +116,11 @@ function AddLessonModal() {
     closeModal('addLesson');
   };
 
+  const handleBack = (): void => {
+    handleClose();
+    openModal('studentsList');
+  };
+
   const selectedStudent = students.find((s) => s.id === parseInt(studentId));
 
   const datetime =
@@ -127,7 +134,13 @@ function AddLessonModal() {
   const isPastTime = datetime ? shouldBeCompleted(datetime.toISOString()) : false;
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Додати урок" size="md">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      onBack={returnToList ? handleBack : undefined}
+      title="Додати урок"
+      size="md"
+    >
       <form
         onSubmit={handleSubmit}
         onKeyDown={submitOnEnter(() => void handleSubmit())}
