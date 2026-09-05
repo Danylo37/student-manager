@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { RefreshCw, Users, Palette, BarChart2, CalendarDays } from 'lucide-react';
 import { formatDateWithMonth } from '@/utils/dateHelpers';
-import { calculateNetEarnings, getFixedTaxMonths, formatUAH } from '@/utils/financials';
+import { calculateNetEarnings, getFixedTaxMonths, formatUAH, hasAnyTax } from '@/utils/financials';
 import useLessons from '@/hooks/useLessons';
 import useAppStore from '@/store/appStore';
 
@@ -47,11 +47,7 @@ function Header() {
     weekTaxableKopiyky,
   );
 
-  const hasTax =
-    taxSettings &&
-    (taxSettings.esv_type !== 'none' ||
-      !!taxSettings.single_tax_enabled ||
-      !!taxSettings.military_tax_enabled);
+  const hasTax = hasAnyTax(taxSettings);
 
   // syncLessons already reloads lessons and students, and the reload bumps
   // dataVersion, which is what makes the finance view refetch.

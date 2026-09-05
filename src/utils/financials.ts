@@ -51,6 +51,14 @@ export interface EarningsBreakdown {
   fixedTaxAmount: number; // kopiyky (ESV)
 }
 
+/** Whether any tax is switched on. The settings row always exists, so a null check is not enough. */
+export function hasAnyTax(settings: TaxSettings | null): boolean {
+  if (!settings) return false;
+  return (
+    settings.esv_type !== 'none' || !!settings.single_tax_enabled || !!settings.military_tax_enabled
+  );
+}
+
 /**
  * Calculate net earnings after taxes.
  * @param grossKopiyky  - gross income in kopiyky

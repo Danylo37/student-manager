@@ -4,6 +4,7 @@ import useAppStore from '@/store/appStore';
 import {
   calculateNetEarnings,
   getFixedTaxMonths,
+  hasAnyTax,
   formatUAH,
   formatChange,
   getDateRangeForPeriod,
@@ -598,11 +599,7 @@ function FinanceView() {
     ? `${cashLessons > 0 ? '' : '−'}${Math.abs(cashLessons)} ${lessonsWordUA(Math.abs(cashLessons))} оплачено · база для податків`
     : 'база для податків';
 
-  const hasTax =
-    taxSettings &&
-    (taxSettings.esv_type !== 'none' ||
-      !!taxSettings.single_tax_enabled ||
-      !!taxSettings.military_tax_enabled);
+  const hasTax = hasAnyTax(taxSettings);
 
   const noPrice = (stats?.lessons_total ?? 0) > 0 && (stats?.lessons_with_price ?? 0) === 0;
 
