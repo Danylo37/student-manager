@@ -1,11 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Calendar, DollarSign, Tag, Percent } from 'lucide-react';
+import {
+  Calendar,
+  CalendarPlus,
+  DollarSign,
+  Tag,
+  Percent,
+  Wallet,
+  Trash2,
+  Gift,
+} from 'lucide-react';
 import useAppStore from '@/store/appStore';
 import useStudents from '@/hooks/useStudents';
 import { useNotification } from '../common/NotificationProvider';
-import { formatUAH, parseInputToKopiyky, kopiykyToInput } from '@/utils/financials';
+import { formatUAH, parseInputToKopiyky, kopiykyToInput, hasAnyTax } from '@/utils/financials';
 import { submitOnEnter } from '@/utils/keyboard';
 import Modal from './Modal';
+import ActionMenu, { type ActionMenuItem } from '../common/ActionMenu';
 import type { Discount, Student } from '@/types';
 
 type EditMode = 'balance' | 'price' | null;
@@ -14,10 +24,12 @@ function StudentsListModal() {
   const isOpen = useAppStore((s) => s.modals.studentsList);
   const closeModal = useAppStore((s) => s.closeModal);
   const openModal = useAppStore((s) => s.openModal);
+  const openAddLessonModal = useAppStore((s) => s.openAddLessonModal);
   const selectStudentForSchedule = useAppStore((s) => s.selectStudentForSchedule);
   const selectStudentForDiscounts = useAppStore((s) => s.selectStudentForDiscounts);
   const { students, searchStudents, deleteStudent, updateBalance } = useStudents();
   const setStudentTaxExempt = useAppStore((s) => s.setStudentTaxExempt);
+  const taxSettings = useAppStore((s) => s.taxSettings);
   const { showToast, showConfirm } = useNotification();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,7 +46,8 @@ function StudentsListModal() {
       setDiscountHint(null);
       return;
     }
-    window.electron.findApplicableDiscount(editingStudentId, amount)
+    window.electron
+      .findApplicableDiscount(editingStudentId, amount)
       .then(setDiscountHint)
       .catch(() => setDiscountHint(null));
   }, [balanceStr, editingStudentId, editMode]);
@@ -66,7 +79,10 @@ function StudentsListModal() {
 
   const handleBalanceSubmit = async (studentId: number) => {
     const amount = parseInt(balanceStr);
-    if (!balanceStr || isNaN(amount)) { showToast('Введіть кількість уроків', 'error'); return; }
+    if (!balanceStr || isNaN(amount)) {
+      showToast('Введіть кількість уроків', 'error');
+      return;
+    }
     try {
       await updateBalance(studentId, amount);
       const msg = amount >= 0 ? 'Уроків додано:' : 'Уроків знято:';
@@ -79,7 +95,10 @@ function StudentsListModal() {
 
   const handlePriceSubmit = async (studentId: number) => {
     const kopiyky = parseInputToKopiyky(priceStr);
-    if (kopiyky === null || kopiyky <= 0) { showToast('Введіть коректну ціну', 'error'); return; }
+    if (kopiyky === null || kopiyky <= 0) {
+      showToast('Введіть коректну ціну', 'error');
+      return;
+    }
     try {
       await window.electron.setStudentPrice(studentId, kopiyky);
       await useAppStore.getState().loadStudents();
@@ -107,6 +126,59 @@ function StudentsListModal() {
   };
 
   const filteredStudents = searchStudents(searchQuery);
+  const taxesOn = hasAnyTax(taxSettings);
+
+  const buildActions = (student: Student): ActionMenuItem[] => [
+    {
+      icon: <Calendar size={14} />,
+      label: 'Розклад',
+      onClick: () => {
+        selectStudentForSchedule(student);
+        handleClose();
+        openModal('schedule');
+      },
+    },
+    {
+      icon: <CalendarPlus size={14} />,
+      label: 'Створити урок',
+      onClick: () => {
+        handleClose();
+        openAddLessonModal(null, student.id);
+      },
+    },
+    {
+      icon: <DollarSign size={14} />,
+      label: 'Ціна',
+      onClick: () => {
+        setEditingStudentId(student.id);
+        setEditMode('price');
+        setPriceStr(student.current_price ? kopiykyToInput(student.current_price) : '');
+      },
+    },
+    {
+      icon: <Tag size={14} />,
+      label: 'Знижки',
+      onClick: () => selectStudentForDiscounts(student),
+    },
+    // Pointless while every tax is off, so it stays out of the menu until one is on.
+    ...(taxesOn
+      ? [
+          {
+            icon: <Percent size={14} />,
+            label: 'Не оподатковувати',
+            onClick: () => void handleToggleTaxExempt(student),
+            active: !!student.is_tax_exempt,
+          },
+        ]
+      : []),
+    {
+      icon: <Trash2 size={14} />,
+      label: 'Видалити',
+      onClick: () => void handleDelete(student.id, student.name),
+      danger: true,
+      separatorBefore: true,
+    },
+  ];
 
   const handleClose = () => {
     setSearchQuery('');
@@ -137,7 +209,10 @@ function StudentsListModal() {
             </div>
           ) : (
             filteredStudents.map((student) => (
-              <div key={student.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div
+                key={student.id}
+                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+              >
                 <div className="flex items-center justify-between gap-4">
                   {/* Info */}
                   <div className="flex-1 min-w-0">
@@ -145,21 +220,23 @@ function StudentsListModal() {
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-gray-600">
                       <span>
                         Баланс:{' '}
-                        <span className={`font-bold ${student.balance < 0 ? 'text-red-600' : student.balance < 3 ? 'text-yellow-600' : 'text-green-600'}`}>
+                        <span
+                          className={`font-bold ${student.balance < 0 ? 'text-red-600' : student.balance < 3 ? 'text-yellow-600' : 'text-green-600'}`}
+                        >
                           {student.balance}
                         </span>
                       </span>
                       <span>Проведено: {student.completed_lessons_count ?? 0}</span>
                       {student.current_price != null ? (
                         <span className="text-green-700 font-medium">
-                          💰 {formatUAH(student.current_price)}/урок
+                          {formatUAH(student.current_price)}/урок
                         </span>
                       ) : (
                         <span className="text-gray-400 italic text-xs">Ціна не вказана</span>
                       )}
-                      {!!student.is_tax_exempt && (
-                        <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs font-medium">
-                          🚫 без податків
+                      {taxesOn && !!student.is_tax_exempt && (
+                        <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs font-medium inline-flex items-center gap-1">
+                          <Percent size={12} /> без податків
                         </span>
                       )}
                     </div>
@@ -181,12 +258,23 @@ function StudentsListModal() {
                             placeholder="±0"
                             autoFocus
                           />
-                          <button onClick={() => handleBalanceSubmit(student.id)} className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-sm">✓</button>
-                          <button onClick={stopEditing} className="px-3 py-1 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded text-sm">✕</button>
+                          <button
+                            onClick={() => handleBalanceSubmit(student.id)}
+                            className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-sm"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={stopEditing}
+                            className="px-3 py-1 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded text-sm"
+                          >
+                            ✕
+                          </button>
                         </div>
                         {discountHint && (
-                          <div className="text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
-                            🎁 Знижка: {formatUAH(discountHint.total_price)} за {discountHint.lessons_count} уроки
+                          <div className="text-xs text-green-700 bg-green-50 px-2 py-1 rounded flex items-center gap-1">
+                            <Gift size={12} /> Знижка: {formatUAH(discountHint.total_price)} за{' '}
+                            {discountHint.lessons_count} уроки
                           </div>
                         )}
                       </div>
@@ -204,54 +292,36 @@ function StudentsListModal() {
                             placeholder="350.00"
                             autoFocus
                           />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₴</span>
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
+                            ₴
+                          </span>
                         </div>
-                        <button onClick={() => handlePriceSubmit(student.id)} className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-sm">✓</button>
-                        <button onClick={stopEditing} className="px-3 py-1 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded text-sm">✕</button>
+                        <button
+                          onClick={() => handlePriceSubmit(student.id)}
+                          className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-sm"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={stopEditing}
+                          className="px-3 py-1 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded text-sm"
+                        >
+                          ✕
+                        </button>
                       </div>
                     ) : (
                       <>
                         <button
-                          onClick={() => { selectStudentForSchedule(student); handleClose(); openModal('schedule'); }}
+                          onClick={() => {
+                            setEditingStudentId(student.id);
+                            setEditMode('balance');
+                            setBalanceStr('');
+                          }}
                           className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-sm font-medium flex items-center gap-1"
                         >
-                          <Calendar size={14} /> Розклад
+                          <Wallet size={14} /> Баланс ±
                         </button>
-                        <button
-                          onClick={() => { setEditingStudentId(student.id); setEditMode('balance'); setBalanceStr(''); }}
-                          className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-sm font-medium"
-                        >
-                          Баланс ±
-                        </button>
-                        <button
-                          onClick={() => { setEditingStudentId(student.id); setEditMode('price'); setPriceStr(student.current_price ? kopiykyToInput(student.current_price) : ''); }}
-                          className="px-3 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded text-sm font-medium flex items-center gap-1"
-                        >
-                          <DollarSign size={14} /> Ціна
-                        </button>
-                        <button
-                          onClick={() => handleToggleTaxExempt(student)}
-                          title={
-                            student.is_tax_exempt
-                              ? 'Дохід не входить у базу податків. Натисніть, щоб повернути'
-                              : 'Виключити з бази податків (ЄП + ВЗ)'
-                          }
-                          className={`px-3 py-1 rounded text-sm font-medium ${student.is_tax_exempt ? 'bg-amber-100 hover:bg-amber-200 text-amber-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-500'}`}
-                        >
-                          <Percent size={14} />
-                        </button>
-                        <button
-                          onClick={() => selectStudentForDiscounts(student)}
-                          className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded text-sm font-medium flex items-center gap-1"
-                        >
-                          <Tag size={14} /> Знижки
-                        </button>
-                        <button
-                          onClick={() => handleDelete(student.id, student.name)}
-                          className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-sm font-medium"
-                        >
-                          Видалити
-                        </button>
+                        <ActionMenu items={buildActions(student)} />
                       </>
                     )}
                   </div>

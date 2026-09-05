@@ -45,6 +45,7 @@ const useAppStore = create<AppState>((set, get) => ({
   selectedStudentForSchedule: null,
   selectedStudentForDiscounts: null,
   prefilledLessonDateTime: null,
+  prefilledLessonStudentId: null,
 
   theme: (localStorage.getItem('theme') as Theme) || 'default',
   taxSettings: null,
@@ -239,8 +240,8 @@ const useAppStore = create<AppState>((set, get) => ({
 
   openModal: (modalName) => set((state) => ({ modals: { ...state.modals, [modalName]: true } })),
 
-  openAddLessonModal: (datetime) => {
-    set({ prefilledLessonDateTime: datetime });
+  openAddLessonModal: (datetime, studentId) => {
+    set({ prefilledLessonDateTime: datetime, prefilledLessonStudentId: studentId ?? null });
     set((state) => ({ modals: { ...state.modals, addLesson: true } }));
   },
 
@@ -249,7 +250,8 @@ const useAppStore = create<AppState>((set, get) => ({
     if (modalName === 'editLesson') set({ selectedLesson: null });
     if (modalName === 'schedule') set({ selectedStudentForSchedule: null, schedules: [] });
     if (modalName === 'discounts') set({ selectedStudentForDiscounts: null });
-    if (modalName === 'addLesson') set({ prefilledLessonDateTime: null });
+    if (modalName === 'addLesson')
+      set({ prefilledLessonDateTime: null, prefilledLessonStudentId: null });
   },
 
   selectLesson: (lesson: Lesson) => {

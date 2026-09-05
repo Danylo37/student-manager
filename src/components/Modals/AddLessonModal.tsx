@@ -15,6 +15,7 @@ function AddLessonModal() {
   const isOpen = useAppStore((state) => state.modals.addLesson);
   const closeModal = useAppStore((state) => state.closeModal);
   const prefilledDateTime = useAppStore((state) => state.prefilledLessonDateTime);
+  const prefilledStudentId = useAppStore((state) => state.prefilledLessonStudentId);
   const { students } = useStudents();
   const { addLesson, getNextTimeSlot } = useLessons();
   const { showToast } = useNotification();
@@ -27,6 +28,8 @@ function AddLessonModal() {
 
   useEffect(() => {
     if (isOpen) {
+      setStudentId(prefilledStudentId ? String(prefilledStudentId) : '');
+
       if (prefilledDateTime) {
         setDate(prefilledDateTime);
         setTime(prefilledDateTime);
@@ -42,7 +45,7 @@ function AddLessonModal() {
         setTime(timeDate);
       }
     }
-  }, [isOpen, getNextTimeSlot, prefilledDateTime]);
+  }, [isOpen, getNextTimeSlot, prefilledDateTime, prefilledStudentId]);
 
   const handleDateChange = (newDate: Date | null): void => {
     setDate(newDate);

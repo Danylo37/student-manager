@@ -273,6 +273,7 @@ export interface AppState {
   selectedStudentForSchedule: Student | null;
   selectedStudentForDiscounts: Student | null;
   prefilledLessonDateTime: Date | null;
+  prefilledLessonStudentId: number | null;
 
   theme: Theme;
   taxSettings: TaxSettings | null;
@@ -311,7 +312,7 @@ export interface AppState {
 
   // Actions — Modals
   openModal: (modalName: ModalName) => void;
-  openAddLessonModal: (datetime: Date) => void;
+  openAddLessonModal: (datetime: Date | null, studentId?: number) => void;
   closeModal: (modalName: ModalName) => void;
   selectLesson: (lesson: Lesson) => void;
   selectStudentForSchedule: (student: Student) => void;
