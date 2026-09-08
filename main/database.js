@@ -468,6 +468,18 @@ function setStudentTaxExempt(studentId, exempt) {
   logger.info('Student tax exemption changed', { studentId, exempt: exempt ? 1 : 0 });
 }
 
+function updateStudentName(studentId, name) {
+  db.prepare('UPDATE students SET name = ? WHERE id = ?').run(name, studentId);
+  // The caches are only read after the student is deleted, but keep them current
+  // so the old name never resurfaces later.
+  db.prepare('UPDATE lessons SET student_name_cache = ? WHERE student_id = ?').run(name, studentId);
+  db.prepare('UPDATE balance_history SET student_name_cache = ? WHERE student_id = ?').run(
+    name,
+    studentId,
+  );
+  logger.info('Student renamed', { studentId });
+}
+
 function getUnpaidCompletedLessons(studentId) {
   return db
     .prepare(
@@ -1239,6 +1251,12 @@ function updateLesson(lessonId, updates) {
     }
   }
 
+  // A trial lesson has no student of its own: its name lives on the lesson.
+  if (updates.student_name_cache !== undefined) {
+    fields.push('student_name_cache = ?');
+    values.push(updates.student_name_cache);
+  }
+
   if (updates.datetime !== undefined) {
     if (!current.previous_datetime) {
       fields.push('previous_datetime = ?');
@@ -1533,6 +1551,7 @@ module.exports = {
   addStudent,
   updateStudentBalance,
   setStudentTaxExempt,
+  updateStudentName,
   markOldestUnpaidLessonsAsPaid,
   deleteStudent,
   // Lesson prices

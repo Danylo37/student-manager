@@ -15,20 +15,28 @@ function EditLessonModal() {
   const closeModal = useAppStore((state) => state.closeModal);
   const selectedLesson = useAppStore((state) => state.selectedLesson);
   const { updateLesson, deleteLesson } = useLessons();
+  const updateStudentName = useAppStore((state) => state.updateStudentName);
   const { showToast, showConfirm } = useNotification();
 
   const [date, setDate] = useState<Date | null>(null);
   const [time, setTime] = useState<Date | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<boolean>(false);
+  const [nameStr, setNameStr] = useState<string>('');
+
+  // Keyed on the lesson itself, not on the object: a rename reloads the lessons and
+  // would otherwise throw away a date the teacher has already picked here.
+  const lessonId = selectedLesson?.id;
+  const lessonDatetime = selectedLesson?.datetime;
 
   useEffect(() => {
-    if (selectedLesson) {
-      const lessonDate = new Date(selectedLesson.datetime);
-      setDate(lessonDate);
-      setTime(lessonDate);
-    }
-  }, [selectedLesson]);
+    if (!lessonDatetime) return;
+    const lessonDate = new Date(lessonDatetime);
+    setDate(lessonDate);
+    setTime(lessonDate);
+    setEditingName(false);
+  }, [lessonId, lessonDatetime]);
 
   const handleSubmit = async (e?: React.SyntheticEvent<HTMLFormElement>): Promise<void> => {
     e?.preventDefault();
@@ -95,13 +103,56 @@ function EditLessonModal() {
     }
   };
 
+  /**
+   * A trial lesson has no student: the name it shows is its own. Any other lesson
+   * shows the student's name, so editing it renames the student everywhere.
+   */
+  const handleNameSubmit = async (): Promise<void> => {
+    if (!selectedLesson) return;
+
+    const name = nameStr.trim();
+    if (!name) {
+      showToast("Введіть ім'я", 'error');
+      return;
+    }
+
+    try {
+      if (selectedLesson.is_trial) {
+        await updateLesson(selectedLesson.id, { student_name_cache: name });
+      } else if (selectedLesson.student_id) {
+        await updateStudentName(selectedLesson.student_id, name);
+      }
+      showToast(`Ім'я змінено: ${name}`, 'success');
+      setEditingName(false);
+    } catch (err) {
+      showToast('Помилка при зміні імені!', 'error');
+      console.error(err);
+    }
+  };
+
+  // The form submits on Enter and the modal closes on Escape, so the name field
+  // keeps both keys to itself.
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      void handleNameSubmit();
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();
+      setEditingName(false);
+    }
+  };
+
   const handleClose = (): void => {
     setError(null);
+    setEditingName(false);
     closeModal('editLesson');
   };
 
   if (!selectedLesson) return null;
 
+  // A deleted student's lesson keeps only a cached name — there is nothing to rename.
+  const canRenameStudent = !!selectedLesson.is_trial || selectedLesson.student_id !== null;
   const status = getLessonStatus(selectedLesson);
   const statusLabel = getStatusLabel(status);
 
@@ -112,10 +163,51 @@ function EditLessonModal() {
         onKeyDown={submitOnEnter(() => void handleSubmit())}
         className="space-y-4"
       >
-        {/* Student info (read-only) */}
+        {/* Student */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <div className="text-sm text-gray-600">Учень</div>
-          <div className="text-lg font-bold text-gray-800">{selectedLesson.student_name}</div>
+          {editingName ? (
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="text"
+                value={nameStr}
+                onChange={(e) => setNameStr(e.target.value)}
+                onKeyDown={handleNameKeyDown}
+                onFocus={(e) => e.target.select()}
+                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                placeholder="Ім'я учня"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => void handleNameSubmit()}
+                className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-sm"
+              >
+                ✓
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingName(false)}
+                className="px-3 py-1 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded text-sm"
+              >
+                ✕
+              </button>
+            </div>
+          ) : canRenameStudent ? (
+            <button
+              type="button"
+              onClick={() => {
+                setNameStr(selectedLesson.student_name ?? '');
+                setEditingName(true);
+              }}
+              title="Змінити ім'я"
+              className="text-lg font-bold text-gray-800 hover:underline"
+            >
+              {selectedLesson.student_name}
+            </button>
+          ) : (
+            <div className="text-lg font-bold text-gray-800">{selectedLesson.student_name}</div>
+          )}
           <div className="text-sm text-gray-600 mt-1">
             {selectedLesson.is_trial
               ? `Пробний урок · 30 хв | Статус: ${statusLabel}`

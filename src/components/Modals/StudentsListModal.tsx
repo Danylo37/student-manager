@@ -8,6 +8,7 @@ import {
   Wallet,
   Trash2,
   Gift,
+  Pencil,
 } from 'lucide-react';
 import useAppStore from '@/store/appStore';
 import useStudents from '@/hooks/useStudents';
@@ -18,7 +19,7 @@ import Modal from './Modal';
 import ActionMenu, { type ActionMenuItem } from '../common/ActionMenu';
 import type { Discount, Student } from '@/types';
 
-type EditMode = 'balance' | 'price' | null;
+type EditMode = 'balance' | 'price' | 'name' | null;
 
 function StudentsListModal() {
   const isOpen = useAppStore((s) => s.modals.studentsList);
@@ -29,6 +30,7 @@ function StudentsListModal() {
   const selectStudentForSchedule = useAppStore((s) => s.selectStudentForSchedule);
   const selectStudentForDiscounts = useAppStore((s) => s.selectStudentForDiscounts);
   const { students, searchStudents, deleteStudent, updateBalance } = useStudents();
+  const updateStudentName = useAppStore((s) => s.updateStudentName);
   const setStudentTaxExempt = useAppStore((s) => s.setStudentTaxExempt);
   const taxSettings = useAppStore((s) => s.taxSettings);
   const { showToast, showConfirm } = useNotification();
@@ -38,6 +40,7 @@ function StudentsListModal() {
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [balanceStr, setBalanceStr] = useState('');
   const [priceStr, setPriceStr] = useState('');
+  const [nameStr, setNameStr] = useState('');
   const [discountHint, setDiscountHint] = useState<Discount | null>(null);
 
   // Check for applicable discount when balance amount changes
@@ -58,6 +61,7 @@ function StudentsListModal() {
     setEditMode(null);
     setBalanceStr('');
     setPriceStr('');
+    setNameStr('');
     setDiscountHint(null);
   };
 
@@ -110,6 +114,21 @@ function StudentsListModal() {
     }
   };
 
+  const handleNameSubmit = async (studentId: number) => {
+    const name = nameStr.trim();
+    if (!name) {
+      showToast("Введіть ім'я", 'error');
+      return;
+    }
+    try {
+      await updateStudentName(studentId, name);
+      showToast(`Ім'я змінено: ${name}`, 'success');
+      stopEditing();
+    } catch {
+      showToast('Помилка при зміні імені!', 'error');
+    }
+  };
+
   /** Only new payments follow the flag: each one snapshots it when it is recorded. */
   const handleToggleTaxExempt = async (student: Student) => {
     const exempt = !student.is_tax_exempt;
@@ -130,6 +149,15 @@ function StudentsListModal() {
   const taxesOn = hasAnyTax(taxSettings);
 
   const buildActions = (student: Student): ActionMenuItem[] => [
+    {
+      icon: <Pencil size={14} />,
+      label: 'Перейменувати',
+      onClick: () => {
+        setEditingStudentId(student.id);
+        setEditMode('name');
+        setNameStr(student.name);
+      },
+    },
     {
       icon: <Calendar size={14} />,
       label: 'Розклад',
@@ -250,7 +278,32 @@ function StudentsListModal() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {editingStudentId === student.id && editMode === 'balance' ? (
+                    {editingStudentId === student.id && editMode === 'name' ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={nameStr}
+                          onChange={(e) => setNameStr(e.target.value)}
+                          onKeyDown={submitOnEnter(() => void handleNameSubmit(student.id))}
+                          onFocus={(e) => e.target.select()}
+                          className="w-56 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                          placeholder="Ім'я учня"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleNameSubmit(student.id)}
+                          className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-sm"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={stopEditing}
+                          className="px-3 py-1 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded text-sm"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : editingStudentId === student.id && editMode === 'balance' ? (
                       <div className="flex flex-col gap-1 items-end">
                         <div className="flex items-center gap-2">
                           <input

@@ -95,6 +95,12 @@ const useAppStore = create<AppState>((set, get) => ({
     await get().loadStudents();
   },
 
+  updateStudentName: async (studentId, name) => {
+    await window.electron.updateStudentName(studentId, name);
+    await get().loadStudents();
+    await get().loadLessons();
+  },
+
   // # Lessons
 
   loadLessons: async () => {
@@ -104,6 +110,12 @@ const useAppStore = create<AppState>((set, get) => ({
       const { start, end } = getWeekRange(currentWeek);
       const lessons = await window.electron.getLessons(start, end);
       set((state) => ({ lessons, lessonsLoading: false, dataVersion: state.dataVersion + 1 }));
+      // The open lesson is a snapshot: repoint it so the editor shows fresh data.
+      const open = get().selectedLesson;
+      if (open) {
+        const fresh = lessons.find((l) => l.id === open.id);
+        if (fresh) set({ selectedLesson: fresh });
+      }
       // The first paid lesson with a price starts the tax clock, and any lesson
       // change can create it, so keep the anchor in sync.
       void get().refreshTaxStart();

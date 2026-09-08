@@ -162,6 +162,8 @@ export interface AddLessonData {
 export interface UpdateLessonData {
   datetime?: string;
   is_completed?: number;
+  /** Trial lesson only: it has no student, so its name lives on the lesson. */
+  student_name_cache?: string;
 }
 
 // # ELECTRON API
@@ -182,6 +184,7 @@ export interface ElectronAPI {
   ) => Promise<void>;
   markUnpaidLessonsPaid: (studentId: number, count: number) => Promise<void>;
   setStudentTaxExempt: (studentId: number, exempt: boolean) => Promise<void>;
+  updateStudentName: (studentId: number, name: string) => Promise<void>;
   deleteStudent: (studentId: number) => Promise<void>;
 
   // Lesson prices (all in kopiyky)
@@ -297,6 +300,7 @@ export interface AppState {
   deleteStudent: (studentId: number) => Promise<void>;
   updateBalance: (studentId: number, amount: number) => Promise<void>;
   setStudentTaxExempt: (studentId: number, exempt: boolean) => Promise<void>;
+  updateStudentName: (studentId: number, name: string) => Promise<void>;
 
   // Actions — Lessons
   loadLessons: () => Promise<void>;
