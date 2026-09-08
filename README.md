@@ -16,8 +16,9 @@
 - [🏗 Building and Installing](#-building-and-installing)
   - [Windows](#windows)
   - [Linux](#linux)
-  - [Cross-building Windows from Linux](#cross-building-windows-from-linux)
+  - [Building Windows from Linux](#building-windows-from-linux)
 - [🔄 Updating an Installed App](#-updating-an-installed-app)
+- [🚀 Publishing a Release](#-publishing-a-release)
 - [📁 Project Structure](#-project-structure)
 - [💾 Database](#-database)
   - [Database Schema](#database-schema)
@@ -251,35 +252,19 @@ sudo apt-get install build-essential python3 make g++   # Debian/Ubuntu
 sudo dnf install gcc-c++ make python3     # Fedora/RHEL
 ```
 
-### Cross-building Windows from Linux
+### Building Windows from Linux
 
-`npm run dist:win` can produce the `.exe` from Linux, but it needs Wine:
-
-```bash
-sudo pacman -S wine
-npm run dist:win
-```
-
-Alternatively build inside the `electronuserland/builder:wine` Docker image, or simply run the Windows block above on a Windows machine.
+Don't. `better-sqlite3` is a native module and has to be compiled on the target OS, so a Wine build of `npm run dist:win` breaks on the database. Use the `Release` workflow on GitHub Actions, which runs on a Windows runner, or build on a real Windows machine with the block above.
 
 ---
 
 ## 🔄 Updating an Installed App
 
-The app has no built-in auto-update, so an update is just a fresh build installed over the old one. The database lives outside the app (`~/.config/student-manager/students.db`, `%APPDATA%/student-manager/students.db` on Windows), so data survives every reinstall.
+**Windows** installations update themselves. On every start the app checks the GitHub releases of this repository, downloads a newer version in the background and offers a restart to install it; the notes of that release are shown once afterwards. Nothing has to be done by hand, and the very first `.exe` is the only one a user installs manually — take it from the [latest release](https://github.com/Danylo37/student-manager/releases/latest).
 
-**Windows** (from the cloned repo):
+The installer is not code-signed, so Windows SmartScreen shows a warning on that first install: **More info** → **Run anyway**.
 
-```powershell
-git pull
-npm install
-npm run dist:win
-Start-Process (Get-ChildItem release\*.exe).FullName
-```
-
-NSIS installs over the previous version, shortcuts stay in place.
-
-**Linux:**
+**Linux** has no auto-update; rebuild from the repo:
 
 ```bash
 git pull
@@ -289,7 +274,18 @@ npm run install:linux
 
 The installed AppImage is overwritten in place, nothing else to do. For a `.deb` install run `npm run dist:linux && sudo apt install ./release/*.deb` instead.
 
-Bump `version` in `package.json` before packaging, otherwise `apt` will not treat the package as newer and the release files keep the old name.
+The database lives outside the app (`~/.config/student-manager/students.db`, `%APPDATA%/student-manager/students.db` on Windows), so data survives every update and reinstall.
+
+---
+
+## 🚀 Publishing a Release
+
+Windows builds are produced by the `Release` workflow on GitHub Actions — a Windows runner is required, because `better-sqlite3` is compiled natively.
+
+1. Bump `version` in `package.json` and push to `main`. Versions follow semver and must strictly increase, otherwise installed copies will not see the update.
+2. Start the workflow: **Actions** → **Release** → **Run workflow**, or push a matching tag (`git tag v1.0.2 && git push origin v1.0.2`).
+3. The workflow uploads `Student Manager Setup <version>.exe`, `latest.yml` and the blockmap to a **draft** release.
+4. Write what changed into the release body, then publish it. Updates only start flowing once the release is published, and that body is the text users see in the app after updating — write it in Ukrainian, as a short bullet list.
 
 ---
 
@@ -303,6 +299,10 @@ student-manager/
 ├── .prettierrc                 # Prettier configuration
 ├── README.md                   # Project documentation
 │
+├── .github/
+│   └── workflows/
+│       └── release.yml         # Builds and publishes the Windows release
+│
 ├── attachments/                # Screenshots for README (01_… to 14_…)
 │
 ├── build/                      # Build resources
@@ -313,6 +313,7 @@ student-manager/
 │   ├── main.js                 # Electron entry point
 │   ├── preload.js              # Preload script for IPC
 │   ├── database.js             # SQLite database and API
+│   ├── updater.js              # Auto-update and release notes
 │   ├── logger.js               # Application logging
 │   ├── constants.js            # Application constants
 │   └── db/
@@ -420,6 +421,7 @@ Day to day you only need these:
 npm run dev              # develop with hot reload
 npm run install:linux    # build and install/update the app on Linux
 npm run dist:win         # build the Windows installer
+npm run release:win      # build and publish a draft GitHub release (used by CI)
 ```
 
 Everything else is a building block the commands above already call:
