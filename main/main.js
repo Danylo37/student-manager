@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const db = require('./database');
 const logger = require('./logger');
+const { initUpdater } = require('./updater');
 
 let mainWindow;
 
@@ -63,6 +64,7 @@ app.whenReady().then(() => {
 
   registerIpcHandlers();
   createWindow();
+  initUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

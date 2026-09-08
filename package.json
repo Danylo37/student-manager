@@ -1,6 +1,6 @@
 {
   "name": "student-manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Student management application with lesson scheduling",
   "main": "main/main.js",
   "scripts": {
@@ -15,6 +15,7 @@
     "rebuild": "electron-builder install-app-deps",
     "dist": "npm run build && npm run package",
     "dist:win": "npm run build && npm run package:win",
+    "release:win": "npm run build && cross-env NODE_ENV=production LOG_LEVEL=info electron-builder --win --publish always",
     "dist:linux": "npm run build && npm run package:linux",
     "install:linux": "npm run dist:linux && install -Dm755 release/*.AppImage $HOME/.local/bin/student-manager"
   },
@@ -46,6 +47,7 @@
   "dependencies": {
     "better-sqlite3": "13.0.3",
     "date-fns": "^4.1.0",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3",
     "react-datepicker": "^9.1.0",
@@ -57,6 +59,13 @@
   "build": {
     "appId": "com.studentmanager.app",
     "productName": "Student Manager",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Danylo37",
+        "repo": "student-manager"
+      }
+    ],
     "directories": {
       "output": "release"
     },
