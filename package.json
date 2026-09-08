@@ -11,7 +11,12 @@
     "package": "cross-env NODE_ENV=production LOG_LEVEL=info electron-builder",
     "package:win": "cross-env NODE_ENV=production LOG_LEVEL=info electron-builder --win",
     "package:linux": "cross-env NODE_ENV=production LOG_LEVEL=info electron-builder --linux",
-    "rebuild": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "rebuild": "electron-builder install-app-deps",
+    "dist": "npm run build && npm run package",
+    "dist:win": "npm run build && npm run package:win",
+    "dist:linux": "npm run build && npm run package:linux",
+    "install:linux": "npm run dist:linux && install -Dm755 release/*.AppImage $HOME/.local/bin/student-manager"
   },
   "keywords": [],
   "author": {
