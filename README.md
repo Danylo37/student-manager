@@ -148,13 +148,14 @@ Editing a lesson: move it, rename the student, mark it paid or delete it.
 
 ## 🛠 Technologies
 
-- **Electron** 43.4.0 — desktop framework
-- **React** 19.2.3 — UI library
-- **Vite** 7.3.1 — build tool and dev server
+- **Electron** 44.2.0 — desktop framework
+- **React** 19.2.8 — UI library
+- **Vite** 8.2.2 — build tool and dev server
 - **Tailwind CSS** 3.4.19 — styling
 - **Better-SQLite3** 13.0.3 — local database
-- **Zustand** 5.0.10 — state management
-- **date-fns** 4.1.0 — date utilities
+- **electron-updater** 6.8.9 — auto-updates from GitHub Releases
+- **Zustand** 5.0.15 — state management
+- **date-fns** 4.4.0 — date utilities
 - **Lucide React** — icons
 
 ---
@@ -369,7 +370,7 @@ student-manager/
 ├── index.html                  # HTML template
 ├── tsconfig.json               # TypeScript configuration
 ├── tsconfig.node.json          # TypeScript Node configuration
-├── vite.config.ts              # Vite configuration
+├── vite.config.mts             # Vite configuration
 ├── tailwind.config.mjs         # Tailwind CSS configuration
 └── postcss.config.js           # PostCSS configuration
 ```
