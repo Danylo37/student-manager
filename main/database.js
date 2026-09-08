@@ -48,6 +48,10 @@ function initDatabase() {
     addMissingColumns();
     backfillBalanceHistory();
 
+    if (db.pragma('user_version', { simple: true }) < LEDGER_VERSION) {
+      runLedgerRebuild();
+    }
+
     logger.info('Database initialized successfully');
     return db;
   } catch (error) {
@@ -70,6 +74,9 @@ function addMissingColumns() {
     // Nobody was exempt before the flag existed, so the default already backfills it.
     ['students', 'is_tax_exempt', 'INTEGER DEFAULT 0'],
     ['payment_bundles', 'is_tax_exempt', 'INTEGER DEFAULT 0'],
+    // Nothing was ever cancelled before refunds started unwinding payments.
+    ['payment_bundles', 'lessons_cancelled', 'INTEGER DEFAULT 0'],
+    ['payment_bundles', 'amount_cancelled', 'INTEGER DEFAULT 0'],
   ];
 
   for (const [table, column, definition, backfill] of additions) {
@@ -279,6 +286,112 @@ function migrateV2Steps() {
   `);
 }
 
+// # LEDGER REBUILD
+//
+// Earlier versions let a refund take the money back without releasing the lessons
+// it had already paid for, and decided "paid" from students.balance instead of the
+// payment a lesson actually came from, so the two ledgers drifted apart. Replaying
+// every student's ledger in order with today's rules puts them back in step.
+//
+// Money is never touched: total_price and paid_at stay as they are, so the cash of
+// every past period — the tax base — is unchanged. Lessons from before prices
+// existed (no price) and students who never had a payment recorded keep what they
+// have.
+
+const LEDGER_VERSION = 3;
+
+function runLedgerRebuild() {
+  logger.info('Rebuilding payment ledger');
+
+  const students = db
+    .prepare('SELECT DISTINCT student_id AS id FROM payment_bundles WHERE student_id IS NOT NULL')
+    .all();
+
+  db.transaction(() => {
+    for (const { id } of students) rebuildStudentLedger(id);
+  })();
+
+  db.pragma(`user_version = ${LEDGER_VERSION}`);
+  logger.info('Payment ledger rebuilt', { students: students.length });
+}
+
+function rebuildStudentLedger(studentId) {
+  db.prepare(
+    `
+    UPDATE payment_bundles SET lessons_used = 0, lessons_cancelled = 0, amount_cancelled = 0
+    WHERE student_id = ?
+  `,
+  ).run(studentId);
+
+  db.prepare(
+    `
+    UPDATE lessons SET is_paid = 0, payment_bundle_id = NULL
+    WHERE student_id = ? AND is_completed = 1 AND price IS NOT NULL
+  `,
+  ).run(studentId);
+
+  // Payments and lessons on one timeline. A lesson carries no lessons_count: it
+  // only moves the clock, the settling below is what consumes a slot.
+  const events = db
+    .prepare(
+      `
+    SELECT ${PAID_AT()} AS at, lessons_count AS lessons
+    FROM payment_bundles WHERE student_id = ?
+    UNION ALL
+    SELECT datetime(datetime) AS at, 0 AS lessons
+    FROM lessons WHERE student_id = ? AND is_completed = 1 AND price IS NOT NULL
+    ORDER BY at ASC
+  `,
+    )
+    .all(studentId, studentId);
+
+  const oldestUnpaid = db.prepare(
+    `
+    SELECT id FROM lessons
+    WHERE student_id = ? AND is_completed = 1 AND is_paid = 0 AND price IS NOT NULL
+      AND datetime(datetime) <= datetime(?)
+    ORDER BY datetime ASC, id ASC LIMIT 1
+  `,
+  );
+  const attach = db.prepare(
+    'UPDATE lessons SET is_paid = 1, price = ?, payment_bundle_id = ? WHERE id = ?',
+  );
+
+  for (const { at, lessons } of events) {
+    if (lessons < 0) cancelPrepaidLessons(studentId, -lessons, { asOf: at });
+
+    // Every lesson already given takes the oldest slot still open
+    for (;;) {
+      const lesson = oldestUnpaid.get(studentId, at);
+      if (!lesson) break;
+      const slot = consumeFromBundle(studentId, at);
+      if (!slot) break;
+      attach.run(slot.price, slot.bundleId, lesson.id);
+    }
+  }
+
+  // What nobody paid for is a debt at the price of its own date, not at the price
+  // of the payment it used to hang on.
+  const repriceStmt = db.prepare('UPDATE lessons SET price = ? WHERE id = ?');
+  const unpaid = db
+    .prepare(
+      `
+    SELECT id, datetime FROM lessons
+    WHERE student_id = ? AND is_completed = 1 AND is_paid = 0 AND price IS NOT NULL
+  `,
+    )
+    .all(studentId);
+  for (const lesson of unpaid) {
+    const price = getStudentPriceAt(studentId, lesson.datetime);
+    if (price !== null) repriceStmt.run(price, lesson.id);
+  }
+
+  db.prepare('UPDATE students SET balance = ? WHERE id = ?').run(
+    countPrepaidLessons(studentId) - unpaid.length,
+    studentId,
+  );
+}
+
 // # STUDENTS
 
 function getStudents() {
@@ -314,8 +427,15 @@ function addStudent(name, balance, priceKopiyky = null) {
  * Delete a student.
  * Completed lessons are preserved (student_id set to NULL, name cached).
  * Incomplete lessons are deleted.
+ * Payments stay in the ledger with no owner (ON DELETE SET NULL), because the
+ * cash of a past period is the tax base and must survive the student.
  */
 function deleteStudent(studentId) {
+  // Nobody is left to work off what was paid ahead, and the upcoming lessons are
+  // about to be deleted, so close the open slots instead of leaving them as an
+  // advance forever. The money of the bundles is untouched.
+  cancelPrepaidLessons(studentId, countPrepaidLessons(studentId), { detachLessons: false });
+
   // Preserve completed lessons
   db.prepare(
     `
@@ -327,7 +447,7 @@ function deleteStudent(studentId) {
   // Delete incomplete lessons
   db.prepare(`DELETE FROM lessons WHERE student_id = ? AND is_completed = 0`).run(studentId);
 
-  // Delete student (cascades schedules, lesson_prices, discounts, bundles, deleted_slots)
+  // Delete student (cascades schedules, lesson_prices, discounts, deleted_slots)
   db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
   logger.info('Student deleted', { studentId });
 }
@@ -497,37 +617,140 @@ function createPaymentBundle(studentId, count, totalPriceKopiyky = null, paidAt 
   return { id: result.lastInsertRowid, total: sign * Math.abs(total) };
 }
 
+/** Slots of a bundle that nobody has worked off or cancelled yet. */
+const FREE_SLOTS = 'lessons_count > 0 AND lessons_used < lessons_count - lessons_cancelled';
+
+/**
+ * Price of one slot of a bundle, by its index.
+ * Integer arithmetic distributes total_price exactly:
+ *   - each lesson gets floor(total / count)
+ *   - the last one gets the remainder so the slots sum up to total exactly
+ */
+function slotPrice(bundle, index) {
+  const base = Math.floor(bundle.total_price / bundle.lessons_count);
+  return index === bundle.lessons_count - 1 ? bundle.total_price - base * index : base;
+}
+
 /**
  * Consume one lesson from the oldest active bundle for a student.
  * Returns { price (kopiyky), bundleId } or null if no bundle available.
- * Uses integer arithmetic to distribute total_price exactly:
- *   - each lesson gets floor(total / count)
- *   - the last lesson gets the remainder so sum == total exactly
+ * @param {string|null} [asOf] - only payments received by then (ledger rebuild)
  */
-function consumeFromBundle(studentId) {
+function consumeFromBundle(studentId, asOf = null) {
   const bundle = db
     .prepare(
       `
     SELECT * FROM payment_bundles
-    WHERE student_id = ? AND lessons_count > 0 AND lessons_used < lessons_count
+    WHERE student_id = ? AND ${FREE_SLOTS} AND (? IS NULL OR ${PAID_AT()} <= datetime(?))
     ORDER BY COALESCE(paid_at, created_at) ASC, id ASC LIMIT 1
   `,
     )
-    .get(studentId);
+    .get(studentId, asOf, asOf);
 
   if (!bundle) return null;
 
-  const base = Math.floor(bundle.total_price / bundle.lessons_count);
-  const isLast = bundle.lessons_used + 1 === bundle.lessons_count;
-  const price = isLast
-    ? bundle.total_price - base * bundle.lessons_used // remainder for exact total
-    : base;
+  const price = slotPrice(bundle, bundle.lessons_used);
 
   db.prepare('UPDATE payment_bundles SET lessons_used = lessons_used + 1 WHERE id = ?').run(
     bundle.id,
   );
 
   return { price, bundleId: bundle.id };
+}
+
+/** Lessons a student has paid for and not worked off yet. */
+function countPrepaidLessons(studentId) {
+  const { free } = db
+    .prepare(
+      `
+    SELECT COALESCE(SUM(lessons_count - lessons_cancelled - lessons_used), 0) AS free
+    FROM payment_bundles WHERE student_id = ? AND ${FREE_SLOTS}
+  `,
+    )
+    .get(studentId);
+  return free;
+}
+
+/**
+ * Take N prepaid lessons back off a student - a refund, or a payment entered by
+ * mistake and removed. Open slots go first, newest payment first; when they run
+ * out, the newest completed lessons are detached and become unpaid, so the money
+ * and the lessons worked off stay in step.
+ *
+ * The bundles keep their money: the cash of a past period is the tax base, and a
+ * refund lives in its own negative row. Only the slots are closed here.
+ *
+ * @param {number} count - lessons to take back (positive)
+ * @param {boolean} [detachLessons] - false to close open slots only
+ * @param {string|null} [asOf] - only payments and lessons up to then (ledger rebuild)
+ * @returns {{lessons: number, amount: number}} what was actually taken back; the
+ *   amount is what those slots were paid for, which is what a refund gives back
+ */
+function cancelPrepaidLessons(studentId, count, { detachLessons = true, asOf = null } = {}) {
+  if (!studentId || count <= 0) return { lessons: 0, amount: 0 };
+
+  let amount = 0;
+
+  const cancelSlot = (bundle) => {
+    const index = bundle.lessons_count - bundle.lessons_cancelled - 1;
+    const price = slotPrice(bundle, index);
+    amount += price;
+    db.prepare(
+      `
+      UPDATE payment_bundles
+      SET lessons_cancelled = lessons_cancelled + 1, amount_cancelled = amount_cancelled + ?
+      WHERE id = ?
+    `,
+    ).run(price, bundle.id);
+  };
+
+  const newestFreeBundle = db.prepare(
+    `
+    SELECT * FROM payment_bundles
+    WHERE student_id = ? AND ${FREE_SLOTS} AND (? IS NULL OR ${PAID_AT()} <= datetime(?))
+    ORDER BY COALESCE(paid_at, created_at) DESC, id DESC LIMIT 1
+  `,
+  );
+
+  const newestPaidLesson = db.prepare(
+    `
+    SELECT id, datetime, price, payment_bundle_id FROM lessons
+    WHERE student_id = ? AND payment_bundle_id IS NOT NULL
+      AND (? IS NULL OR datetime(datetime) <= datetime(?))
+    ORDER BY datetime DESC, id DESC LIMIT 1
+  `,
+  );
+
+  const bundleById = db.prepare('SELECT * FROM payment_bundles WHERE id = ?');
+  const detach = db.prepare(
+    'UPDATE lessons SET is_paid = 0, price = ?, payment_bundle_id = NULL WHERE id = ?',
+  );
+  const releaseSlot = db.prepare(
+    'UPDATE payment_bundles SET lessons_used = MAX(0, lessons_used - 1) WHERE id = ?',
+  );
+
+  let left = count;
+
+  while (left > 0) {
+    const bundle = newestFreeBundle.get(studentId, asOf, asOf);
+    if (!bundle) break;
+    cancelSlot(bundle);
+    left--;
+  }
+
+  while (left > 0 && detachLessons) {
+    const lesson = newestPaidLesson.get(studentId, asOf, asOf);
+    if (!lesson) break;
+    // The lesson was given, so it stays a debt at the price of its date.
+    detach.run(getStudentPriceAt(studentId, lesson.datetime) ?? lesson.price, lesson.id);
+    releaseSlot.run(lesson.payment_bundle_id);
+    cancelSlot(bundleById.get(lesson.payment_bundle_id));
+    left--;
+  }
+
+  const cancelled = count - left;
+  if (cancelled > 0) logger.info('Prepaid lessons cancelled', { studentId, cancelled, amount });
+  return { lessons: cancelled, amount };
 }
 
 /**
@@ -543,6 +766,19 @@ function resolveLessonPrice(studentId, datetime) {
   if (bundle) return { price: bundle.price, bundleId: bundle.bundleId };
 
   return { price: getStudentPriceAt(studentId, datetime), bundleId: null };
+}
+
+/**
+ * Settle a lesson that has just been completed: it takes a slot from the oldest
+ * prepayment, and holding that slot is what makes it paid. A balance filled in by
+ * hand (a student who was already prepaid before the app) still counts as paid,
+ * it simply has no bundle behind it.
+ * @param {number} balance - the student's balance before this lesson
+ * @returns {{price: number|null, bundleId: number|null, isPaid: boolean}}
+ */
+function settleCompletedLesson(studentId, datetime, balance) {
+  const { price, bundleId } = resolveLessonPrice(studentId, datetime);
+  return { price, bundleId, isPaid: bundleId !== null || balance > 0 };
 }
 
 /**
@@ -694,7 +930,7 @@ function saveTaxSettings(s) {
 //               a ФОП declares income on the date the money arrives, so a month
 //               paid upfront in June belongs to Q2 even if the lessons are in Q3.
 //  - EARNED   — what was worked off (lessons by datetime). Shows real load.
-// cash = earned + change in unearned advances (see getUnearnedTotal).
+// cash = earned + change in what is still open (see getBalanceTotals).
 
 /** A lesson counts as earned once it is completed, paid and has a price. */
 const IS_INCOME = (t = '') => `${t}is_completed = 1 AND ${t}is_paid = 1 AND ${t}price IS NOT NULL`;
@@ -760,26 +996,43 @@ function getCashByStudent(startDate, endDate) {
 }
 
 /**
- * Advances still owed as lessons at a moment in time: money already received
- * minus the part of it already worked off. This is the bridge between the two
- * views — cash of a period equals earned plus the change in this number.
+ * The two sides of what is still open at a moment in time:
+ *  - advance — money received for lessons that have not been given yet. Counted
+ *    per payment and never below zero, so one student's debt cannot eat another
+ *    student's advance.
+ *  - debt    — lessons already given and not paid for, at the price of their date.
+ * Refunds do not appear here: a refund closes slots on the payment it cancels
+ * (amount_cancelled), so the money it took back is already out of the advance.
  * @param {string} asOf - ISO moment (exclusive)
+ * @returns {{advance: number, debt: number}} kopiyky
  */
-function getUnearnedTotal(asOf) {
-  const { unearned } = db
+function getBalanceTotals(asOf) {
+  const { advance } = db
     .prepare(
       `
-    SELECT
-      (SELECT COALESCE(SUM(total_price), 0) FROM payment_bundles
-        WHERE ${PAID_AT()} < datetime(?))
-      -
-      (SELECT COALESCE(SUM(price), 0) FROM lessons
-        WHERE payment_bundle_id IS NOT NULL AND price IS NOT NULL AND datetime < ?)
-      AS unearned
+    SELECT COALESCE(SUM(MAX(0, b.total_price - b.amount_cancelled - COALESCE(w.worked, 0))), 0)
+             AS advance
+    FROM payment_bundles b
+    LEFT JOIN (
+      SELECT payment_bundle_id, SUM(price) AS worked FROM lessons
+      WHERE payment_bundle_id IS NOT NULL AND price IS NOT NULL AND datetime < ?
+      GROUP BY payment_bundle_id
+    ) w ON w.payment_bundle_id = b.id
+    WHERE b.lessons_count > 0 AND ${PAID_AT('b.')} < datetime(?)
   `,
     )
     .get(asOf, asOf);
-  return unearned;
+
+  const { debt } = db
+    .prepare(
+      `
+    SELECT COALESCE(SUM(price), 0) AS debt FROM lessons
+    WHERE is_completed = 1 AND is_paid = 0 AND price IS NOT NULL AND datetime < ?
+  `,
+    )
+    .get(asOf);
+
+  return { advance, debt };
 }
 
 function getEarningsStats(startDate, endDate) {
@@ -892,17 +1145,21 @@ function getLessons(startDate, endDate) {
     .all(startDate, endDate);
 }
 
-function addLesson(studentId, datetime, isPaid, isCompleted) {
+function addLesson(studentId, datetime, isCompleted) {
   // Get student name for cache
   const student = studentId
-    ? db.prepare('SELECT name FROM students WHERE id = ?').get(studentId)
+    ? db.prepare('SELECT name, balance FROM students WHERE id = ?').get(studentId)
     : null;
   const studentNameCache = student ? student.name : null;
 
-  const { price, bundleId } =
-    isCompleted && studentId
-      ? resolveLessonPrice(studentId, datetime)
-      : { price: null, bundleId: null };
+  // Whether a completed lesson is paid is decided here, by the slot it takes.
+  const {
+    price,
+    bundleId,
+    isPaid: paid,
+  } = isCompleted && studentId
+    ? settleCompletedLesson(studentId, datetime, student ? student.balance : 0)
+    : { price: null, bundleId: null, isPaid: false };
 
   const result = db
     .prepare(
@@ -912,15 +1169,7 @@ function addLesson(studentId, datetime, isPaid, isCompleted) {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `,
     )
-    .run(
-      studentId,
-      studentNameCache,
-      datetime,
-      isPaid ? 1 : 0,
-      isCompleted ? 1 : 0,
-      price,
-      bundleId,
-    );
+    .run(studentId, studentNameCache, datetime, paid ? 1 : 0, isCompleted ? 1 : 0, price, bundleId);
 
   if (isCompleted && studentId) {
     updateStudentBalance(studentId, -1);
@@ -946,34 +1195,31 @@ function updateLesson(lessonId, updates) {
   const values = [];
 
   if (updates.is_completed !== undefined) {
+    const completed = !!updates.is_completed;
     fields.push('is_completed = ?');
-    values.push(updates.is_completed ? 1 : 0);
+    values.push(completed ? 1 : 0);
 
-    // Snapshot price when marking completed for the first time
-    if (
-      updates.is_completed &&
-      !current.is_completed &&
-      current.price === null &&
-      current.student_id
-    ) {
-      const { price, bundleId } = resolveLessonPrice(current.student_id, current.datetime);
-      if (price !== null) {
-        fields.push('price = ?');
-        values.push(price);
+    // Marked completed: snapshot the price and settle the payment. is_paid is not
+    // taken from the caller — it follows the prepayment slot the lesson takes.
+    if (completed && !current.is_completed && current.student_id) {
+      if (current.price === null) {
+        const settled = settleCompletedLesson(
+          current.student_id,
+          current.datetime,
+          current.balance,
+        );
+        fields.push('price = ?', 'payment_bundle_id = ?', 'is_paid = ?');
+        values.push(settled.price, settled.bundleId, settled.isPaid ? 1 : 0);
       }
-      if (bundleId !== null) {
-        fields.push('payment_bundle_id = ?');
-        values.push(bundleId);
-      }
+      updateStudentBalance(current.student_id, -1);
     }
-  }
 
-  if (updates.is_paid !== undefined) {
-    fields.push('is_paid = ?');
-    values.push(updates.is_paid ? 1 : 0);
-    const noBalance = current.balance <= 0 && updates.is_completed;
-    if (updates.is_paid || noBalance) updateStudentBalance(current.student_id, -1);
-    else updateStudentBalance(current.student_id, 1);
+    // Back to a scheduled lesson: the money it took goes back to the payment.
+    if (!completed && current.is_completed) {
+      returnLessonToBundle(current.payment_bundle_id);
+      fields.push('price = NULL', 'payment_bundle_id = NULL', 'is_paid = 0');
+      if (current.student_id) updateStudentBalance(current.student_id, 1);
+    }
   }
 
   if (updates.datetime !== undefined) {
@@ -1020,7 +1266,8 @@ function toggleLessonPayment(lessonId) {
     bundleId,
     lessonId,
   );
-  if (lesson.balance < 0 && lesson.student_id) updateStudentBalance(lesson.student_id, 1);
+  // One lesson less owed, whatever the balance was
+  if (lesson.student_id) updateStudentBalance(lesson.student_id, 1);
   return { studentId: lesson.student_id, price };
 }
 
@@ -1072,42 +1319,32 @@ function syncCompletedLessons() {
 
     if (lessons.length === 0) return 0;
 
-    const withBalance = [];
-    const withoutBalance = [];
     const studentBalances = {};
     const balanceUpdates = {};
 
-    lessons.forEach(({ id, student_id, balance }) => {
-      if (studentBalances[student_id] === undefined) studentBalances[student_id] = balance ?? 0;
-      if (studentBalances[student_id] > 0) {
-        withBalance.push(id);
-        studentBalances[student_id]--;
-      } else {
-        withoutBalance.push(id);
-      }
-      balanceUpdates[student_id] = (balanceUpdates[student_id] || 0) - 1;
-    });
-
-    if (withBalance.length) {
-      const ph = withBalance.map(() => '?').join(',');
-      db.prepare(`UPDATE lessons SET is_completed = 1, is_paid = 1 WHERE id IN (${ph})`).run(
-        ...withBalance,
-      );
-    }
-    if (withoutBalance.length) {
-      const ph = withoutBalance.map(() => '?').join(',');
-      db.prepare(`UPDATE lessons SET is_completed = 1 WHERE id IN (${ph})`).run(...withoutBalance);
-    }
-
-    // Snapshot the price of each newly completed lesson. Lessons that already
-    // carry a price are skipped so they do not consume a second bundle slot.
+    const completeStmt = db.prepare(
+      'UPDATE lessons SET is_completed = 1, is_paid = ? WHERE id = ?',
+    );
     const priceStmt = db.prepare(
       'UPDATE lessons SET price = ?, payment_bundle_id = ? WHERE id = ?',
     );
-    for (const { id, student_id, datetime, price: existing } of lessons) {
-      if (existing !== null) continue;
-      const { price, bundleId } = resolveLessonPrice(student_id, datetime);
-      priceStmt.run(price, bundleId, id);
+
+    // Each lesson takes a slot from the oldest prepayment, and that slot is what
+    // makes it paid. Lessons that already carry a price keep it, so they do not
+    // consume a second slot.
+    for (const { id, student_id, datetime, price: existing, balance } of lessons) {
+      if (studentBalances[student_id] === undefined) studentBalances[student_id] = balance ?? 0;
+
+      if (existing === null) {
+        const settled = settleCompletedLesson(student_id, datetime, studentBalances[student_id]);
+        priceStmt.run(settled.price, settled.bundleId, id);
+        completeStmt.run(settled.isPaid ? 1 : 0, id);
+      } else {
+        completeStmt.run(studentBalances[student_id] > 0 ? 1 : 0, id);
+      }
+
+      studentBalances[student_id]--;
+      balanceUpdates[student_id] = (balanceUpdates[student_id] || 0) - 1;
     }
 
     const balStmt = db.prepare('UPDATE students SET balance = balance + ? WHERE id = ?');
@@ -1276,6 +1513,7 @@ module.exports = {
   deleteStudentPrice,
   // Payment bundles
   createPaymentBundle,
+  cancelPrepaidLessons,
   // Balance history
   recordBalanceChange,
   getBalanceHistory,
@@ -1297,7 +1535,7 @@ module.exports = {
   getCashStats,
   getCashByDay,
   getCashByStudent,
-  getUnearnedTotal,
+  getBalanceTotals,
   // Lessons
   getLessons,
   addLesson,

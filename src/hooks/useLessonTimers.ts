@@ -19,10 +19,7 @@ function useLessonTimers(): null {
   const completeLessonAutomatically = async (lesson: Lesson): Promise<void> => {
     try {
       // Update lesson in DB
-      await updateLesson(lesson.id, {
-        is_completed: 1,
-        is_paid: lesson.balance && lesson.balance > 0 ? 1 : 0, // Mark as paid if balance exists
-      });
+      await updateLesson(lesson.id, { is_completed: 1 });
 
       // Update student balances
       await loadStudents();

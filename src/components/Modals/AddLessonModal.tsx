@@ -84,13 +84,9 @@ function AddLessonModal() {
 
       const isCompleted = shouldBeCompleted(datetime.toISOString());
 
-      const student = students.find((s) => s.id === parseInt(studentId));
-      const isPaid = !!(student && student.balance > 0 && isCompleted);
-
       await addLesson({
         studentId: parseInt(studentId),
         datetime: datetime.toISOString(),
-        isPaid,
         isCompleted,
       });
 

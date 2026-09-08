@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import useAppStore from '@/store/appStore';
 import useLessons from '@/hooks/useLessons';
-import useStudents from '@/hooks/useStudents';
 import { getLessonStatus, getStatusLabel, shouldBeCompleted } from '@/utils/lessonStatus';
 import { DatePickerInput, TimePickerInput } from '../common/DateTimePicker';
 import { useNotification } from '../common/NotificationProvider';
@@ -16,7 +15,6 @@ function EditLessonModal() {
   const closeModal = useAppStore((state) => state.closeModal);
   const selectedLesson = useAppStore((state) => state.selectedLesson);
   const { updateLesson, deleteLesson } = useLessons();
-  const { getStudentById } = useStudents();
   const { showToast, showConfirm } = useNotification();
 
   const [date, setDate] = useState<Date | null>(null);
@@ -55,18 +53,13 @@ function EditLessonModal() {
       const updateData: {
         datetime: string;
         is_completed?: number;
-        is_paid?: number;
       } = {
         datetime: datetime.toISOString(),
       };
 
-      if (completionStatusChanged) {
-        // student_id is null for lessons kept after the student was deleted
-        const student =
-          selectedLesson.student_id != null ? getStudentById(selectedLesson.student_id) : undefined;
-        updateData.is_completed = is_completed ? 1 : 0;
-        updateData.is_paid = student && student.balance > 0 && is_completed ? 1 : 0;
-      }
+      // Whether the lesson counts as paid follows the prepayment it takes,
+      // and that is settled in the database.
+      if (completionStatusChanged) updateData.is_completed = is_completed ? 1 : 0;
 
       await updateLesson(selectedLesson.id, updateData);
       showToast('Урок оновлено успішно!', 'success');

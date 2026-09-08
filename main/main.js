@@ -104,7 +104,11 @@ function registerIpcHandlers() {
     db.updateStudentBalance(studentId, amount);
     // Both directions hit the cash ledger: a negative change is money given back
     // or a payment entered by mistake, and either way the period must show it.
-    const bundle = db.createPaymentBundle(studentId, amount);
+    // Taking lessons off the balance also takes them off the payments they came
+    // from, and what those slots cost is exactly the money going back — the price
+    // list of today has nothing to do with it.
+    const refunded = amount < 0 ? db.cancelPrepaidLessons(studentId, -amount) : null;
+    const bundle = db.createPaymentBundle(studentId, amount, refunded && refunded.amount);
     db.recordBalanceChange(studentId, amount, bundle && bundle.total);
   });
   handle('db:pay-for-lessons', (_, studentId, amount, totalPriceKopiyky) => {
@@ -152,13 +156,13 @@ function registerIpcHandlers() {
   handle('db:get-cash-stats', (_, s, e) => db.getCashStats(s, e));
   handle('db:get-cash-by-day', (_, s, e) => db.getCashByDay(s, e));
   handle('db:get-cash-by-student', (_, s, e) => db.getCashByStudent(s, e));
-  handle('db:get-unearned-total', (_, asOf) => db.getUnearnedTotal(asOf));
+  handle('db:get-balance-totals', (_, asOf) => db.getBalanceTotals(asOf));
   handle('db:get-balance-history', (_, s, e) => db.getBalanceHistory(s, e));
 
   // # Lessons
   handle('db:get-lessons', (_, s, e) => db.getLessons(s, e));
   handle('db:add-lesson', (_, data) =>
-    db.addLesson(data.studentId, data.datetime, data.isPaid, data.isCompleted),
+    db.addLesson(data.studentId, data.datetime, data.isCompleted),
   );
   handle('db:update-lesson', (_, id, updates) => db.updateLesson(id, updates));
   handle('db:toggle-lesson-payment', (_, id) => {

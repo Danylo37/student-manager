@@ -22,6 +22,7 @@ import type {
   EarningsByStudent,
   BalanceHistoryEntry,
   CashStats,
+  BalanceTotals,
 } from '@/types';
 
 /** Ukrainian plural: pluralUA(2, 'урок', 'уроки', 'уроків') → 'уроки'. */
@@ -466,6 +467,7 @@ const GRID_COLS: Record<number, string> = {
   3: 'grid-cols-3',
   4: 'grid-cols-4',
   5: 'grid-cols-5',
+  6: 'grid-cols-3',
 };
 
 const PERIODS: { key: EarningsPeriod; label: string }[] = [
@@ -498,7 +500,7 @@ function FinanceView() {
   const [prevCash, setPrevCash] = useState<CashStats | null>(null);
   const [cashByDay, setCashByDay] = useState<EarningsByDay[]>([]);
   const [cashByStudent, setCashByStudent] = useState<EarningsByStudent[]>([]);
-  const [unearned, setUnearned] = useState(0);
+  const [openTotals, setOpenTotals] = useState<BalanceTotals>({ advance: 0, debt: 0 });
 
   // Reset offset when switching periods
   useEffect(() => {
@@ -525,23 +527,22 @@ function FinanceView() {
     try {
       const range = getActiveRange();
       const prevRange = getPrevRange();
-      const [s, byday, bystudent, ps, hist, c, cbyday, cbystudent, pc, unearnedTotal] =
-        await Promise.all([
-          window.electron.getEarningsStats(range.start, range.end),
-          window.electron.getEarningsByDay(range.start, range.end),
-          window.electron.getEarningsByStudent(range.start, range.end),
-          prevRange
-            ? window.electron.getEarningsStats(prevRange.start, prevRange.end)
-            : Promise.resolve(null),
-          window.electron.getBalanceHistory(range.start, range.end),
-          window.electron.getCashStats(range.start, range.end),
-          window.electron.getCashByDay(range.start, range.end),
-          window.electron.getCashByStudent(range.start, range.end),
-          prevRange
-            ? window.electron.getCashStats(prevRange.start, prevRange.end)
-            : Promise.resolve(null),
-          window.electron.getUnearnedTotal(range.end),
-        ]);
+      const [s, byday, bystudent, ps, hist, c, cbyday, cbystudent, pc, totals] = await Promise.all([
+        window.electron.getEarningsStats(range.start, range.end),
+        window.electron.getEarningsByDay(range.start, range.end),
+        window.electron.getEarningsByStudent(range.start, range.end),
+        prevRange
+          ? window.electron.getEarningsStats(prevRange.start, prevRange.end)
+          : Promise.resolve(null),
+        window.electron.getBalanceHistory(range.start, range.end),
+        window.electron.getCashStats(range.start, range.end),
+        window.electron.getCashByDay(range.start, range.end),
+        window.electron.getCashByStudent(range.start, range.end),
+        prevRange
+          ? window.electron.getCashStats(prevRange.start, prevRange.end)
+          : Promise.resolve(null),
+        window.electron.getBalanceTotals(range.end),
+      ]);
       setStats(s);
       setByDay(byday);
       setByStudent(bystudent);
@@ -551,7 +552,7 @@ function FinanceView() {
       setCashByDay(cbyday);
       setCashByStudent(cbystudent);
       setPrevCash(pc);
-      setUnearned(unearnedTotal);
+      setOpenTotals(totals);
     } catch (e) {
       console.error(e);
     } finally {
@@ -616,11 +617,12 @@ function FinanceView() {
 
   // The two views differ by the advances that moved in or out of the period
   const basisGap = (cash?.total ?? 0) - (stats?.total ?? 0);
-  const showUnearned = isCash && unearned !== 0;
-  const cardCount = 1 + (hasTax ? 2 : 0) + 1 + (showUnearned ? 1 : 0);
+  const showAdvance = isCash && openTotals.advance > 0;
+  const showDebt = isCash && openTotals.debt > 0;
+  const cardCount = 1 + (hasTax ? 2 : 0) + 1 + (showAdvance ? 1 : 0) + (showDebt ? 1 : 0);
 
-  // The advances card is a balance at a moment, not a sum over the period:
-  // positive means paid ahead, negative means lessons given before the money came.
+  // Both are a balance at a moment, not a sum over the period: what is paid for
+  // and not yet given, and what is given and not yet paid for.
   const asOfLabel = new Date(new Date(activeRange.end).getTime() - 1).toLocaleDateString('uk-UA', {
     day: '2-digit',
     month: '2-digit',
@@ -724,15 +726,18 @@ function FinanceView() {
                 />
               )}
               {hasTax && <StatCard label="Нетто" value={formatUAH(net)} accent={net > 0} />}
-              {showUnearned && (
+              {showAdvance && (
                 <StatCard
-                  label={unearned > 0 ? `Аванси на ${asOfLabel}` : `Уроки в борг на ${asOfLabel}`}
-                  value={formatUAH(Math.abs(unearned))}
-                  sub={
-                    unearned > 0
-                      ? 'оплачено наперед, ще не відпрацьовано'
-                      : 'проведено, але оплачено пізніше'
-                  }
+                  label={`Аванси на ${asOfLabel}`}
+                  value={formatUAH(openTotals.advance)}
+                  sub="оплачено наперед, ще не відпрацьовано"
+                />
+              )}
+              {showDebt && (
+                <StatCard
+                  label={`Уроки в борг на ${asOfLabel}`}
+                  value={formatUAH(openTotals.debt)}
+                  sub="проведено, але ще не оплачено"
                 />
               )}
               <StatCard

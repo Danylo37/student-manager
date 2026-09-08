@@ -134,6 +134,12 @@ export interface BalanceHistoryEntry {
   created_at: string; // ISO (UTC)
 }
 
+/** What is still open at a moment: paid ahead vs given and not paid for. */
+export interface BalanceTotals {
+  advance: number; // kopiyky, always >= 0
+  debt: number; // kopiyky, always >= 0
+}
+
 export interface EarningsDateRange {
   min_date: string | null;
   max_date: string | null;
@@ -145,14 +151,12 @@ export interface EarningsDateRange {
 export interface AddLessonData {
   studentId: number;
   datetime: string;
-  isPaid: boolean;
   isCompleted: boolean;
 }
 
 export interface UpdateLessonData {
   datetime?: string;
   is_completed?: number;
-  is_paid?: number;
 }
 
 // # ELECTRON API
@@ -206,7 +210,7 @@ export interface ElectronAPI {
   getCashStats: (startDate: string, endDate: string) => Promise<CashStats>;
   getCashByDay: (startDate: string, endDate: string) => Promise<EarningsByDay[]>;
   getCashByStudent: (startDate: string, endDate: string) => Promise<EarningsByStudent[]>;
-  getUnearnedTotal: (asOf: string) => Promise<number>;
+  getBalanceTotals: (asOf: string) => Promise<BalanceTotals>;
   getBalanceHistory: (startDate: string, endDate: string) => Promise<BalanceHistoryEntry[]>;
 
   // Lessons

@@ -18,12 +18,18 @@ CREATE TABLE IF NOT EXISTS students (
 -- consumed by lessons and simply reduces the cash of its period.
 -- is_tax_exempt snapshots the student's flag when the payment is recorded, so the
 -- tax base of a past period never changes and survives the student's deletion.
+-- lessons_cancelled/amount_cancelled are the slots a refund took back: the money
+-- of this row never changes (it is the tax base of its period), the refund lives
+-- in its own negative row, and what is left to work off is
+-- total_price - amount_cancelled minus the lessons already taken from it.
 CREATE TABLE IF NOT EXISTS payment_bundles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER,
   total_price INTEGER NOT NULL, -- kopiyky
   lessons_count INTEGER NOT NULL,
   lessons_used INTEGER DEFAULT 0,
+  lessons_cancelled INTEGER DEFAULT 0,
+  amount_cancelled INTEGER DEFAULT 0, -- kopiyky
   is_tax_exempt INTEGER DEFAULT 0,
   paid_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
