@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS balance_history (
 -- student_name_cache preserves the name after deletion.
 -- price in KOPIYKY.
 -- payment_bundle_id links to the bundle that paid for this lesson.
+-- is_trial: a 30-minute free lesson with no student of its own — it keeps the
+-- name in student_name_cache and never touches balances, bundles or income.
 CREATE TABLE IF NOT EXISTS lessons (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER,
@@ -62,6 +64,7 @@ CREATE TABLE IF NOT EXISTS lessons (
   previous_datetime TEXT,
   is_completed BOOLEAN DEFAULT 0,
   is_paid BOOLEAN DEFAULT 0,
+  is_trial BOOLEAN DEFAULT 0,
   price INTEGER DEFAULT NULL, -- kopiyky
   payment_bundle_id INTEGER,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

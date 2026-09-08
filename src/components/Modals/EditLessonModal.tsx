@@ -47,7 +47,7 @@ function EditLessonModal() {
       const datetime = new Date(date);
       datetime.setHours(time.getHours(), time.getMinutes(), 0, 0);
 
-      const is_completed = shouldBeCompleted(datetime.toISOString());
+      const is_completed = shouldBeCompleted(datetime.toISOString(), selectedLesson.is_trial);
       const completionStatusChanged = is_completed !== (selectedLesson.is_completed === 1);
 
       const updateData: {
@@ -117,7 +117,9 @@ function EditLessonModal() {
           <div className="text-sm text-gray-600">Учень</div>
           <div className="text-lg font-bold text-gray-800">{selectedLesson.student_name}</div>
           <div className="text-sm text-gray-600 mt-1">
-            Баланс: {selectedLesson.balance} | Статус: {statusLabel}
+            {selectedLesson.is_trial
+              ? `Пробний урок · 30 хв | Статус: ${statusLabel}`
+              : `Баланс: ${selectedLesson.balance} | Статус: ${statusLabel}`}
           </div>
         </div>
 

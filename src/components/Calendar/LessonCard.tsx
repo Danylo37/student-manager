@@ -39,8 +39,38 @@ function LessonCard({ lesson }: LessonCardProps) {
     }
   };
 
-  // Show payment button only for completed lessons
-  const showPaymentButton = !!lesson.is_completed && !lesson.is_paid;
+  // Show payment button only for completed lessons; a trial one is free
+  const isTrial = !!lesson.is_trial;
+  const showPaymentButton = !!lesson.is_completed && !lesson.is_paid && !isTrial;
+
+  // A trial lesson is only 30 minutes tall, so it holds a single row
+  if (isTrial) {
+    return (
+      <div
+        onClick={handleClick}
+        className={`
+                ${bgColor}
+                ${borderColor}
+                border-2
+                px-2
+                rounded-2xl
+                h-full
+                flex
+                items-center
+                gap-2
+                overflow-hidden
+                cursor-pointer
+                hover:shadow-md
+                transition-shadow
+            `}
+        title={status}
+      >
+        <span className="font-bold text-gray-800">{formatTime(lesson.datetime)}</span>
+        <span className="text-sm text-gray-700 font-medium truncate">{lesson.student_name}</span>
+        <span className="ml-auto text-xs text-blue-600 font-medium shrink-0">Пробний</span>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -52,7 +82,8 @@ function LessonCard({ lesson }: LessonCardProps) {
                 border-2
                 p-2
                 rounded-2xl
-                mb-2 
+                h-full
+                overflow-hidden
                 cursor-pointer 
                 hover:shadow-md 
                 transition-shadow
@@ -78,7 +109,7 @@ function LessonCard({ lesson }: LessonCardProps) {
       </div>
 
       {/* Student name */}
-      <div className="text-sm text-gray-700 font-medium">{lesson.student_name}</div>
+      <div className="text-sm text-gray-700 font-medium truncate">{lesson.student_name}</div>
     </div>
   );
 }

@@ -23,6 +23,8 @@ function AddLessonModal() {
   const { showToast } = useNotification();
 
   const [studentId, setStudentId] = useState<string>('');
+  const [isTrial, setIsTrial] = useState<boolean>(false);
+  const [trialName, setTrialName] = useState<string>('');
   const [date, setDate] = useState<Date | null>(null);
   const [time, setTime] = useState<Date | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -31,6 +33,8 @@ function AddLessonModal() {
   useEffect(() => {
     if (isOpen) {
       setStudentId(prefilledStudentId ? String(prefilledStudentId) : '');
+      setIsTrial(false);
+      setTrialName('');
 
       if (prefilledDateTime) {
         setDate(prefilledDateTime);
@@ -65,8 +69,8 @@ function AddLessonModal() {
 
     if (loading) return;
 
-    if (!studentId) {
-      setError('Оберіть учня');
+    if (isTrial ? !trialName.trim() : !studentId) {
+      setError(isTrial ? "Вкажіть ім'я" : 'Оберіть учня');
       return;
     }
 
@@ -82,17 +86,21 @@ function AddLessonModal() {
       const datetime = new Date(date);
       datetime.setHours(time.getHours(), time.getMinutes(), 0, 0);
 
-      const isCompleted = shouldBeCompleted(datetime.toISOString());
+      const isCompleted = shouldBeCompleted(datetime.toISOString(), isTrial);
 
       await addLesson({
-        studentId: parseInt(studentId),
+        studentId: isTrial ? null : parseInt(studentId),
         datetime: datetime.toISOString(),
         isCompleted,
+        isTrial,
+        studentName: isTrial ? trialName.trim() : null,
       });
 
       showToast(`Урок створено успішно!`, 'success');
 
       setStudentId('');
+      setIsTrial(false);
+      setTrialName('');
       setDate(null);
       setTime(null);
       closeModal('addLesson');
@@ -106,6 +114,8 @@ function AddLessonModal() {
 
   const handleClose = (): void => {
     setStudentId('');
+    setIsTrial(false);
+    setTrialName('');
     setDate(null);
     setTime(null);
     setError(null);
@@ -117,7 +127,7 @@ function AddLessonModal() {
     openModal('studentsList');
   };
 
-  const selectedStudent = students.find((s) => s.id === parseInt(studentId));
+  const selectedStudent = isTrial ? undefined : students.find((s) => s.id === parseInt(studentId));
 
   const datetime =
     date && time
@@ -127,7 +137,7 @@ function AddLessonModal() {
         return dt;
       })()
       : null;
-  const isPastTime = datetime ? shouldBeCompleted(datetime.toISOString()) : false;
+  const isPastTime = datetime ? shouldBeCompleted(datetime.toISOString(), isTrial) : false;
 
   return (
     <Modal
@@ -142,30 +152,63 @@ function AddLessonModal() {
         onKeyDown={submitOnEnter(() => void handleSubmit())}
         className="space-y-4"
       >
-        {/* Student select */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Учень *</label>
-          <select
-            value={studentId}
+        {/* Trial lesson */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isTrial}
             onChange={(e) => {
-              setStudentId(e.target.value);
-              if (e.target.value) {
-                setError(null);
-              }
+              setIsTrial(e.target.checked);
+              setError(null);
             }}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            autoFocus
-          >
-            <option value="" disabled={studentId !== ''}>
-              Оберіть учня...
-            </option>
-            {students.map((student) => (
-              <option key={student.id} value={student.id}>
-                {student.name} (Баланс: {student.balance})
+            className="w-4 h-4 accent-blue-500"
+          />
+          <span className="text-sm font-medium text-gray-700">Пробний урок</span>
+        </label>
+
+        {/* Student */}
+        {isTrial ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Ім'я *</label>
+            <input
+              type="text"
+              value={trialName}
+              onChange={(e) => {
+                setTrialName(e.target.value);
+                if (e.target.value.trim()) {
+                  setError(null);
+                }
+              }}
+              placeholder="Ім'я учня"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoFocus
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Учень *</label>
+            <select
+              value={studentId}
+              onChange={(e) => {
+                setStudentId(e.target.value);
+                if (e.target.value) {
+                  setError(null);
+                }
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoFocus
+            >
+              <option value="" disabled={studentId !== ''}>
+                Оберіть учня...
               </option>
-            ))}
-          </select>
-        </div>
+              {students.map((student) => (
+                <option key={student.id} value={student.id}>
+                  {student.name} (Баланс: {student.balance})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Date and time */}
         <div className="grid grid-cols-2 gap-4">
@@ -188,6 +231,13 @@ function AddLessonModal() {
         {isPastTime && (
           <div className="bg-orange-50 border border-orange-200 text-orange-800 px-4 py-3 rounded text-sm">
             ⚠️ Час уже минув. Урок буде автоматично позначено як проведений
+          </div>
+        )}
+
+        {/* Trial info */}
+        {isTrial && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg text-sm">
+            Пробний урок: 30 хвилин, безкоштовно. Ім'я не додається до списку учнів
           </div>
         )}
 

@@ -8,6 +8,7 @@ interface LessonsByStatus {
   [LessonStatus.PAID]: Lesson[];
   [LessonStatus.PENDING]: Lesson[];
   [LessonStatus.OVERDUE]: Lesson[];
+  [LessonStatus.TRIAL]: Lesson[];
 }
 
 interface LessonStats {
@@ -132,6 +133,7 @@ function useLessons(): UseLessonsReturn {
       [LessonStatus.PAID]: [],
       [LessonStatus.PENDING]: [],
       [LessonStatus.OVERDUE]: [],
+      [LessonStatus.TRIAL]: [],
     };
 
     lessons.forEach((lesson) => {

@@ -2,7 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
-const { LESSON_DURATION_MINUTES } = require('./constants');
+const { LESSON_DURATION_MINUTES, TRIAL_LESSON_DURATION_MINUTES } = require('./constants');
 const logger = require('./logger');
 
 let db = null;
@@ -77,6 +77,8 @@ function addMissingColumns() {
     // Nothing was ever cancelled before refunds started unwinding payments.
     ['payment_bundles', 'lessons_cancelled', 'INTEGER DEFAULT 0'],
     ['payment_bundles', 'amount_cancelled', 'INTEGER DEFAULT 0'],
+    // Every lesson that existed before trial lessons was a normal paid one.
+    ['lessons', 'is_trial', 'INTEGER DEFAULT 0'],
   ];
 
   for (const [table, column, definition, backfill] of additions) {
@@ -1045,7 +1047,7 @@ function getEarningsStats(startDate, endDate) {
       COUNT(CASE WHEN ${IS_INCOME()} THEN 1 END)             AS lessons_paid,
       COUNT(*)                                               AS lessons_total
     FROM lessons
-    WHERE is_completed = 1 AND datetime >= ? AND datetime < ?
+    WHERE is_completed = 1 AND is_trial = 0 AND datetime >= ? AND datetime < ?
   `,
     )
     .get(startDate, endDate);
@@ -1145,12 +1147,18 @@ function getLessons(startDate, endDate) {
     .all(startDate, endDate);
 }
 
-function addLesson(studentId, datetime, isCompleted) {
+/**
+ * A trial lesson has no student of its own: it keeps the typed name, stays free
+ * and never touches a balance or a payment bundle.
+ */
+function addLesson(studentId, datetime, isCompleted, isTrial = false, trialName = null) {
+  if (isTrial) studentId = null;
+
   // Get student name for cache
   const student = studentId
     ? db.prepare('SELECT name, balance FROM students WHERE id = ?').get(studentId)
     : null;
-  const studentNameCache = student ? student.name : null;
+  const studentNameCache = isTrial ? (trialName || '').trim() || null : (student?.name ?? null);
 
   // Whether a completed lesson is paid is decided here, by the slot it takes.
   const {
@@ -1165,11 +1173,20 @@ function addLesson(studentId, datetime, isCompleted) {
     .prepare(
       `
     INSERT INTO lessons
-      (student_id, student_name_cache, datetime, is_paid, is_completed, price, payment_bundle_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+      (student_id, student_name_cache, datetime, is_paid, is_completed, is_trial, price, payment_bundle_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `,
     )
-    .run(studentId, studentNameCache, datetime, paid ? 1 : 0, isCompleted ? 1 : 0, price, bundleId);
+    .run(
+      studentId,
+      studentNameCache,
+      datetime,
+      paid ? 1 : 0,
+      isCompleted ? 1 : 0,
+      isTrial ? 1 : 0,
+      price,
+      bundleId,
+    );
 
   if (isCompleted && studentId) {
     updateStudentBalance(studentId, -1);
@@ -1246,6 +1263,7 @@ function toggleLessonPayment(lessonId) {
     )
     .get(lessonId);
   if (!lesson || !lesson.is_completed) throw new Error('Lesson not found or not completed');
+  if (lesson.is_trial) throw new Error('Trial lesson is free');
 
   // Money arrives now, so it needs its own row in the cash ledger. The lesson is
   // attached to it right away — it is exactly what that payment bought.
@@ -1303,19 +1321,24 @@ function syncCompletedLessons() {
   cleanupExpiredDeletedSlots();
 
   const threshold = new Date(Date.now() - LESSON_DURATION_MINUTES * 60 * 1000).toISOString();
+  const trialThreshold = new Date(
+    Date.now() - TRIAL_LESSON_DURATION_MINUTES * 60 * 1000,
+  ).toISOString();
 
   const sync = db.transaction(() => {
     const lessons = db
       .prepare(
         `
-      SELECT l.id, l.student_id, l.datetime, l.price, s.balance
+      SELECT l.id, l.student_id, l.datetime, l.price, l.is_trial, s.balance
       FROM lessons l
       LEFT JOIN students s ON l.student_id = s.id
-      WHERE l.datetime < ? AND l.is_completed = 0 AND l.student_id IS NOT NULL
+      WHERE l.is_completed = 0
+        AND ((l.is_trial = 0 AND l.student_id IS NOT NULL AND l.datetime < ?)
+          OR (l.is_trial = 1 AND l.datetime < ?))
       ORDER BY l.datetime ASC
     `,
       )
-      .all(threshold);
+      .all(threshold, trialThreshold);
 
     if (lessons.length === 0) return 0;
 
@@ -1332,7 +1355,13 @@ function syncCompletedLessons() {
     // Each lesson takes a slot from the oldest prepayment, and that slot is what
     // makes it paid. Lessons that already carry a price keep it, so they do not
     // consume a second slot.
-    for (const { id, student_id, datetime, price: existing, balance } of lessons) {
+    for (const { id, student_id, datetime, price: existing, is_trial, balance } of lessons) {
+      // A trial lesson is free: it just ends, without a price or a balance move.
+      if (is_trial) {
+        completeStmt.run(0, id);
+        continue;
+      }
+
       if (studentBalances[student_id] === undefined) studentBalances[student_id] = balance ?? 0;
 
       if (existing === null) {

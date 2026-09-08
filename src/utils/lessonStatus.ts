@@ -1,4 +1,4 @@
-import { LESSON_DURATION_MINUTES } from './constants';
+import { lessonDurationMinutes } from './constants';
 import type { Lesson } from '@/types';
 
 /**
@@ -8,12 +8,18 @@ export enum LessonStatus {
   PAID = 'PAID',
   PENDING = 'PENDING',
   OVERDUE = 'OVERDUE',
+  TRIAL = 'TRIAL',
 }
 
 /**
  * Get lesson status based on payment and time
  */
 export function getLessonStatus(lesson: Lesson): LessonStatus {
+  // A trial lesson is free, so payment never applies to it
+  if (lesson.is_trial) {
+    return LessonStatus.TRIAL;
+  }
+
   // If not completed yet, always yellow (pending)
   if (!lesson.is_completed) {
     return LessonStatus.PENDING;
@@ -36,6 +42,7 @@ export function getStatusBorderColor(status: LessonStatus): string {
     [LessonStatus.PAID]: 'border-green-500',
     [LessonStatus.PENDING]: 'border-yellow-500',
     [LessonStatus.OVERDUE]: 'border-red-500',
+    [LessonStatus.TRIAL]: 'border-blue-500',
   };
   return colors[status] || 'border-gray-500';
 }
@@ -48,6 +55,7 @@ export function getStatusBgLight(status: LessonStatus): string {
     [LessonStatus.PAID]: 'bg-green-50',
     [LessonStatus.PENDING]: 'bg-yellow-50',
     [LessonStatus.OVERDUE]: 'bg-red-50',
+    [LessonStatus.TRIAL]: 'bg-blue-50',
   };
   return colors[status] || 'bg-gray-50';
 }
@@ -60,6 +68,7 @@ export function getStatusLabel(status: LessonStatus): string {
     [LessonStatus.PAID]: 'Проведено та оплачено',
     [LessonStatus.PENDING]: 'Заплановано',
     [LessonStatus.OVERDUE]: 'Проведено, не оплачено',
+    [LessonStatus.TRIAL]: 'Пробний урок',
   };
   return labels[status] || 'Невідомо';
 }
@@ -72,6 +81,7 @@ export function getStatusEmoji(status: LessonStatus): string {
     [LessonStatus.PAID]: '🟢',
     [LessonStatus.PENDING]: '🟡',
     [LessonStatus.OVERDUE]: '🔴',
+    [LessonStatus.TRIAL]: '🔵',
   };
   return emojis[status] || '⚪';
 }
@@ -79,11 +89,11 @@ export function getStatusEmoji(status: LessonStatus): string {
 /**
  * Check if lesson should be marked as completed
  */
-export function shouldBeCompleted(datetime: string): boolean {
+export function shouldBeCompleted(datetime: string, isTrial: boolean | number = false): boolean {
   const now = new Date();
   const lessonDate = new Date(datetime);
 
-  const lessonEndTime = new Date(lessonDate.getTime() + LESSON_DURATION_MINUTES * 60 * 1000);
+  const lessonEndTime = new Date(lessonDate.getTime() + lessonDurationMinutes(isTrial) * 60 * 1000);
   return lessonEndTime < now;
 }
 

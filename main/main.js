@@ -162,7 +162,7 @@ function registerIpcHandlers() {
   // # Lessons
   handle('db:get-lessons', (_, s, e) => db.getLessons(s, e));
   handle('db:add-lesson', (_, data) =>
-    db.addLesson(data.studentId, data.datetime, data.isCompleted),
+    db.addLesson(data.studentId, data.datetime, data.isCompleted, data.isTrial, data.studentName),
   );
   handle('db:update-lesson', (_, id, updates) => db.updateLesson(id, updates));
   handle('db:toggle-lesson-payment', (_, id) => {

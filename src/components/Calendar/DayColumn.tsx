@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { formatDate, formatDayOfWeekShort } from '@/utils/dateHelpers';
 import { isToday } from '@/utils/lessonStatus';
+import { lessonDurationMinutes } from '@/utils/constants';
 import useLessons from '@/hooks/useLessons';
 import useAppStore from '@/store/appStore';
 import LessonCard from './LessonCard';
@@ -119,14 +120,16 @@ function DayColumn({ date, timeSlots }: DayColumnProps) {
             >
               {/* Lessons in this hour */}
               {hourLessons.map(({ id, lesson, minuteOffset }) => {
-                // Calculate top position based on minutes (0-60 minutes = 0-80px)
+                // Position and height follow the clock (60 minutes = 80px),
+                // so a 30-minute trial lesson is visibly shorter.
                 const topPosition = (minuteOffset / 60) * 80;
+                const height = (lessonDurationMinutes(lesson.is_trial) / 60) * 80;
 
                 return (
                   <div
                     key={id}
                     className="absolute left-1 right-3 z-10"
-                    style={{ top: `${topPosition}px` }}
+                    style={{ top: `${topPosition}px`, height: `${height}px` }}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <LessonCard lesson={lesson} />

@@ -21,6 +21,8 @@ export interface Lesson {
   previous_datetime: string | null;
   is_completed: number;
   is_paid: number;
+  /** 0 | 1 — a free 30-minute trial lesson: no student, no price, no balance. */
+  is_trial: number;
   price: number | null; // kopiyky; null until lesson completes
   payment_bundle_id: number | null;
   created_at: string;
@@ -149,9 +151,12 @@ export interface EarningsDateRange {
 // # API TYPES
 
 export interface AddLessonData {
-  studentId: number;
+  studentId: number | null; // null for a trial lesson
   datetime: string;
   isCompleted: boolean;
+  isTrial?: boolean;
+  /** Trial lesson only: the name typed once, kept on the lesson itself. */
+  studentName?: string | null;
 }
 
 export interface UpdateLessonData {
