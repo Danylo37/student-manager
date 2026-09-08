@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
+import { Calendar } from 'lucide-react';
 import useAppStore from '@/store/appStore';
 import useStudents from '@/hooks/useStudents';
 import { useNotification } from '../common/NotificationProvider';
 import { parseInputToKopiyky } from '@/utils/financials';
 import Modal from './Modal';
+import type { Student } from '@/types';
 
 function AddStudentModal() {
   const isOpen = useAppStore((s) => s.modals.addStudent);
   const closeModal = useAppStore((s) => s.closeModal);
+  const openModal = useAppStore((s) => s.openModal);
+  const selectStudentForSchedule = useAppStore((s) => s.selectStudentForSchedule);
   const { addStudent } = useStudents();
   const { showToast } = useNotification();
 
@@ -17,14 +21,13 @@ function AddStudentModal() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!name.trim()) { setError("Введіть ім'я учня"); return; }
+  const createStudent = async (): Promise<Student | null> => {
+    if (!name.trim()) { setError("Введіть ім'я учня"); return null; }
 
     const priceKopiyky = priceStr !== '' ? parseInputToKopiyky(priceStr) : null;
     if (priceStr !== '' && (priceKopiyky === null || priceKopiyky <= 0)) {
       setError('Ціна за урок повинна бути більше 0');
-      return;
+      return null;
     }
 
     const balance = parseInt(balanceStr) || 0;
@@ -32,14 +35,28 @@ function AddStudentModal() {
     setLoading(true);
     setError(null);
     try {
-      await addStudent(name.trim(), balance, priceKopiyky);
+      const student = await addStudent(name.trim(), balance, priceKopiyky);
       showToast(`Учня "${name.trim()}" додано!`, 'success');
-      handleClose();
+      return student;
     } catch {
       showToast('Помилка при додаванні учня!', 'error');
+      return null;
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (await createStudent()) handleClose();
+  };
+
+  const handleCreateWithSchedule = async () => {
+    const student = await createStudent();
+    if (!student) return;
+    handleClose();
+    selectStudentForSchedule(student);
+    openModal('schedule');
   };
 
   const handleClose = () => {
@@ -96,6 +113,11 @@ function AddStudentModal() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">{error}</div>
         )}
+
+        <button type="button" onClick={handleCreateWithSchedule} disabled={loading}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50">
+          <Calendar size={16} /> Додати й створити розклад
+        </button>
 
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={handleClose} disabled={loading}

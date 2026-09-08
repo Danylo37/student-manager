@@ -296,7 +296,7 @@ export interface AppState {
 
   // Actions — Students
   loadStudents: () => Promise<void>;
-  addStudent: (name: string, balance: number, priceKopiyky?: number | null) => Promise<void>;
+  addStudent: (name: string, balance: number, priceKopiyky?: number | null) => Promise<Student>;
   deleteStudent: (studentId: number) => Promise<void>;
   updateBalance: (studentId: number, amount: number) => Promise<void>;
   setStudentTaxExempt: (studentId: number, exempt: boolean) => Promise<void>;

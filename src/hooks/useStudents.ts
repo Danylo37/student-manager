@@ -22,7 +22,7 @@ interface UseStudentsReturn {
 
   // Actions
   loadStudents: () => Promise<void>;
-  addStudent: (name: string, balance: number, price?: number | null) => Promise<void>;
+  addStudent: (name: string, balance: number, price?: number | null) => Promise<Student>;
   deleteStudent: (studentId: number) => Promise<void>;
   updateBalance: (studentId: number, amount: number) => Promise<void>;
 
