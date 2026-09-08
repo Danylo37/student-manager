@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const db = require('./database');
 const logger = require('./logger');
-const { initUpdater } = require('./updater');
+const { initUpdater, consumeReleaseNotes } = require('./updater');
 
 let mainWindow;
 
@@ -96,6 +96,9 @@ function registerIpcHandlers() {
       }
     });
   };
+
+  // # App
+  handle('app:get-release-notes', () => consumeReleaseNotes());
 
   // # Students
   handle('db:get-students', () => db.getStudents());

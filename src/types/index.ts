@@ -238,6 +238,14 @@ export interface ElectronAPI {
 
   // Sync
   syncLessons: () => Promise<number>;
+
+  // Updates
+  getReleaseNotes: () => Promise<ReleaseNotes | null>;
+}
+
+export interface ReleaseNotes {
+  version: string;
+  notes: string;
 }
 
 declare global {

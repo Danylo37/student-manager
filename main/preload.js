@@ -73,4 +73,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Sync
   syncLessons: () => ipcRenderer.invoke('db:sync-lessons'),
+
+  // Updates
+  getReleaseNotes: () => ipcRenderer.invoke('app:get-release-notes'),
 });

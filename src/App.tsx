@@ -12,6 +12,7 @@ import EditLessonModal from './components/Modals/EditLessonModal';
 import ScheduleModal from './components/Modals/ScheduleModal';
 import TaxSettingsModal from './components/Modals/TaxSettingsModal';
 import DiscountsModal from './components/Modals/DiscountsModal';
+import WhatsNewModal from './components/Modals/WhatsNewModal';
 import { NotificationProvider } from './components/common/NotificationProvider';
 
 function App() {
@@ -50,6 +51,7 @@ function App() {
         <ScheduleModal />
         <TaxSettingsModal />
         <DiscountsModal />
+        <WhatsNewModal />
       </div>
     </NotificationProvider>
   );
