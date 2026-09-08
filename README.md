@@ -5,15 +5,19 @@
 - [📖 About the Project](#-about-the-project)
   - [Key Features](#key-features)
   - [📸 Screenshots](#-screenshots)
+    - [Calendar](#calendar)
+    - [Finance](#finance)
+    - [Students and Lessons](#students-and-lessons)
 - [🛠 Technologies](#-technologies)
 - [📦 Installation and Setup](#-installation-and-setup)
   - [Prerequisites](#prerequisites)
   - [Installing Dependencies](#installing-dependencies)
   - [Development Mode](#development-mode)
-- [🏗 Building the Application](#-building-the-application)
+- [🏗 Building and Installing](#-building-and-installing)
   - [Windows](#windows)
   - [Linux](#linux)
-  - [Universal Build](#universal-build)
+  - [Cross-building Windows from Linux](#cross-building-windows-from-linux)
+- [🔄 Updating an Installed App](#-updating-an-installed-app)
 - [📁 Project Structure](#-project-structure)
 - [💾 Database](#-database)
   - [Database Schema](#database-schema)
@@ -39,32 +43,61 @@
 
 ### Calendar
 
-![Calendar](attachments/1_calendar.png)
+Week view with every lesson status at once: 🟢 given and paid, 🔴 given and unpaid, 🟡 scheduled, 🔵 free trial (a half-height 30-minute card). The header carries the week total and, when taxes are on, the net beside it.
 
-### Calendar (Purple Theme)
+![Week with all lesson statuses](attachments/01_calendar_week.png)
 
-![Purple theme](attachments/2_calendar_purple_theme.png)
+The same week in the purple theme.
 
-### Calendar with Lessons
+![Purple theme](attachments/02_calendar_purple.png)
 
-![Calendar with lessons - view 1](attachments/3_calendar_with_lessons_1.png)
-![Calendar with lessons - view 2](attachments/4_calendar_with_lessons_2.png)
+### Finance
 
-### Add Student
+Earnings by period with the tax breakdown: cash received (the tax base) against lessons given, minus ЄП, ВЗ and ЄСВ.
 
-![Add student](attachments/5_add_student.png)
+![Finance overview](attachments/03_finance_overview.png)
 
-### Add Lesson
+The payment history, every payment and refund in the period.
 
-![Add lesson](attachments/6_add_lesson.png)
+![Payment history](attachments/04_finance_payments.png)
 
-### Student List
+The income calculator answers "what happens if I raise prices", based on the active weekly schedule.
 
-![Student list](attachments/7_student_list.png)
+![Income calculator](attachments/05_finance_calculator.png)
 
-### Schedule
+Tax settings: єдиний податок, ЄСВ and військовий збір.
 
-![Schedule](attachments/8_schedule.png)
+![Tax settings](attachments/06_tax_settings.png)
+
+### Students and Lessons
+
+The student list shows the balance, the price per lesson and the discount package that applies; every action lives in the row menu.
+
+![Student list](attachments/07_students_list.png)
+
+![Student row menu](attachments/08_students_menu.png)
+
+Package discounts: pay for several lessons at once at a lower price per lesson.
+
+![Discounts](attachments/09_discounts.png)
+
+A recurring weekly schedule, and the lessons generated from it.
+
+![Schedule](attachments/10_schedule.png)
+
+Adding a student, with the price and an optional jump straight into the schedule.
+
+![Add student](attachments/11_add_student.png)
+
+Adding a lesson, including a free 30-minute trial for someone who is not a student yet.
+
+![Add lesson](attachments/12_add_lesson.png)
+
+![Trial lesson](attachments/13_add_trial_lesson.png)
+
+Editing a lesson: move it, rename the student, mark it paid or delete it.
+
+![Edit lesson](attachments/14_edit_lesson.png)
 
 ---
 
@@ -72,43 +105,53 @@
 
 ✅ **Student Management**
 
-- Add, edit, and delete students
-- Track each student's balance
-- View lesson history
+- Add, rename and delete students, each with a price per lesson
+- Balance in lessons: a positive one is prepaid, a negative one is debt
+- Price history, so a past lesson keeps the price it was given at
+- Payments and refunds recorded as packages, with the lessons left to work off
 
 ✅ **Lesson Calendar**
 
-- Weekly view with lessons
-- Visual lesson statuses (scheduled, completed, paid, overdue)
-- Quick lesson adding and editing
+- Weekly view with four statuses: scheduled, given and paid, given and unpaid, trial
+- Free 30-minute trial lessons for someone who is not a student yet
+- Mark a lesson as paid straight from its card
+- Move, rename or delete a lesson from the editor
 
 ✅ **Scheduling**
 
-- Create recurring schedules for each student
-- Automatic lesson generation based on schedule
-- Flexible schedule management (activate/deactivate)
+- A recurring weekly schedule per student
+- Lessons for the current and next week are generated from it automatically
+- A slot deleted by hand is not recreated
+
+✅ **Money and Taxes**
+
+- Finance view with earnings by day, week, month, quarter, year or all time
+- Two views of the same period: cash received (the tax base) and lessons given
+- ФОП taxes: єдиний податок 5%, військовий збір 1%, fixed ЄСВ per month
+- A student can be excluded from the percentage taxes
+- Package discounts, for example 10 lessons for the price of 9
+- Income calculator: what the month looks like if prices change
+- Payment history for every period
 
 ✅ **Automatic Accounting**
 
-- Balance synchronization when marking lessons as completed
-- Automatic detection of overdue lessons
-- Secure local data storage using SQLite database
+- A lesson is marked as given once its time has passed
+- Paying takes the oldest open slot, so payments and lessons stay in step
+- A refund releases the lessons it paid for without rewriting a past tax period
+- All data stays local in an SQLite database
 
 ✅ **Visual Customization**
 
-- Beautiful purple theme for a modern and pleasant interface
-- Elegant color scheme that reduces eye strain
-- Intuitive visual design for better user experience
-
----
+- Standard and purple themes
+- Toasts and confirmations instead of system dialogs
 
 ## 🛠 Technologies
 
-- **Electron** 40.0.0 — desktop framework
+- **Electron** 43.4.0 — desktop framework
 - **React** 19.2.3 — UI library
 - **Vite** 7.3.1 — build tool and dev server
 - **Tailwind CSS** 3.4.19 — styling
-- **Better-SQLite3** 12.6.2 — local database
+- **Better-SQLite3** 13.0.3 — local database
 - **Zustand** 5.0.10 — state management
 - **date-fns** 4.1.0 — date utilities
 - **Lucide React** — icons
@@ -119,7 +162,7 @@
 
 ### Prerequisites
 
-- **Node.js** version 18 or higher
+- **Node.js** version 20 or higher
 - **npm** or **yarn**
 - **Python** (for building native modules)
 - **Build tools** for your OS:
@@ -129,16 +172,12 @@
 ### Installing Dependencies
 
 ```bash
-# Clone the repository
 git clone https://github.com/Danylo37/student-manager
 cd student-manager
-
-# Install dependencies
 npm install
-
-# Rebuild native modules for Electron
-npm run rebuild
 ```
+
+`npm install` runs `postinstall`, which rebuilds the native module `better-sqlite3` against the Electron ABI. No extra step is needed.
 
 ### Development Mode
 
@@ -153,68 +192,104 @@ This command will start:
 
 ---
 
-## 🏗 Building the Application
+## 🏗 Building and Installing
+
+Each block below is copy-paste ready: run it from a clean machine and you end up with the app installed.
 
 ### Windows
 
-```bash
-# Build frontend
-npm run build
+Install the toolchain once (PowerShell), then reopen the terminal so `PATH` picks up `git` and `node`:
 
-# Create Windows installer
-npm run package:win
+```powershell
+winget install Git.Git
+winget install OpenJS.NodeJS.LTS
 ```
 
-**Output:** Executable `.exe` installer in `release/` folder
+Build and install the app:
 
-**Windows Requirements:**
-
-- Visual Studio Build Tools 2017 or newer
-- Windows SDK (usually included in Visual Studio Build Tools)
-
-Install Build Tools with:
-
-```bash
-npm install --global windows-build-tools
+```powershell
+git clone https://github.com/Danylo37/student-manager
+cd student-manager
+npm install
+npm run dist:win
+Start-Process (Get-ChildItem release\*.exe).FullName
 ```
+
+The last line opens the generated `Student Manager Setup <version>.exe`, a regular NSIS wizard with a folder choice and Desktop / Start Menu shortcuts.
+
+If `npm install` fails while compiling `better-sqlite3`, the prebuilt binary was unavailable and a compiler is required:
+
+```powershell
+winget install Python.Python.3.12
+winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+> The old `npm install --global windows-build-tools` package is deprecated and no longer works on current Node versions; use the Build Tools installer above instead.
 
 ### Linux
 
 ```bash
-# Build frontend
-npm run build
-
-# Create Linux packages
-npm run package:linux
+git clone https://github.com/Danylo37/student-manager
+cd student-manager
+npm install
+npm run install:linux
+student-manager
 ```
 
-**Output:**
+`install:linux` builds an AppImage and copies it to `~/.local/bin/student-manager`, so the app starts with a single word (make sure `~/.local/bin` is in your `PATH`). AppImage bundles every library it needs, which is why it runs on any distribution, Arch included.
 
-- `.AppImage` — universal format for all distributions
-- `.deb` — for Ubuntu/Debian-based systems
+If you want the artifacts without installing them, use `npm run dist:linux`. It writes to `release/`:
 
-In `release/` folder
+- `.AppImage` — universal, just make it executable and run it
+- `.deb` — for Ubuntu/Debian, install with `sudo apt install ./release/*.deb`
 
-**Linux Requirements:**
+Compiler packages are only needed if the `better-sqlite3` prebuilt binary is unavailable for your platform:
 
 ```bash
-# Debian/Ubuntu
-sudo apt-get install build-essential python3 make g++
-
-# Fedora/RHEL
-sudo dnf install gcc-c++ make python3
-
-# Arch Linux
-sudo pacman -S base-devel python
+sudo pacman -S base-devel python          # Arch
+sudo apt-get install build-essential python3 make g++   # Debian/Ubuntu
+sudo dnf install gcc-c++ make python3     # Fedora/RHEL
 ```
 
-### Universal Build
+### Cross-building Windows from Linux
+
+`npm run dist:win` can produce the `.exe` from Linux, but it needs Wine:
 
 ```bash
-# Build for current platform
-npm run build
-npm run package
+sudo pacman -S wine
+npm run dist:win
 ```
+
+Alternatively build inside the `electronuserland/builder:wine` Docker image, or simply run the Windows block above on a Windows machine.
+
+---
+
+## 🔄 Updating an Installed App
+
+The app has no built-in auto-update, so an update is just a fresh build installed over the old one. The database lives outside the app (`~/.config/student-manager/students.db`, `%APPDATA%/student-manager/students.db` on Windows), so data survives every reinstall.
+
+**Windows** (from the cloned repo):
+
+```powershell
+git pull
+npm install
+npm run dist:win
+Start-Process (Get-ChildItem release\*.exe).FullName
+```
+
+NSIS installs over the previous version, shortcuts stay in place.
+
+**Linux:**
+
+```bash
+git pull
+npm install
+npm run install:linux
+```
+
+The installed AppImage is overwritten in place, nothing else to do. For a `.deb` install run `npm run dist:linux && sudo apt install ./release/*.deb` instead.
+
+Bump `version` in `package.json` before packaging, otherwise `apt` will not treat the package as newer and the release files keep the old name.
 
 ---
 
@@ -228,15 +303,7 @@ student-manager/
 ├── .prettierrc                 # Prettier configuration
 ├── README.md                   # Project documentation
 │
-├── attachments/                # Screenshots for README
-│   ├── 1_calendar.png
-│   ├── 2_calendar_purple_theme.png
-│   ├── 3_calendar_with_lessons_1.png
-│   ├── 4_calendar_with_lessons_2.png
-│   ├── 5_add_student.png
-│   ├── 6_add_lesson.png
-│   ├── 7_student_list.png
-│   └── 8_schedule.png
+├── attachments/                # Screenshots for README (01_… to 14_…)
 │
 ├── build/                      # Build resources
 │   ├── icon.ico                # Icon for Windows
@@ -338,7 +405,7 @@ The application uses **SQLite** for local data storage. The database is automati
 
 - `id` — unique identifier
 - `student_id` — reference to student
-- `day_of_week` — day of week (0-6, where 0 = Sunday)
+- `day_of_week` — day of week (0-6, where 0 = Monday)
 - `time` — lesson time
 - `is_active` — whether schedule is active
 - `created_at` — creation date
@@ -347,21 +414,29 @@ The application uses **SQLite** for local data storage. The database is automati
 
 ## 🔧 Available Commands
 
+Day to day you only need these:
+
 ```bash
-# Development
-npm run dev              # Run in development mode
-npm run dev:vite         # Vite dev server only
-npm run dev:electron     # Electron only
-
-# Build
-npm run build            # Build React application
-npm run package          # Create installer for current OS
-npm run package:win      # Build for Windows
-npm run package:linux    # Build for Linux
-
-# Utilities
-npm run rebuild          # Rebuild native modules for Electron
+npm run dev              # develop with hot reload
+npm run install:linux    # build and install/update the app on Linux
+npm run dist:win         # build the Windows installer
 ```
+
+Everything else is a building block the commands above already call:
+
+```bash
+npm run build            # compile React into dist/
+npm run package          # pack dist/ + main/ into an installer for the current OS
+npm run package:win      # same, forced to the Windows target
+npm run package:linux    # same, forced to the Linux targets
+npm run dist             # build + package for the current OS
+npm run dist:linux       # build + package the AppImage and .deb
+npm run dev:vite         # Vite dev server only
+npm run dev:electron     # Electron window only (expects Vite to be running)
+npm run rebuild          # rebuild native modules manually (npm install already does it)
+```
+
+Naming rule: `dev*` is for working on the code, `dist*` is for producing installers, and the suffix after the colon is the target platform.
 
 ---
 
@@ -372,10 +447,8 @@ npm run rebuild          # Rebuild native modules for Electron
 If you encounter errors with the `better-sqlite3` module:
 
 ```bash
-# Remove node_modules and rebuild
 rm -rf node_modules package-lock.json
 npm install
-npm run rebuild
 ```
 
 ### Hot Reload
