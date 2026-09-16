@@ -37,3 +37,12 @@ Thumbs.db
 
 # Packaged app
 release/
+
+# Cloud (cloud/)
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+cloud/worker-configuration.d.ts
+cloud/public/*
+!cloud/public/.gitkeep

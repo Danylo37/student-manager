@@ -1,0 +1,5 @@
+# Copy to .dev.vars for `wrangler dev`; in production set each with `wrangler secret put NAME`.
+BOT_TOKEN=123456789:replace-with-the-token-from-BotFather
+DEVICE_SECRET=replace-with-openssl-rand-hex-32
+WEBHOOK_SECRET=replace-with-openssl-rand-hex-32
+ALLOWED_TG_IDS=123456789

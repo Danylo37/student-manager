@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "student-manager",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "observability": { "enabled": true },
+  // The built Mini App (stage 3) lands in public/; unknown paths fall back to index.html.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "student-manager",
+      "database_id": "REPLACE_WITH_OUTPUT_OF_wrangler_d1_create",
+      "migrations_dir": "migrations",
+    },
+  ],
+}
