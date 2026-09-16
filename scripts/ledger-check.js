@@ -1,0 +1,616 @@
+#!/usr/bin/env node
+'use strict';
+
+// Replays the money paths on throwaway databases and checks that the ledger
+// ends up identical whichever way a mutation arrives: through the IPC handlers
+// or through an intent. Also checks that a repeated intent changes nothing, that
+// expected rejections write nothing, and that a failure inside an action rolls
+// the whole action back.
+//
+//   node scripts/ledger-check.js
+//   node scripts/ledger-check.js --before <dir>   # also replay through another
+//        checkout's main/ (a git worktree of an older commit) and diff the two
+//
+// main/ needs electron for app.getPath and ipcMain.handle, so a stand-in is
+// served from here and the handlers are collected instead of registered.
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const Module = require('module');
+const { randomUUID } = require('crypto');
+
+// # ELECTRON STAND-IN
+
+const state = { userData: null, handlers: null, startupError: null };
+
+const fakeElectron = {
+  app: {
+    isPackaged: false,
+    getPath: () => state.userData,
+    getVersion: () => 'ledger-check',
+    whenReady: () => Promise.resolve(),
+    on() {},
+  },
+  BrowserWindow: class {
+    constructor() {
+      this.webContents = { on() {}, openDevTools() {} };
+    }
+    maximize() {}
+    loadURL() {
+      return Promise.resolve();
+    }
+    loadFile() {
+      return Promise.resolve();
+    }
+    static getAllWindows() {
+      return [];
+    }
+  },
+  ipcMain: {
+    handle: (channel, fn) => {
+      state.handlers[channel] = fn;
+    },
+  },
+  dialog: {
+    showErrorBox: (title, message) => {
+      state.startupError = new Error(`${title}: ${message}`);
+    },
+    showMessageBox: async () => ({ response: 1 }),
+  },
+};
+
+const originalLoad = Module._load;
+Module._load = function (request, ...rest) {
+  if (request === 'electron') return fakeElectron;
+  if (request === 'electron-updater') return { autoUpdater: {} };
+  return originalLoad.call(this, request, ...rest);
+};
+
+// schema.sql is read from the tree itself in development
+process.env.NODE_ENV = 'development';
+
+const tempDirs = [];
+
+/** Boot one main/ tree on a fresh database, the way electron would. */
+async function loadTree(mainDir) {
+  state.userData = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-check-'));
+  tempDirs.push(state.userData);
+  state.handlers = {};
+  state.startupError = null;
+
+  for (const file of Object.keys(require.cache)) {
+    if (file.startsWith(mainDir + path.sep)) delete require.cache[file];
+  }
+  require(path.join(mainDir, 'main.js'));
+  require(path.join(mainDir, 'logger.js')).silent = true;
+  await new Promise((resolve) => setImmediate(resolve));
+  if (state.startupError) throw state.startupError;
+  process.removeAllListeners('uncaughtException');
+  process.removeAllListeners('unhandledRejection');
+
+  const Database = require('better-sqlite3');
+  const tree = {
+    mainDir,
+    handlers: state.handlers,
+    db: require(path.join(mainDir, 'database.js')),
+    raw: new Database(path.join(state.userData, 'students.db')),
+  };
+  const intentsFile = path.join(mainDir, 'sync', 'intents.js');
+  if (fs.existsSync(intentsFile)) tree.intents = require(intentsFile);
+  return tree;
+}
+
+// # DRIVERS
+//
+// The same eight operations, sent the way the renderer sends them (IPC
+// channels) or wrapped as intents. Both return promises so scenarios read the
+// same either way.
+
+function viaHandlers(tree) {
+  const call = (channel, ...args) => tree.handlers[channel]({}, ...args);
+  return {
+    name: 'handlers',
+    tree,
+    addStudent: async (name, balance, price) =>
+      (await call('db:add-student', name, balance, price)).id,
+    pay: (studentId, lessons, total = null) =>
+      call('db:pay-for-lessons', studentId, lessons, total),
+    adjust: (studentId, lessons) => call('db:update-balance', studentId, lessons),
+    addLesson: async (studentId, datetime, extra = {}) =>
+      (await call('db:add-lesson', { studentId, datetime, isCompleted: false, ...extra })).id,
+    move: (lessonId, datetime) => call('db:update-lesson', lessonId, { datetime }),
+    complete: (lessonId, done) =>
+      call('db:update-lesson', lessonId, { is_completed: done ? 1 : 0 }),
+    remove: (lessonId) => call('db:delete-lesson', lessonId),
+    toggle: (lessonId) => call('db:toggle-lesson-payment', lessonId),
+  };
+}
+
+function viaIntents(tree) {
+  const apply = (type, payload, createdAt = new Date().toISOString()) => {
+    const intent = { id: randomUUID(), type, payload, createdAt, source: 'ledger-check' };
+    const outcome = tree.intents.apply(intent);
+    if (outcome.status !== 'applied') {
+      throw new Error(`${type} ${JSON.stringify(payload)} -> ${outcome.status}: ${outcome.reason}`);
+    }
+    return outcome.result;
+  };
+  return {
+    name: 'intents',
+    tree,
+    apply,
+    addStudent: async (name, balance, price) =>
+      apply('student.add', { name, balance, priceKopiyky: price }).id,
+    pay: async (studentId, lessons, total = null) =>
+      apply('balance.pay', { studentId, lessons, totalPriceKopiyky: total }),
+    adjust: async (studentId, lessons) => apply('balance.adjust', { studentId, lessons }),
+    addLesson: async (studentId, datetime, extra = {}) =>
+      apply('lesson.add', { studentId, datetime, ...extra }).id,
+    move: async (lessonId, datetime) => apply('lesson.move', { lessonId, datetime }),
+    complete: async (lessonId, done) => apply('lesson.complete', { lessonId, isCompleted: done }),
+    remove: async (lessonId) => apply('lesson.delete', { lessonId }),
+    toggle: async (lessonId) => apply('lesson.togglePayment', { lessonId }),
+  };
+}
+
+// # SNAPSHOT
+
+const WIDE = ['2000-01-01T00:00:00.000Z', '2100-01-01T00:00:00.000Z'];
+const FAR = '2100-01-01T00:00:00.000Z';
+
+// Every business column except the timestamps, which differ run to run
+const TABLES = {
+  students: 'SELECT id, name, balance, is_tax_exempt FROM students ORDER BY id',
+  payment_bundles: `SELECT id, student_id, total_price, lessons_count, lessons_used,
+      lessons_cancelled, amount_cancelled, is_tax_exempt FROM payment_bundles ORDER BY id`,
+  lessons: `SELECT id, student_id, student_name_cache, datetime, previous_datetime, is_completed,
+      is_paid, is_trial, price, payment_bundle_id FROM lessons ORDER BY id`,
+  balance_history:
+    'SELECT id, student_id, student_name_cache, lessons, amount FROM balance_history ORDER BY id',
+  lesson_prices: 'SELECT id, student_id, price FROM lesson_prices ORDER BY id',
+  deleted_lesson_slots: 'SELECT id, student_id, datetime FROM deleted_lesson_slots ORDER BY id',
+};
+
+function snapshot(tree) {
+  const rows = {};
+  for (const [table, sql] of Object.entries(TABLES)) rows[table] = tree.raw.prepare(sql).all();
+  return {
+    rows,
+    cash: tree.db.getCashStats(...WIDE),
+    earned: tree.db.getEarningsStats(...WIDE),
+    open: tree.db.getBalanceTotals(FAR),
+  };
+}
+
+/** First difference between two snapshots, or null. */
+function diff(a, b) {
+  if (JSON.stringify(a) === JSON.stringify(b)) return null;
+  for (const table of Object.keys(TABLES)) {
+    const n = Math.max(a.rows[table].length, b.rows[table].length);
+    for (let i = 0; i < n; i++) {
+      const ra = JSON.stringify(a.rows[table][i]);
+      const rb = JSON.stringify(b.rows[table][i]);
+      if (ra !== rb) return `${table}[${i}]\n      ${ra}\n      ${rb}`;
+    }
+  }
+  for (const key of ['cash', 'earned', 'open']) {
+    const ja = JSON.stringify(a[key]);
+    const jb = JSON.stringify(b[key]);
+    if (ja !== jb) return `${key}: ${ja} vs ${jb}`;
+  }
+  return 'differs';
+}
+
+const uah = (kopiyky) => (kopiyky / 100).toFixed(2);
+
+function summary(s) {
+  const balances = s.rows.students.map((r) => `#${r.id}=${r.balance}`).join(' ') || '-';
+  return (
+    `cash ${uah(s.cash.total)} (taxable ${uah(s.cash.taxable)}, lessons ${s.cash.lessons}) ` +
+    `earned ${uah(s.earned.total)} advance ${uah(s.open.advance)} debt ${uah(s.open.debt)} ` +
+    `balances ${balances}`
+  );
+}
+
+// # SCENARIOS
+
+const PRICE = 50000; // 500 ₴ per lesson
+const at = (hours) => new Date(Date.UTC(2030, 0, 1, 10) + hours * 3600e3).toISOString();
+
+/** Add and complete `count` lessons, one per hour starting at slot `from`. */
+async function given(t, studentId, count, from = 0) {
+  const ids = [];
+  for (let i = 0; i < count; i++) {
+    const id = await t.addLesson(studentId, at(from + i));
+    await t.complete(id, true);
+    ids.push(id);
+  }
+  return ids;
+}
+
+// `real` is the money that actually changed hands, so the printout shows where
+// the ledger is known to drift (the LEDGER-BUG markers) and that the drift is
+// the same before and after. `intents: false` marks a path the intent guards
+// refuse on purpose; those run through the handlers only.
+const scenarios = [
+  {
+    name: 'пополнение со скидкой: 10 уроків за 4000 ₴, 12 проведено',
+    real: 400000,
+    run: async (t) => {
+      const s = await t.addStudent('Знижка', 0, PRICE);
+      t.tree.db.addDiscount(s, 10, 400000, '10 уроків');
+      await t.pay(s, 10);
+      await given(t, s, 12);
+    },
+  },
+  {
+    name: 'возврат с отменой предоплаченных: оплата 5, 3 проведено, знято 4',
+    real: 250000 - 200000,
+    run: async (t) => {
+      const s = await t.addStudent('Повернення', 0, PRICE);
+      await t.pay(s, 5);
+      await given(t, s, 3);
+      await t.adjust(s, -4);
+    },
+  },
+  {
+    name: 'урок оплачен задним числом (💵 на долговом), потом пополнение 3',
+    real: 50000 + 150000,
+    run: async (t) => {
+      const s = await t.addStudent('Борг', 0, PRICE);
+      const [first] = await given(t, s, 2);
+      await t.toggle(first);
+      await t.pay(s, 3);
+    },
+  },
+  {
+    name: 'ошибочное пополнение 10, снято 5, добавлено 2 через баланс',
+    real: 500000 - 250000 + 100000,
+    run: async (t) => {
+      const s = await t.addStudent('Помилка', 0, PRICE);
+      await t.pay(s, 10);
+      await t.adjust(s, -5);
+      await t.adjust(s, 2);
+    },
+  },
+  {
+    name: 'перенос запланированного, проведён и отменён, удалён запланированный, пробный',
+    real: 100000,
+    run: async (t) => {
+      const s = await t.addStudent('Рух', 0, PRICE);
+      await t.pay(s, 2);
+      const a = await t.addLesson(s, at(0));
+      await t.move(a, at(5));
+      await t.complete(a, true);
+      await t.complete(a, false);
+      const b = await t.addLesson(s, at(1));
+      await t.remove(b);
+      const trial = await t.addLesson(null, at(2), { isTrial: true, studentName: 'Пробний' });
+      await t.complete(trial, true);
+    },
+  },
+  {
+    name: 'LEDGER-BUG-2: учень без цены, 2 проведено, пополнение 3',
+    real: null,
+    run: async (t) => {
+      const s = await t.addStudent('Без ціни', 0, null);
+      await given(t, s, 2);
+      await t.pay(s, 3);
+    },
+  },
+  {
+    name: 'LEDGER-BUG-3: стартовый баланс 3, 4 проведено',
+    real: 150000,
+    run: async (t) => {
+      const s = await t.addStudent('Старт', 3, PRICE);
+      await given(t, s, 4);
+    },
+  },
+  {
+    name: 'LEDGER-BUG-4: оплата 5, 6 проведено, удалён оплаченный, 💵 на долговом',
+    real: 250000,
+    run: async (t) => {
+      const s = await t.addStudent('Слот', 0, PRICE);
+      await t.pay(s, 5);
+      const ids = await given(t, s, 6);
+      await t.remove(ids[2]);
+      await t.toggle(ids[5]);
+    },
+  },
+  {
+    name: 'LEDGER-BUG-5: оплата 5, потом флаг пільги, потом знято 2',
+    real: 150000,
+    run: async (t) => {
+      const s = await t.addStudent('Пільга', 0, PRICE);
+      await t.pay(s, 5);
+      t.tree.db.setStudentTaxExempt(s, true);
+      await t.adjust(s, -2);
+    },
+  },
+  {
+    name: 'LEDGER-BUG-6: оплата 5, 2 проведено, ученик удалён',
+    real: 250000,
+    run: async (t) => {
+      const s = await t.addStudent('Пішов', 0, PRICE);
+      await t.pay(s, 5);
+      await given(t, s, 2);
+      t.tree.db.deleteStudent(s);
+    },
+  },
+  {
+    name: 'LEDGER-BUG-1: должник удалён, 💵 на его уроке (намерение это отклоняет)',
+    real: 50000,
+    intents: false,
+    run: async (t) => {
+      const s = await t.addStudent('Боржник', 0, PRICE);
+      const [first] = await given(t, s, 2);
+      t.tree.db.deleteStudent(s);
+      await t.toggle(first);
+    },
+  },
+  {
+    name: 'LEDGER-BUG-7: пакет по 400, ошибочный +1 по 500, внесён прошлый урок, снято 1',
+    real: 400000 + 50000 - 50000,
+    run: async (t) => {
+      const s = await t.addStudent('Пакет', 0, PRICE);
+      t.tree.db.addDiscount(s, 10, 400000, '10 уроків');
+      await t.pay(s, 10);
+      await given(t, s, 10, 10);
+      await t.pay(s, 1);
+      await given(t, s, 1, 0);
+      await t.adjust(s, -1);
+    },
+  },
+];
+
+// # CHECKS
+
+let failures = 0;
+const ok = (cond, message) => {
+  if (!cond) failures++;
+  console.log(`   ${cond ? '✓' : '✗'} ${message}`);
+  return cond;
+};
+
+async function runScenario(scenario, trees) {
+  console.log(`\n${scenario.name}`);
+  const results = [];
+  for (const { label, mainDir, driver } of trees) {
+    if (driver === viaIntents && scenario.intents === false) continue;
+    const tree = await loadTree(mainDir);
+    if (driver === viaIntents && !tree.intents) continue;
+    const t = driver(tree);
+    await scenario.run(t);
+    const snap = snapshot(tree);
+    results.push({ label, snap });
+    console.log(`   ${label.padEnd(16)} ${summary(snap)}`);
+  }
+
+  const base = results[0];
+  for (const other of results.slice(1)) {
+    const d = diff(base.snap, other.snap);
+    ok(!d, `${base.label} == ${other.label}${d ? `\n      ${d}` : ''}`);
+  }
+
+  const { cash, earned, open } = base.snap;
+  const identity = cash.total - open.advance === earned.total;
+  console.log(
+    `   ${identity ? '=' : '≠'} cash − advance ${identity ? '=' : '≠'} earned` +
+      (scenario.real === null
+        ? '   real: невідомо (ціни немає)'
+        : `   ledger ${uah(cash.total)} vs real ${uah(scenario.real)}` +
+          (cash.total === scenario.real ? '' : '  ← known drift')),
+  );
+}
+
+async function checkPastPaidAt(mainDir) {
+  console.log('\nнамерение с createdAt в прошлом: paid_at попадает в тот период');
+  const tree = await loadTree(mainDir);
+  const t = viaIntents(tree);
+  const s = await t.addStudent('Минуле', 0, PRICE);
+  t.apply('balance.pay', { studentId: s, lessons: 5 }, '2024-02-10T10:00:00.000Z');
+  t.apply('balance.adjust', { studentId: s, lessons: -1 }, '2024-05-03T09:30:00.000Z');
+  await viaHandlers(tree).pay(s, 1);
+
+  const q1 = tree.db.getCashStats('2024-01-01T00:00:00.000Z', '2024-04-01T00:00:00.000Z');
+  const q2 = tree.db.getCashStats('2024-04-01T00:00:00.000Z', '2024-07-01T00:00:00.000Z');
+  const year = new Date().getUTCFullYear();
+  const thisYear = tree.db.getCashStats(`${year}-01-01T00:00:00.000Z`, FAR);
+  const paidAt = tree.raw.prepare('SELECT paid_at FROM payment_bundles ORDER BY id').all();
+  console.log(
+    `   2024 Q1 ${uah(q1.total)}  2024 Q2 ${uah(q2.total)}  ${year} ${uah(thisYear.total)}`,
+  );
+  console.log(`   paid_at: ${paidAt.map((r) => r.paid_at).join(' | ')}`);
+  ok(q1.total === 250000 && q2.total === -50000, 'оплата и возврат легли в свои кварталы 2024');
+  ok(thisYear.total === 50000, 'IPC-оплата без paidAt осталась в текущем периоде');
+  ok(
+    paidAt.slice(0, 2).every((r) => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(r.paid_at)),
+    "paid_at в формате datetime('now')",
+  );
+}
+
+async function checkIntents(mainDir) {
+  console.log('\nповторное применение и отказы намерений: база не меняется');
+  const tree = await loadTree(mainDir);
+  const t = viaIntents(tree);
+  const s = await t.addStudent('Ідемпотентність', 0, PRICE);
+  const now = new Date().toISOString();
+
+  const intent = {
+    id: 'pay-once',
+    type: 'balance.pay',
+    payload: { studentId: s, lessons: 5 },
+    createdAt: now,
+    source: 'ledger-check',
+  };
+  ok(tree.intents.apply(intent).status === 'applied', 'первое применение: applied');
+  const after = snapshot(tree);
+  const again = tree.intents.apply(intent);
+  ok(
+    again.status === 'duplicate' && again.previous.status === 'applied',
+    'второе применение: duplicate',
+  );
+  const forged = tree.intents.apply({ ...intent, payload: { studentId: s, lessons: 50 } });
+  ok(forged.status === 'duplicate', 'тот же id с другим payload: duplicate');
+  ok(!diff(after, snapshot(tree)), 'после повторов база не изменилась');
+
+  // Fixtures for the rejections
+  const [done] = await given(t, s, 1, 0);
+  const ghost = await t.addStudent('Привид', 0, PRICE);
+  const [ghostLesson] = await given(t, ghost, 1, 1);
+  tree.db.deleteStudent(ghost);
+
+  const cases = [
+    ['ученик удалён', 'balance.pay', { studentId: ghost, lessons: 1 }, 'Учня видалено'],
+    [
+      'урок не найден',
+      'lesson.complete',
+      { lessonId: 9999, isCompleted: true },
+      'Урок не знайдено',
+    ],
+    ['слот занят', 'lesson.add', { studentId: s, datetime: at(0) }, 'Цей час уже зайнято'],
+    [
+      'урок уже проведён',
+      'lesson.complete',
+      { lessonId: done, isCompleted: true },
+      'Урок уже проведено',
+    ],
+    [
+      'перенос проведённого',
+      'lesson.move',
+      { lessonId: done, datetime: at(9) },
+      'Урок уже проведено',
+    ],
+    ['урок уже оплачен', 'lesson.togglePayment', { lessonId: done }, 'Урок уже оплачено'],
+    ['💵 на уроке удалённого', 'lesson.togglePayment', { lessonId: ghostLesson }, 'Учня видалено'],
+  ];
+  for (const [label, type, payload, reason] of cases) {
+    const before = snapshot(tree);
+    const id = randomUUID();
+    const outcome = tree.intents.apply({
+      id,
+      type,
+      payload,
+      createdAt: now,
+      source: 'ledger-check',
+    });
+    const repeat = tree.intents.apply({
+      id,
+      type,
+      payload,
+      createdAt: now,
+      source: 'ledger-check',
+    });
+    ok(
+      outcome.status === 'rejected' &&
+        outcome.reason === reason &&
+        repeat.status === 'duplicate' &&
+        !diff(before, snapshot(tree)),
+      `${label}: ${outcome.status} «${outcome.reason}», повтор ${repeat.status}, база без изменений`,
+    );
+  }
+
+  const malformed = [
+    ['дробные копейки', 'balance.pay', { studentId: s, lessons: 1, totalPriceKopiyky: 12.5 }],
+    ['datetime без Z', 'lesson.add', { studentId: s, datetime: '2030-01-01T10:00:00' }],
+    ['неизвестный тип', 'lesson.pay', { lessonId: done }],
+  ];
+  for (const [label, type, payload] of malformed) {
+    const before = snapshot(tree);
+    const outcome = tree.intents.apply({ id: randomUUID(), type, payload, createdAt: now });
+    ok(
+      outcome.status === 'rejected' && !diff(before, snapshot(tree)),
+      `${label}: rejected «${outcome.reason}»`,
+    );
+  }
+
+  // A failure inside the action: rolled back, not remembered, so a retry can succeed
+  const original = tree.db.recordBalanceChange;
+  tree.db.recordBalanceChange = () => {
+    throw new Error('disk full (simulated)');
+  };
+  const before = snapshot(tree);
+  const failing = {
+    id: 'retry-me',
+    type: 'balance.pay',
+    payload: { studentId: s, lessons: 2 },
+    createdAt: now,
+  };
+  const failed = tree.intents.apply(failing);
+  const untouched = !diff(before, snapshot(tree));
+  tree.db.recordBalanceChange = original;
+  const retried = tree.intents.apply(failing);
+  ok(
+    failed.status === 'failed' && untouched && retried.status === 'applied',
+    `сбой внутри действия: ${failed.status} «${failed.reason}», база без изменений, повтор после починки: ${retried.status}`,
+  );
+}
+
+async function checkRollback(label, mainDir) {
+  const tree = await loadTree(mainDir);
+  const t = viaHandlers(tree);
+  const s = await t.addStudent('Відкат', 0, PRICE);
+  const original = tree.db.recordBalanceChange;
+  tree.db.recordBalanceChange = () => {
+    throw new Error('disk full (simulated)');
+  };
+  let threw = false;
+  try {
+    await t.pay(s, 5);
+  } catch {
+    threw = true;
+  }
+  tree.db.recordBalanceChange = original;
+  const { balance } = tree.raw.prepare('SELECT balance FROM students WHERE id = ?').get(s);
+  const bundles = tree.raw.prepare('SELECT COUNT(*) AS n FROM payment_bundles').get().n;
+  console.log(`   ${label.padEnd(16)} threw ${threw}, balance ${balance}, bundles ${bundles}`);
+  return { threw, balance, bundles };
+}
+
+// # MAIN
+
+async function main() {
+  const args = process.argv.slice(2);
+  const afterDir = path.resolve(__dirname, '..', 'main');
+  const beforeArg = args[args.indexOf('--before') + 1];
+  const beforeDir =
+    args.includes('--before') && beforeArg
+      ? fs.existsSync(path.join(path.resolve(beforeArg), 'main.js'))
+        ? path.resolve(beforeArg)
+        : path.join(path.resolve(beforeArg), 'main')
+      : null;
+
+  const trees = [];
+  if (beforeDir) trees.push({ label: 'before/handlers', mainDir: beforeDir, driver: viaHandlers });
+  trees.push({ label: 'after/handlers', mainDir: afterDir, driver: viaHandlers });
+  trees.push({ label: 'after/intents', mainDir: afterDir, driver: viaIntents });
+
+  console.log(`after:  ${afterDir}`);
+  if (beforeDir) console.log(`before: ${beforeDir}`);
+
+  for (const scenario of scenarios) await runScenario(scenario, trees);
+
+  console.log('\nсбой посреди pay-for-lessons (recordBalanceChange бросает)');
+  if (beforeDir) {
+    const b = await checkRollback('before/handlers', beforeDir);
+    ok(
+      b.threw && b.balance === 5 && b.bundles === 1,
+      'до: баланс и бандл записаны, истории нет (частичная запись)',
+    );
+  }
+  const a = await checkRollback('after/handlers', afterDir);
+  ok(a.threw && a.balance === 0 && a.bundles === 0, 'после: транзакция откатила всё');
+
+  await checkPastPaidAt(afterDir);
+  await checkIntents(afterDir);
+
+  console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');
+  for (const dir of tempDirs) fs.rmSync(dir, { recursive: true, force: true });
+  process.exit(failures ? 1 : 0);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

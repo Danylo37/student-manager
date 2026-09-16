@@ -8,6 +8,7 @@
     "dev:vite": "vite",
     "dev:electron": "wait-on http://localhost:5173 && cross-env NODE_ENV=development electron . --ozone-platform=x11",
     "build": "vite build",
+    "check:ledger": "node scripts/ledger-check.js",
     "package": "cross-env NODE_ENV=production LOG_LEVEL=info electron-builder",
     "package:win": "cross-env NODE_ENV=production LOG_LEVEL=info electron-builder --win",
     "package:linux": "cross-env NODE_ENV=production LOG_LEVEL=info electron-builder --linux",
