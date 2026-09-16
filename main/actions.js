@@ -72,25 +72,46 @@ function payForLessons(studentId, lessons, totalPriceKopiyky = null, paidAt = nu
 /**
  * Lessons added to or taken off a balance by hand. Both directions hit the
  * cash ledger: a negative change is money given back or a payment entered by
- * mistake, and either way the period must show it. Taking lessons off the
- * balance also takes them off the payments they came from, and what those
- * slots cost is exactly the money going back; the price list of today has
- * nothing to do with it.
+ * mistake, and either way the period must show it.
+ *
+ * Taking lessons off gives back what the ledger holds, open slots first and
+ * then lessons already worked off, newest payment first; what those slots cost
+ * is exactly the money going back, the price list of today has nothing to do
+ * with it. A balance typed in by hand (LEDGER-BUG-3) has no money behind it and
+ * gives the rest while it lasts. Whatever is left over is not applied: a lesson
+ * nobody paid for cannot be taken back, so the balance moves by what actually
+ * happened and the caller learns that number.
+ * @returns {{lessons: number, amount: number}} lessons added or taken off, and
+ *   the money that moved with them
  */
 function adjustBalance(studentId, lessons, paidAt = null) {
   return transaction(() => {
-    db.updateStudentBalance(studentId, lessons);
-    const refunded = lessons < 0 ? db.cancelPrepaidLessons(studentId, -lessons) : null;
-    // LEDGER-BUG-9: the refund row is written for `lessons` even when fewer
-    // slots could actually be taken back (refunded.lessons).
-    const bundle = db.createPaymentBundle(
-      studentId,
-      lessons,
-      refunded && refunded.amount,
-      toLedgerTime(paidAt),
-    );
-    if (!bundle) throw new Rejection(REASON.noPrice);
-    db.recordBalanceChange(studentId, lessons, bundle.total);
+    if (lessons > 0) {
+      db.updateStudentBalance(studentId, lessons);
+      const bundle = db.createPaymentBundle(studentId, lessons, null, toLedgerTime(paidAt));
+      if (!bundle) throw new Rejection(REASON.noPrice);
+      db.recordBalanceChange(studentId, lessons, bundle.total);
+      return { lessons, amount: bundle.total };
+    }
+
+    const requested = -lessons;
+    const hand = db.countHandPrepaidLessons(studentId);
+    const refunded = db.cancelPrepaidLessons(studentId, requested);
+    const removed = refunded.lessons + Math.min(requested - refunded.lessons, hand);
+    if (removed === 0) throw new Rejection(REASON.nothingToRefund);
+
+    db.updateStudentBalance(studentId, -removed);
+    const bundle =
+      refunded.lessons > 0
+        ? db.createPaymentBundle(
+            studentId,
+            -refunded.lessons,
+            refunded.amount,
+            toLedgerTime(paidAt),
+          )
+        : null;
+    db.recordBalanceChange(studentId, -removed, bundle && bundle.total);
+    return { lessons: removed, amount: refunded.amount };
   });
 }
 

@@ -176,7 +176,10 @@ export interface ElectronAPI {
     balance: number,
     priceKopiyky?: number | null,
   ) => Promise<{ id: number; name: string; balance: number }>;
-  updateBalance: (studentId: number, amount: number) => Promise<void>;
+  updateBalance: (
+    studentId: number,
+    amount: number,
+  ) => Promise<{ lessons: number; amount: number }>;
   payForLessons: (
     studentId: number,
     amount: number,
@@ -306,7 +309,7 @@ export interface AppState {
   loadStudents: () => Promise<void>;
   addStudent: (name: string, balance: number, priceKopiyky?: number | null) => Promise<Student>;
   deleteStudent: (studentId: number) => Promise<void>;
-  updateBalance: (studentId: number, amount: number) => Promise<void>;
+  updateBalance: (studentId: number, amount: number) => Promise<number>;
   setStudentTaxExempt: (studentId: number, exempt: boolean) => Promise<void>;
   updateStudentName: (studentId: number, name: string) => Promise<void>;
 

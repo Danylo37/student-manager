@@ -80,15 +80,20 @@ const useAppStore = create<AppState>((set, get) => ({
   },
 
   updateBalance: async (studentId, amount) => {
+    // Lessons actually added or taken off: a removal stops short of the request
+    // when there is less to give back than asked.
+    let applied = 0;
     if (amount > 0) {
       // payForLessons: backend auto-detects applicable discount or current price,
       // creates payment bundle, marks unpaid lessons as paid.
       await window.electron.payForLessons(studentId, amount, null);
+      applied = amount;
     } else if (amount < 0) {
-      await window.electron.updateBalance(studentId, amount);
+      applied = (await window.electron.updateBalance(studentId, amount)).lessons;
     }
     await get().loadStudents();
     await get().loadLessons();
+    return applied;
   },
 
   setStudentTaxExempt: async (studentId, exempt) => {

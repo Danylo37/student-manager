@@ -418,6 +418,43 @@ const scenarios = [
       await t.adjust(s, -1);
     },
   },
+  {
+    name: 'LEDGER-BUG-9: оплата 2, знято 5; стартовый баланс 3, знято 2; нечего снимать',
+    real: 100000 - 100000,
+    fixed: 'BUG-9',
+    run: async (t) => {
+      const a = await t.addStudent('Двічі', 0, PRICE);
+      await t.pay(a, 2);
+      const over = await t.attempt(() => t.adjust(a, -5));
+      const h = await t.addStudent('Рука', 3, PRICE);
+      const hand = await t.attempt(() => t.adjust(h, -2));
+      const n = await t.addStudent('Нуль', 0, PRICE);
+      const nothing = await t.attempt(() => t.adjust(n, -1));
+      return { over, hand, nothing };
+    },
+    expect: (snap, tree, notes) => [
+      [
+        'снято 2 из 5: баланс 0, строка возврата -2 на 1000',
+        snap.rows.students[0].balance === 0 &&
+          snap.rows.payment_bundles.some(
+            (b) => b.student_id === 1 && b.lessons_count === -2 && b.total_price === -100000,
+          ),
+      ],
+      [
+        'ручной баланс: снято 2, баланс 1, без денежной строки',
+        snap.rows.students[1].balance === 1 &&
+          !snap.rows.payment_bundles.some((b) => b.student_id === 2),
+      ],
+      [
+        'история ручного снятия: -2 без суммы',
+        snap.rows.balance_history.some(
+          (h) => h.student_id === 2 && h.lessons === -2 && h.amount === null,
+        ),
+      ],
+      ['нечего снимать: отказ, баланс 0', !!notes.nothing && snap.rows.students[2].balance === 0],
+      ['первые два снятия не отклонены', notes.over === null && notes.hand === null],
+    ],
+  },
 ];
 
 // # CHECKS
@@ -603,6 +640,13 @@ async function checkIntents(tree) {
       { lessonId: unpriced },
       'Вкажіть ціну уроку, щоб записати оплату',
       'BUG-2',
+    ],
+    [
+      'нечего снимать',
+      'balance.adjust',
+      { studentId: noPrice, lessons: -1 },
+      'Немає оплачених уроків, які можна зняти',
+      'BUG-9',
     ],
   ];
   for (const [label, type, payload, reason, fixed] of cases) {

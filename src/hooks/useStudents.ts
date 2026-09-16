@@ -24,7 +24,7 @@ interface UseStudentsReturn {
   loadStudents: () => Promise<void>;
   addStudent: (name: string, balance: number, price?: number | null) => Promise<Student>;
   deleteStudent: (studentId: number) => Promise<void>;
-  updateBalance: (studentId: number, amount: number) => Promise<void>;
+  updateBalance: (studentId: number, amount: number) => Promise<number>;
 
   // Helpers
   getStudentById: (studentId: number) => Student | undefined;

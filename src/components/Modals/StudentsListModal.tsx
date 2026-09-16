@@ -90,9 +90,10 @@ function StudentsListModal() {
       return;
     }
     try {
-      await updateBalance(studentId, amount);
+      const applied = await updateBalance(studentId, amount);
       const msg = amount >= 0 ? 'Уроків додано:' : 'Уроків знято:';
-      showToast(`${msg} ${Math.abs(amount)}`, 'success');
+      const shortfall = applied < Math.abs(amount) ? ` із ${Math.abs(amount)}` : '';
+      showToast(`${msg} ${applied}${shortfall}`, 'success');
       stopEditing();
     } catch (err) {
       showToast(rejectionReason(err) ?? 'Помилка при оновленні балансу!', 'error');

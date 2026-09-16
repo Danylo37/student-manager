@@ -695,6 +695,23 @@ function countPrepaidLessons(studentId) {
 }
 
 /**
+ * Prepaid lessons a student holds outside the ledger: a balance typed in by
+ * hand (LEDGER-BUG-3) that no payment bundle stands behind. balance = open
+ * slots + hand prepaid - unpaid lessons, so this is what is left of the balance
+ * once the ledger's own numbers are taken out; never below zero.
+ */
+function countHandPrepaidLessons(studentId) {
+  const student = db.prepare('SELECT balance FROM students WHERE id = ?').get(studentId);
+  if (!student) return 0;
+  const { unpaid } = db
+    .prepare(
+      'SELECT COUNT(*) AS unpaid FROM lessons WHERE student_id = ? AND is_completed = 1 AND is_paid = 0',
+    )
+    .get(studentId);
+  return Math.max(0, student.balance - countPrepaidLessons(studentId) + unpaid);
+}
+
+/**
  * Take N prepaid lessons back off a student - a refund, or a payment entered by
  * mistake and removed. Open slots go first, newest payment first; when they run
  * out, the newest completed lessons are detached and become unpaid, so the money
@@ -1634,6 +1651,7 @@ module.exports = {
   // Payment bundles
   createPaymentBundle,
   cancelPrepaidLessons,
+  countHandPrepaidLessons,
   // Balance history
   recordBalanceChange,
   getBalanceHistory,
