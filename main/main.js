@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const db = require('./database');
+const actions = require('./actions');
 const logger = require('./logger');
 const { initUpdater, consumeReleaseNotes } = require('./updater');
 
@@ -53,7 +54,8 @@ app.whenReady().then(() => {
   });
 
   try {
-    db.initDatabase();
+    const connection = db.initDatabase();
+    actions.init(connection);
     db.syncCompletedLessons();
     db.autoCreateLessonsForAllStudents();
   } catch (error) {
@@ -102,27 +104,14 @@ function registerIpcHandlers() {
 
   // # Students
   handle('db:get-students', () => db.getStudents());
-  handle('db:add-student', (_, name, balance, price) =>
-    db.addStudent(name, balance, price ?? null),
+  handle('db:add-student', (_, name, balance, price) => actions.addStudent(name, balance, price));
+  // Money entered on the desktop is received right now, so no paidAt is given.
+  handle('db:update-balance', (_, studentId, amount) =>
+    actions.adjustBalance(studentId, amount, null),
   );
-  handle('db:update-balance', (_, studentId, amount) => {
-    db.updateStudentBalance(studentId, amount);
-    // Both directions hit the cash ledger: a negative change is money given back
-    // or a payment entered by mistake, and either way the period must show it.
-    // Taking lessons off the balance also takes them off the payments they came
-    // from, and what those slots cost is exactly the money going back — the price
-    // list of today has nothing to do with it.
-    const refunded = amount < 0 ? db.cancelPrepaidLessons(studentId, -amount) : null;
-    const bundle = db.createPaymentBundle(studentId, amount, refunded && refunded.amount);
-    db.recordBalanceChange(studentId, amount, bundle && bundle.total);
-  });
-  handle('db:pay-for-lessons', (_, studentId, amount, totalPriceKopiyky) => {
-    // Explicit payment with known total (used when a discount applies)
-    db.updateStudentBalance(studentId, amount);
-    const bundle = db.createPaymentBundle(studentId, amount, totalPriceKopiyky);
-    db.recordBalanceChange(studentId, amount, bundle && bundle.total);
-    db.markOldestUnpaidLessonsAsPaid(studentId, amount);
-  });
+  handle('db:pay-for-lessons', (_, studentId, amount, totalPriceKopiyky) =>
+    actions.payForLessons(studentId, amount, totalPriceKopiyky, null),
+  );
   handle('db:mark-unpaid-lessons-paid', (_, studentId, count) =>
     db.markOldestUnpaidLessonsAsPaid(studentId, count),
   );
@@ -168,15 +157,17 @@ function registerIpcHandlers() {
   // # Lessons
   handle('db:get-lessons', (_, s, e) => db.getLessons(s, e));
   handle('db:add-lesson', (_, data) =>
-    db.addLesson(data.studentId, data.datetime, data.isCompleted, data.isTrial, data.studentName),
+    actions.addLesson(
+      data.studentId,
+      data.datetime,
+      data.isCompleted,
+      data.isTrial,
+      data.studentName,
+    ),
   );
-  handle('db:update-lesson', (_, id, updates) => db.updateLesson(id, updates));
-  handle('db:toggle-lesson-payment', (_, id) => {
-    // Paying for a single lesson after the fact — a payment like any other
-    const { studentId, price } = db.toggleLessonPayment(id);
-    db.recordBalanceChange(studentId, 1, price);
-  });
-  handle('db:delete-lesson', (_, id) => db.deleteLesson(id));
+  handle('db:update-lesson', (_, id, updates) => actions.updateLesson(id, updates));
+  handle('db:toggle-lesson-payment', (_, id) => actions.toggleLessonPayment(id));
+  handle('db:delete-lesson', (_, id) => actions.deleteLesson(id));
 
   // # Schedules
   handle('db:get-schedules', (_, studentId) => db.getSchedules(studentId));
