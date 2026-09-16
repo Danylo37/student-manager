@@ -97,12 +97,16 @@ export async function pendingIntents(db: D1Database, limit: number): Promise<Int
   return results.map(toIntent);
 }
 
-/** What the Mini App shows on top of the snapshot: everything pending, failures since a moment. */
+/**
+ * What the Mini App shows on top of the snapshot: everything pending, plus the
+ * failures decided since a moment. Decided, not recorded: an intent recorded
+ * while the desktop was off for days is refused only when it comes back.
+ */
 export async function openIntents(db: D1Database, failedSince: string): Promise<Intent[]> {
   const { results } = await db
     .prepare(
       `SELECT * FROM intents
-       WHERE status = 'pending' OR (status = 'failed' AND created_at >= ?1)
+       WHERE status = 'pending' OR (status = 'failed' AND acked_at >= ?1)
        ORDER BY created_at, id`,
     )
     .bind(failedSince)

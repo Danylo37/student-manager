@@ -71,7 +71,7 @@ export type Intent = { [T in IntentType]: IntentOf<T> }[IntentType];
 /** GET /app/snapshot */
 export interface AppSnapshotResponse {
   snapshot: Snapshot | null;
-  /** Pending intents plus the failed ones of the last 48 hours. */
+  /** Pending intents plus the ones the desktop refused in the last 48 hours. */
   intents: Intent[];
   /** When the desktop last pulled intents; null until it ever did. */
   deviceSeenAt: string | null;
