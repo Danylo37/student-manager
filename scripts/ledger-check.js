@@ -8,13 +8,16 @@
 // the whole action back.
 //
 //   node scripts/ledger-check.js
-//   node scripts/ledger-check.js --before <dir>   # also replay through another
-//        checkout's main/ (a git worktree of an older commit) and diff the two
+//   node scripts/ledger-check.js --before <dir> --fixed BUG-2
+//        also replay through another checkout's main/ (a git worktree of the
+//        previous commit) and diff the two; --fixed names the LEDGER-BUG tags
+//        this tree fixes and the old one still has
 //
 // With --before, every scenario must end up byte for byte the same on both
-// trees, except the ones marked `fixed`: those must differ, and their `expect`
-// assertions must fail on the old tree and pass on the new one. That is how a
-// fix commit shows it changed exactly the scenario it meant to.
+// trees, except the ones whose `fixed` tag is named in --fixed: those must
+// differ, and their `expect` assertions must fail on the old tree and pass on
+// the new one. That is how a fix commit shows it changed exactly the scenario
+// it meant to.
 //
 // main/ needs electron for app.getPath and ipcMain.handle, so a stand-in is
 // served from here and the handlers are collected instead of registered.
@@ -250,8 +253,8 @@ async function given(t, studentId, count, from = 0) {
 // the ledger is known to drift (the LEDGER-BUG markers) and that the drift is
 // the same before and after. `intents: false` marks a path the intent guards
 // refuse on purpose; those run through the handlers only. `expect` lists
-// assertions as [label, ok] pairs; with `fixed: 'BUG-N'` they must fail on the
-// --before tree and the scenario must come out different there.
+// assertions as [label, ok] pairs; with `fixed: 'BUG-N'` named in --fixed they
+// must fail on the --before tree and the scenario must come out different there.
 const scenarios = [
   {
     name: 'пополнение со скидкой: 10 уроків за 4000 ₴, 12 проведено',
@@ -409,17 +412,21 @@ const scenarios = [
 // [label, ok, 'BUG-N']. Tagged pairs must fail on the --before tree.
 
 let failures = 0;
+const fixes = new Set(); // LEDGER-BUG tags this run proves against --before
 const ok = (cond, message) => {
   if (!cond) failures++;
   console.log(`   ${cond ? '✓' : '✗'} ${message}`);
   return cond;
 };
 
-/** Report assertions for the tree they ran on: after must pass, before must fail where tagged. */
+/**
+ * Report assertions for the tree they ran on: after must pass; before must fail
+ * for the fixes this run proves (--fixed), which the old tree does not have.
+ */
 function report(pairs, { before }) {
   for (const [label, passed, fixed] of pairs) {
     if (!before) ok(passed, label);
-    else if (fixed) ok(!passed, `падает до фикса (${fixed}): ${label}`);
+    else if (fixed && fixes.has(fixed)) ok(!passed, `падает до фикса (${fixed}): ${label}`);
   }
 }
 
@@ -443,14 +450,15 @@ async function runScenario(scenario, trees) {
     const d = diff(after[0].snap, other.snap);
     ok(!d, `${after[0].label} == ${other.label}${d ? `\n      ${d}` : ''}`);
   }
+  const proves = scenario.fixed && fixes.has(scenario.fixed);
   if (before) {
     const d = diff(before.snap, after[0].snap);
-    if (scenario.fixed) ok(d, `before ≠ after, намеренно (${scenario.fixed})`);
+    if (proves) ok(d, `before ≠ after, намеренно (${scenario.fixed})`);
     else ok(!d, `before == after${d ? `\n      ${d}` : ''}`);
   }
   if (scenario.expect) {
     report(scenario.expect(after[0].snap, after[0].tree), { before: false });
-    if (before && scenario.fixed) {
+    if (before && proves) {
       const pairs = scenario.expect(before.snap, before.tree);
       ok(
         pairs.some(([, passed]) => !passed),
@@ -654,6 +662,10 @@ async function main() {
   const args = process.argv.slice(2);
   const afterDir = path.resolve(__dirname, '..', 'main');
   const beforeArg = args[args.indexOf('--before') + 1];
+  const fixedArg = args[args.indexOf('--fixed') + 1];
+  if (args.includes('--fixed') && fixedArg) {
+    for (const tag of fixedArg.split(',')) fixes.add(tag.trim());
+  }
   const beforeDir =
     args.includes('--before') && beforeArg
       ? fs.existsSync(path.join(path.resolve(beforeArg), 'main.js'))
