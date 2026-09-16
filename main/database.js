@@ -1295,9 +1295,13 @@ function updateLesson(lessonId, updates) {
       updateStudentBalance(current.student_id, -1);
     }
 
-    // Back to a scheduled lesson: the money it took goes back to the payment.
+    // Back to a scheduled lesson: the money it took goes back to the payment,
+    // and the freed slot straight to the oldest lesson still waiting for one.
     if (!completed && current.is_completed) {
-      returnLessonToBundle(current.payment_bundle_id);
+      if (current.payment_bundle_id) {
+        returnLessonToBundle(current.payment_bundle_id);
+        markOldestUnpaidLessonsAsPaid(current.student_id, 1);
+      }
       fields.push('price = NULL', 'payment_bundle_id = NULL', 'is_paid = 0');
       if (current.student_id) updateStudentBalance(current.student_id, 1);
     }
@@ -1334,6 +1338,8 @@ function toggleLessonPayment(lessonId, paidAt = null) {
     .get(lessonId);
   if (!lesson || !lesson.is_completed) throw new Error('Lesson not found or not completed');
   if (lesson.is_trial) throw new Error('Trial lesson is free');
+  // Paying twice would move the balance with no money behind it
+  if (lesson.is_paid) throw new Rejection(REASON.alreadyPaid);
 
   // Money arrives, now or at paidAt when it is recorded after the fact, so it
   // needs its own row in the cash ledger. The lesson is attached to it right
@@ -1372,8 +1378,12 @@ function deleteLesson(lessonId) {
   if (lesson.is_completed) {
     // Restore balance
     if (lesson.student_id) updateStudentBalance(lesson.student_id, 1);
-    // Return lesson to its payment bundle
-    if (lesson.payment_bundle_id) returnLessonToBundle(lesson.payment_bundle_id);
+    // Return the lesson to its payment bundle, and hand the freed slot straight
+    // to the oldest lesson still waiting for one
+    if (lesson.payment_bundle_id) {
+      returnLessonToBundle(lesson.payment_bundle_id);
+      markOldestUnpaidLessonsAsPaid(lesson.student_id, 1);
+    }
   }
 
   // Record deleted slot to prevent auto-recreation

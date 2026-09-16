@@ -13,6 +13,7 @@ class Rejection extends Error {
 const REASON = {
   noPrice: 'Вкажіть ціну уроку, щоб записати оплату',
   nothingToRefund: 'Немає оплачених уроків, які можна зняти',
+  alreadyPaid: 'Урок уже оплачено',
 };
 
 module.exports = { Rejection, REASON };

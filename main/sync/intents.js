@@ -1,7 +1,7 @@
 const actions = require('../actions');
 const db = require('../database');
 const logger = require('../logger');
-const { Rejection } = require('../rejection');
+const { Rejection, REASON: REFUSAL } = require('../rejection');
 
 // An intent is a mutation recorded somewhere else (later: the Telegram Mini
 // App) and applied here exactly once: { id, type, payload, createdAt, source }.
@@ -30,7 +30,7 @@ const REASON = {
   slotTaken: 'Цей час уже зайнято',
   alreadyCompleted: 'Урок уже проведено',
   notCompleted: 'Урок ще не проведено',
-  alreadyPaid: 'Урок уже оплачено',
+  alreadyPaid: REFUSAL.alreadyPaid,
   trialIsFree: 'Пробний урок безкоштовний',
   noStudent: 'Не вказано учня',
 };

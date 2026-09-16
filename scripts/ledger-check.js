@@ -344,14 +344,44 @@ const scenarios = [
     },
   },
   {
-    name: 'LEDGER-BUG-4: оплата 5, 6 проведено, удалён оплаченный, 💵 на долговом',
-    real: 250000,
+    name: 'LEDGER-BUG-4: оплата 5, 6 проведено, удалён оплаченный, 💵 на бывшем долговом; отмена проведения',
+    real: 250000 + 100000,
+    fixed: 'BUG-4',
     run: async (t) => {
       const s = await t.addStudent('Слот', 0, PRICE);
       await t.pay(s, 5);
       const ids = await given(t, s, 6);
       await t.remove(ids[2]);
-      await t.toggle(ids[5]);
+      const toggle = await t.attempt(() => t.toggle(ids[5]));
+      // The same through un-completing: the freed slot goes to the debt lesson
+      const u = await t.addStudent('Скасування', 0, PRICE);
+      await t.pay(u, 2);
+      const [first] = await given(t, u, 3, 10);
+      await t.complete(first, false);
+      await t.complete(first, true);
+      return { toggle };
+    },
+    expect: (snap, tree, notes) => {
+      const lesson = (id) => snap.rows.lessons.find((l) => l.id === id);
+      return [
+        [
+          'освободившийся слот занял шестой урок',
+          lesson(6).is_paid === 1 && lesson(6).payment_bundle_id === 1,
+        ],
+        ['💵 на оплаченном отклонён', !!notes.toggle && notes.toggle.includes('Урок уже оплачено')],
+        [
+          'после отмены проведения слот ушёл долговому уроку',
+          lesson(9).is_paid === 1 && lesson(7).is_paid === 0 && lesson(7).price === 50000,
+        ],
+        [
+          'кэш = реальные деньги: 3500, аванс 0, долг 500',
+          snap.cash.total === 350000 && snap.open.advance === 0 && snap.open.debt === 50000,
+        ],
+        [
+          'балансы 0 и -1',
+          snap.rows.students[0].balance === 0 && snap.rows.students[1].balance === -1,
+        ],
+      ];
     },
   },
   {
