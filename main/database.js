@@ -587,9 +587,16 @@ function deleteStudentPrice(priceId) {
  * @param {number} count     - lessons purchased; negative for a refund
  * @param {number|null} totalPriceKopiyky - if null, computed from current price
  * @param {string|null} paidAt - when the money arrived (default: now)
+ * @param {number|null} isTaxExempt - the flag to store; null snapshots the student's
  * @returns {{id: number, total: number}|null} the bundle, or null if no price info
  */
-function createPaymentBundle(studentId, count, totalPriceKopiyky = null, paidAt = null) {
+function createPaymentBundle(
+  studentId,
+  count,
+  totalPriceKopiyky = null,
+  paidAt = null,
+  isTaxExempt = null,
+) {
   if (count === 0) return null;
 
   const lessons = Math.abs(count);
@@ -616,11 +623,11 @@ function createPaymentBundle(studentId, count, totalPriceKopiyky = null, paidAt 
   const sign = count < 0 ? -1 : 1;
 
   // Snapshot the student's tax exemption: the tax base of a period is settled when
-  // the money arrives, so flipping the flag later must not rewrite it.
-  // LEDGER-BUG-5: a refund (count < 0) snapshots the flag as it is today, not as
-  // it was on the payment it undoes, so the two rows can land in different bases.
+  // the money arrives, so flipping the flag later must not rewrite it. A refund
+  // is handed the flag of the payment it undoes instead, so it lands in the
+  // same base.
   const student = db.prepare('SELECT is_tax_exempt FROM students WHERE id = ?').get(studentId);
-  const isTaxExempt = student && student.is_tax_exempt ? 1 : 0;
+  const exempt = isTaxExempt ?? (student && student.is_tax_exempt ? 1 : 0);
 
   const result = db
     .prepare(
@@ -629,7 +636,7 @@ function createPaymentBundle(studentId, count, totalPriceKopiyky = null, paidAt 
     VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')))
   `,
     )
-    .run(studentId, sign * Math.abs(total), sign * lessons, isTaxExempt, paidAt);
+    .run(studentId, sign * Math.abs(total), sign * lessons, exempt, paidAt);
 
   logger.info('Payment bundle created', {
     studentId,
@@ -723,18 +730,28 @@ function countHandPrepaidLessons(studentId) {
  * @param {number} count - lessons to take back (positive)
  * @param {boolean} [detachLessons] - false to close open slots only
  * @param {string|null} [asOf] - only payments and lessons up to then (ledger rebuild)
- * @returns {{lessons: number, amount: number}} what was actually taken back; the
- *   amount is what those slots were paid for, which is what a refund gives back
+ * @returns {{lessons: number, amount: number, refunds: Array<{isTaxExempt: number,
+ *   lessons: number, amount: number}>}} what was actually taken back; the amount
+ *   is what those slots were paid for, which is what a refund gives back, and
+ *   refunds splits it by the tax flag of the payments it came from
  */
 function cancelPrepaidLessons(studentId, count, { detachLessons = true, asOf = null } = {}) {
-  if (!studentId || count <= 0) return { lessons: 0, amount: 0 };
+  if (!studentId || count <= 0) return { lessons: 0, amount: 0, refunds: [] };
 
   let amount = 0;
+  // Per tax flag of the payment a slot came from: a refund row has to sit in the
+  // same tax base as the money it undoes.
+  const byFlag = new Map();
 
   const cancelSlot = (bundle) => {
     const index = bundle.lessons_count - bundle.lessons_cancelled - 1;
     const price = slotPrice(bundle, index);
     amount += price;
+    const flag = bundle.is_tax_exempt ? 1 : 0;
+    const group = byFlag.get(flag) ?? { isTaxExempt: flag, lessons: 0, amount: 0 };
+    group.lessons += 1;
+    group.amount += price;
+    byFlag.set(flag, group);
     db.prepare(
       `
       UPDATE payment_bundles
@@ -793,7 +810,7 @@ function cancelPrepaidLessons(studentId, count, { detachLessons = true, asOf = n
 
   const cancelled = count - left;
   if (cancelled > 0) logger.info('Prepaid lessons cancelled', { studentId, cancelled, amount });
-  return { lessons: cancelled, amount };
+  return { lessons: cancelled, amount, refunds: [...byFlag.values()] };
 }
 
 /**

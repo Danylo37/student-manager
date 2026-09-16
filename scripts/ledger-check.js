@@ -355,13 +355,33 @@ const scenarios = [
     },
   },
   {
-    name: 'LEDGER-BUG-5: оплата 5, потом флаг пільги, потом знято 2',
-    real: 150000,
+    name: 'LEDGER-BUG-5: оплата 5, флаг пільги, знято 2, оплата 3 (пільга), знято 4',
+    real: 250000 - 100000 + 150000 - 200000,
+    fixed: 'BUG-5',
     run: async (t) => {
       const s = await t.addStudent('Пільга', 0, PRICE);
       await t.pay(s, 5);
       t.tree.db.setStudentTaxExempt(s, true);
       await t.adjust(s, -2);
+      await t.pay(s, 3);
+      await t.adjust(s, -4);
+    },
+    expect: (snap) => {
+      const refund = (lessons, total, exempt) =>
+        snap.rows.payment_bundles.some(
+          (b) =>
+            b.lessons_count === lessons && b.total_price === total && b.is_tax_exempt === exempt,
+        );
+      return [
+        ['taxable = 2500 − 1000 − 500 = 1000', snap.cash.taxable === 100000],
+        ['возврат 2 наследует базу оплаты: -2/-1000 без пільги', refund(-2, -100000, 0)],
+        ['возврат 4 разбит по флагу: -3/-1500 пільга', refund(-3, -150000, 1)],
+        ['возврат 4 разбит по флагу: -1/-500 без пільги', refund(-1, -50000, 0)],
+        [
+          'история: одно снятие -4 на 2000',
+          snap.rows.balance_history.some((h) => h.lessons === -4 && h.amount === -200000),
+        ],
+      ];
     },
   },
   {

@@ -72,7 +72,8 @@ function payForLessons(studentId, lessons, totalPriceKopiyky = null, paidAt = nu
 /**
  * Lessons added to or taken off a balance by hand. Both directions hit the
  * cash ledger: a negative change is money given back or a payment entered by
- * mistake, and either way the period must show it.
+ * mistake, and either way the period must show it, in the tax base of the payment
+ * it undoes (one refund row per base touched).
  *
  * Taking lessons off gives back what the ledger holds, open slots first and
  * then lessons already worked off, newest payment first; what those slots cost
@@ -101,16 +102,10 @@ function adjustBalance(studentId, lessons, paidAt = null) {
     if (removed === 0) throw new Rejection(REASON.nothingToRefund);
 
     db.updateStudentBalance(studentId, -removed);
-    const bundle =
-      refunded.lessons > 0
-        ? db.createPaymentBundle(
-            studentId,
-            -refunded.lessons,
-            refunded.amount,
-            toLedgerTime(paidAt),
-          )
-        : null;
-    db.recordBalanceChange(studentId, -removed, bundle && bundle.total);
+    for (const r of refunded.refunds) {
+      db.createPaymentBundle(studentId, -r.lessons, r.amount, toLedgerTime(paidAt), r.isTaxExempt);
+    }
+    db.recordBalanceChange(studentId, -removed, refunded.lessons > 0 ? -refunded.amount : null);
     return { lessons: removed, amount: refunded.amount };
   });
 }
