@@ -21,6 +21,16 @@ jobs:
 
       - run: npm ci
 
+      - name: Create draft release
+        shell: bash
+        run: |
+          TAG="v$(node -p "require('./package.json').version")"
+          if [ -z "$(gh api repos/$GITHUB_REPOSITORY/releases --jq ".[] | select(.draft and .tag_name==\"$TAG\") | .id")" ]; then
+            gh release create "$TAG" --draft --title "${TAG#v}" --notes ""
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - run: npm run release:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
