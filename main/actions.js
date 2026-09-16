@@ -14,7 +14,8 @@ function init(connection) {
   conn = connection;
 }
 
-function run(fn) {
+/** Run fn inside one transaction; nested calls become savepoints. */
+function transaction(fn) {
   return conn.transaction(fn)();
 }
 
@@ -44,7 +45,7 @@ function toLedgerTime(paidAt) {
 // # STUDENTS
 
 function addStudent(name, balance, priceKopiyky) {
-  return run(() => db.addStudent(name, balance, priceKopiyky ?? null));
+  return transaction(() => db.addStudent(name, balance, priceKopiyky ?? null));
 }
 
 // # BALANCE
@@ -54,7 +55,7 @@ function addStudent(name, balance, priceKopiyky) {
  * otherwise priced from the discount table or the current price.
  */
 function payForLessons(studentId, lessons, totalPriceKopiyky = null, paidAt = null) {
-  return run(() => {
+  return transaction(() => {
     db.updateStudentBalance(studentId, lessons);
     const bundle = db.createPaymentBundle(
       studentId,
@@ -78,7 +79,7 @@ function payForLessons(studentId, lessons, totalPriceKopiyky = null, paidAt = nu
  * nothing to do with it.
  */
 function adjustBalance(studentId, lessons, paidAt = null) {
-  return run(() => {
+  return transaction(() => {
     db.updateStudentBalance(studentId, lessons);
     const refunded = lessons < 0 ? db.cancelPrepaidLessons(studentId, -lessons) : null;
     // LEDGER-BUG-9: the refund row is written for `lessons` even when fewer
@@ -96,20 +97,20 @@ function adjustBalance(studentId, lessons, paidAt = null) {
 // # LESSONS
 
 function addLesson(studentId, datetime, isCompleted, isTrial, studentName) {
-  return run(() => db.addLesson(studentId, datetime, isCompleted, isTrial, studentName));
+  return transaction(() => db.addLesson(studentId, datetime, isCompleted, isTrial, studentName));
 }
 
 function updateLesson(lessonId, updates) {
-  return run(() => db.updateLesson(lessonId, updates));
+  return transaction(() => db.updateLesson(lessonId, updates));
 }
 
 function deleteLesson(lessonId) {
-  return run(() => db.deleteLesson(lessonId));
+  return transaction(() => db.deleteLesson(lessonId));
 }
 
 /** Paying for a single lesson after the fact: a payment like any other. */
 function toggleLessonPayment(lessonId) {
-  return run(() => {
+  return transaction(() => {
     const { studentId, price } = db.toggleLessonPayment(lessonId);
     db.recordBalanceChange(studentId, 1, price);
   });
@@ -117,6 +118,7 @@ function toggleLessonPayment(lessonId) {
 
 module.exports = {
   init,
+  transaction,
   isUtcIso,
   addStudent,
   payForLessons,

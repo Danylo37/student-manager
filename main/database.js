@@ -1558,6 +1558,59 @@ function autoCreateLessonsForAllStudents() {
   return total;
 }
 
+// # INTENT LOG
+//
+// What the sync layer (main/sync/intents.js) reads before it applies an intent,
+// and how it remembers the ones it decided on. Nothing here moves money.
+
+function getStudentById(studentId) {
+  return db.prepare('SELECT * FROM students WHERE id = ?').get(studentId) ?? null;
+}
+
+function getLessonById(lessonId) {
+  return db.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId) ?? null;
+}
+
+/** The tutor gives one lesson at a time, so a datetime is a slot for everyone. */
+function findLessonAt(datetime, exceptLessonId = null) {
+  return (
+    db
+      .prepare('SELECT id FROM lessons WHERE datetime = ? AND (? IS NULL OR id <> ?)')
+      .get(datetime, exceptLessonId, exceptLessonId) ?? null
+  );
+}
+
+function getAppliedIntent(id) {
+  const row = db
+    .prepare('SELECT status, result, reason, applied_at FROM applied_intents WHERE id = ?')
+    .get(id);
+  if (!row) return null;
+  return {
+    status: row.status,
+    result: row.result === null ? null : JSON.parse(row.result),
+    reason: row.reason,
+    appliedAt: row.applied_at,
+  };
+}
+
+function recordAppliedIntent(intent, status, result = null, reason = null) {
+  db.prepare(
+    `
+    INSERT INTO applied_intents (id, type, source, payload, created_at, status, result, reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+  ).run(
+    intent.id,
+    intent.type,
+    intent.source ?? null,
+    JSON.stringify(intent.payload),
+    intent.createdAt,
+    status,
+    result === null ? null : JSON.stringify(result),
+    reason,
+  );
+}
+
 // # EXPORTS
 
 module.exports = {
@@ -1615,4 +1668,10 @@ module.exports = {
   toggleScheduleActive,
   autoCreateLessons,
   autoCreateLessonsForAllStudents,
+  // Intent log
+  getStudentById,
+  getLessonById,
+  findLessonAt,
+  getAppliedIntent,
+  recordAppliedIntent,
 };

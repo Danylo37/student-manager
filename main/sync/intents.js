@@ -1,12 +1,14 @@
 const actions = require('../actions');
+const db = require('../database');
 const logger = require('../logger');
 
 // An intent is a mutation recorded somewhere else (later: the Telegram Mini
 // App) and applied here exactly once: { id, type, payload, createdAt, source }.
 // The ledger is touched only through actions.*, so an intent can never run a
-// shorter sequence than the desktop does. applied_intents remembers every id
-// that was decided on, and a repeat of the same id is answered from there
-// without touching anything.
+// shorter sequence than the desktop does; database.js answers the lookups the
+// guards need and keeps applied_intents, where every id that was decided on is
+// remembered. A repeat of the same id is answered from there without touching
+// anything.
 //
 // apply() never throws for a bad intent. It returns one of
 //   { status: 'applied',   result }              written and remembered
@@ -15,12 +17,6 @@ const logger = require('../logger');
 //   { status: 'failed',    reason }              unexpected error, rolled back, not remembered
 // A malformed envelope or payload is rejected without being remembered, so the
 // same id can come back corrected.
-
-let conn = null;
-
-function init(connection) {
-  conn = connection;
-}
 
 // # VALIDATION
 
@@ -59,37 +55,16 @@ const firstError = (...errors) => errors.find(Boolean) ?? null;
 
 // # GUARDS
 //
-// What has to be true right before an action runs. These are the only reads
-// outside database.js: the sync layer looks up the rows an intent names, and
-// never writes to them.
+// What has to be true right before an action runs, read inside the transaction.
 
-function findStudent(studentId) {
-  return conn.prepare('SELECT id FROM students WHERE id = ?').get(studentId) ?? null;
-}
-
-function findLesson(lessonId) {
-  return (
-    conn
-      .prepare('SELECT id, student_id, is_completed, is_paid, is_trial FROM lessons WHERE id = ?')
-      .get(lessonId) ?? null
-  );
-}
-
-/** The tutor gives one lesson at a time, so a datetime is a slot for everyone. */
-function slotTaken(datetime, exceptLessonId = null) {
-  return (
-    conn
-      .prepare('SELECT id FROM lessons WHERE datetime = ? AND (? IS NULL OR id <> ?)')
-      .get(datetime, exceptLessonId, exceptLessonId) !== undefined
-  );
-}
-
-const studentExists = (studentId) => (findStudent(studentId) ? null : REASON.studentDeleted);
+const studentExists = (studentId) => (db.getStudentById(studentId) ? null : REASON.studentDeleted);
+const slotTaken = (datetime, exceptLessonId = null) =>
+  db.findLessonAt(datetime, exceptLessonId) !== null;
 
 // # REGISTRY (v1)
 //
 // validate: the payload's shape, before anything is read.
-// guard:    the preconditions, read inside the transaction; a reason rejects.
+// guard:    the preconditions; a reason rejects.
 // run:      the action, with the intent's own time as the payment date.
 
 const TYPES = {
@@ -137,7 +112,7 @@ const TYPES = {
   'lesson.move': {
     validate: (p) => firstError(field.id(p, 'lessonId'), field.datetime(p, 'datetime')),
     guard: (p) => {
-      const lesson = findLesson(p.lessonId);
+      const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
       if (lesson.is_completed) return REASON.alreadyCompleted;
       return slotTaken(p.datetime, p.lessonId) ? REASON.slotTaken : null;
@@ -148,7 +123,7 @@ const TYPES = {
   'lesson.complete': {
     validate: (p) => firstError(field.id(p, 'lessonId'), field.boolean(p, 'isCompleted')),
     guard: (p) => {
-      const lesson = findLesson(p.lessonId);
+      const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
       if (!!lesson.is_completed === p.isCompleted) {
         return p.isCompleted ? REASON.alreadyCompleted : REASON.notCompleted;
@@ -160,14 +135,14 @@ const TYPES = {
 
   'lesson.delete': {
     validate: (p) => field.id(p, 'lessonId'),
-    guard: (p) => (findLesson(p.lessonId) ? null : REASON.lessonNotFound),
+    guard: (p) => (db.getLessonById(p.lessonId) ? null : REASON.lessonNotFound),
     run: (p) => actions.deleteLesson(p.lessonId),
   },
 
   'lesson.togglePayment': {
     validate: (p) => field.id(p, 'lessonId'),
     guard: (p) => {
-      const lesson = findLesson(p.lessonId);
+      const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
       if (lesson.is_trial) return REASON.trialIsFree;
       if (!lesson.is_completed) return REASON.notCompleted;
@@ -208,41 +183,6 @@ function canonical(payload) {
   return { ...payload, datetime: new Date(payload.datetime).toISOString() };
 }
 
-// # APPLIED INTENTS
-
-function findApplied(id) {
-  const row = conn
-    .prepare('SELECT status, result, reason, applied_at FROM applied_intents WHERE id = ?')
-    .get(id);
-  if (!row) return null;
-  return {
-    status: row.status,
-    result: row.result === null ? null : JSON.parse(row.result),
-    reason: row.reason,
-    appliedAt: row.applied_at,
-  };
-}
-
-function remember(intent, status, result, reason) {
-  conn
-    .prepare(
-      `
-    INSERT INTO applied_intents (id, type, source, payload, created_at, status, result, reason)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `,
-    )
-    .run(
-      intent.id,
-      intent.type,
-      intent.source ?? null,
-      JSON.stringify(intent.payload),
-      intent.createdAt,
-      status,
-      result === undefined || result === null ? null : JSON.stringify(result),
-      reason ?? null,
-    );
-}
-
 // # APPLY
 
 function apply(intent) {
@@ -256,25 +196,25 @@ function apply(intent) {
   const payload = canonical(intent.payload);
 
   try {
-    return conn.transaction(() => {
-      const previous = findApplied(intent.id);
+    return actions.transaction(() => {
+      const previous = db.getAppliedIntent(intent.id);
       if (previous) return { status: 'duplicate', previous };
 
       const reason = type.guard(payload);
       if (reason) {
-        remember(intent, 'rejected', null, reason);
+        db.recordAppliedIntent(intent, 'rejected', null, reason);
         return { status: 'rejected', reason };
       }
 
       const result = type.run(payload, intent) ?? null;
-      remember(intent, 'applied', result, null);
+      db.recordAppliedIntent(intent, 'applied', result, null);
       logger.info('Intent applied', { id: intent.id, type: intent.type, source: intent.source });
       return { status: 'applied', result };
-    })();
+    });
   } catch (error) {
     logger.error('Intent failed', { id: intent.id, type: intent.type, error: error.message });
     return { status: 'failed', reason: error.message };
   }
 }
 
-module.exports = { init, apply, TYPES: Object.keys(TYPES) };
+module.exports = { apply, TYPES: Object.keys(TYPES) };
