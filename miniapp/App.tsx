@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { deniedText } from './api';
 import Banners from './components/Banners';
 import LessonSheet from './components/LessonSheet';
 import TabBar from './components/TabBar';
@@ -60,15 +61,11 @@ export default function App() {
   }
 
   if (!data) {
-    const denied = error && /^(Unauthorized|Forbidden)$/.test(error);
+    const denied = error ? deniedText(error.status) : null;
     return (
       <Shell>
         <Empty>
-          {denied
-            ? 'Немає доступу. Перевірте, чи ваш Telegram-id у білому списку бота.'
-            : error
-              ? 'Не вдалося отримати дані з хмари.'
-              : 'Завантаження…'}
+          {denied ?? (error ? 'Не вдалося отримати дані з хмари.' : 'Завантаження…')}
           {error && !denied && (
             <div className="mt-3">
               <button type="button" className="text-tg-link" onClick={() => void refresh()}>

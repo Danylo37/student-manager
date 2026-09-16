@@ -99,12 +99,24 @@ export const Hint = ({ children }: { children: ReactNode }) => (
   <div className="px-4 pt-2 text-xs text-tg-hint">{children}</div>
 );
 
-export const Field = ({ label, children }: { label: string; children: ReactNode }) => (
-  <label className="block border-b border-tg-separator px-3.5 py-3 last:border-b-0">
-    <span className="mb-1 block text-[11.5px] uppercase tracking-wider text-tg-hint">{label}</span>
-    {children}
-  </label>
-);
+interface FieldProps {
+  label: string;
+  children: ReactNode;
+  /** For a control with its own buttons: a label would send a tap on the caption to the first of them. */
+  group?: boolean;
+}
+
+export const Field = ({ label, children, group }: FieldProps) => {
+  const Tag = group ? 'div' : 'label';
+  return (
+    <Tag className="block border-b border-tg-separator px-3.5 py-3 last:border-b-0">
+      <span className="mb-1 block text-[11.5px] uppercase tracking-wider text-tg-hint">
+        {label}
+      </span>
+      {children}
+    </Tag>
+  );
+};
 
 export const inputClass = 'w-full bg-transparent p-0 text-base tabular-nums outline-none';
 

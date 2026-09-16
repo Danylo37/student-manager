@@ -6,23 +6,25 @@ import { Card, Empty, GroupLabel } from '../components/ui';
 import type { Data } from '../hooks';
 import useStore from '../store';
 import { haptic } from '../telegram';
-import { byDatetime, dayKey, dayStart, relativeDayName, weekDays, weekStart, zoned } from '../time';
+import {
+  byDatetime,
+  dayKey,
+  relativeDayName,
+  snapshotWindow,
+  weekDays,
+  weekStart,
+  zoned,
+} from '../time';
 
 // A list by day, not a grid: a grid is unreadable on a phone. Calendar weeks
 // like the desktop, limited to the days the snapshot covers.
-
-const WINDOW_BEFORE_DAYS = 7;
-const WINDOW_AFTER_DAYS = 21;
 
 export default function Week({ data, now }: { data: Data; now: Date }) {
   const push = useStore((s) => s.push);
   const [offset, setOffset] = useState(0);
   const { tz } = data;
 
-  // The window is the desktop's, around the day it built the snapshot.
-  const built = dayStart(zoned(data.snapshot.generatedAt, tz));
-  const first = addDays(built, -WINDOW_BEFORE_DAYS);
-  const last = addDays(built, WINDOW_AFTER_DAYS);
+  const { first, last } = snapshotWindow(data.snapshot.generatedAt, tz);
   const start = addDays(weekStart(now), offset * 7);
   const days = weekDays(start);
   const canGoBack = isBefore(first, start);
@@ -64,12 +66,17 @@ export default function Week({ data, now }: { data: Data; now: Date }) {
           .filter((l) => dayKey(zoned(l.datetime, tz)) === key)
           .sort(byDatetime);
         const label = `${relativeDayName(day, now)} · ${format(day, 'd MMMM', { locale: uk })}`;
+        const covered = inWindow(day);
         return (
           <div key={key}>
-            <GroupLabel onClick={() => push({ name: 'newLesson', date: key })}>
-              {label} ＋
-            </GroupLabel>
-            {!inWindow(day) ? (
+            {covered ? (
+              <GroupLabel onClick={() => push({ name: 'newLesson', date: key })}>
+                {label} ＋
+              </GroupLabel>
+            ) : (
+              <GroupLabel>{label}</GroupLabel>
+            )}
+            {!covered ? (
               <Empty>Поза вікном синхронізації</Empty>
             ) : lessons.length === 0 ? (
               <Card>

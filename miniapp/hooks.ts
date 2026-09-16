@@ -19,7 +19,9 @@ export function useData(): Data | null {
   const local = useStore((s) => s.local);
   return useMemo(() => {
     if (!data?.snapshot) return null;
-    const intents = [...data.intents, ...local];
+    // The cloud's copy wins: a local one it already lists would count twice.
+    const listed = new Set(data.intents.map((i) => i.id));
+    const intents = [...data.intents, ...local.filter((i) => !listed.has(i.id))];
     return {
       snapshot: data.snapshot,
       tz: data.snapshot.timezone,

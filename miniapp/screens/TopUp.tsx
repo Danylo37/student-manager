@@ -61,7 +61,7 @@ export default function TopUp({ data, studentId }: { data: Data; studentId: numb
       </Card>
       <GroupLabel>Скільки уроків</GroupLabel>
       <Card>
-        <Field label="Плюс поповнює, мінус знімає">
+        <Field label="Плюс поповнює, мінус знімає" group>
           <Stepper
             value={lessons}
             min={-99}

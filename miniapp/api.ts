@@ -17,6 +17,13 @@ const TIMEOUT_MS = 15_000;
 
 export const isNetworkError = (error: unknown) => !(error instanceof ApiError);
 
+/** A refusal of the initData itself; a retry cannot fix either, so the text says what can. */
+export function deniedText(status: number | null): string | null {
+  if (status === 401) return 'Сесія Telegram застаріла: закрийте застосунок і відкрийте знову.';
+  if (status === 403) return 'Немає доступу. Перевірте, чи ваш Telegram-id у білому списку бота.';
+  return null;
+}
+
 async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
     method,

@@ -60,7 +60,7 @@ export default function NewStudent() {
             placeholder="0 або порожньо"
           />
         </Field>
-        <Field label="Оплачено уроків наперед">
+        <Field label="Оплачено уроків наперед" group>
           <Stepper
             value={hasPrice ? balance : 0}
             min={0}

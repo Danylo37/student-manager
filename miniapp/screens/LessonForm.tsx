@@ -13,7 +13,16 @@ import type { Data } from '../hooks';
 import { lessonTitle } from '../lessonView';
 import type { Screen } from '../store';
 import useStore from '../store';
-import { dayKey, findBusy, nextFullHour, timeOf, toUtcIso, zoned } from '../time';
+import {
+  dayKey,
+  findBusy,
+  nextFullHour,
+  snapshotWindow,
+  timeKey,
+  timeOf,
+  toUtcIso,
+  zoned,
+} from '../time';
 
 type Mode = Extract<Screen, { name: 'newLesson' | 'moveLesson' }>;
 
@@ -34,14 +43,13 @@ export default function LessonForm({ data, now, mode }: { data: Data; now: Date;
     mode.name === 'newLesson' && mode.studentId ? mode.studentId : '',
   );
   const [studentName, setStudentName] = useState('');
-  const [date, setDate] = useState(
-    moving
-      ? dayKey(zoned(moving.datetime, tz))
-      : mode.name === 'newLesson' && mode.date
-        ? mode.date
-        : dayKey(now),
+  const [date, setDate] = useState(() => {
+    if (moving) return dayKey(zoned(moving.datetime, tz));
+    return mode.name === 'newLesson' && mode.date ? mode.date : dayKey(nextFullHour(now));
+  });
+  const [time, setTime] = useState(() =>
+    moving ? timeOf(moving.datetime, tz) : timeKey(nextFullHour(now)),
   );
-  const [time, setTime] = useState(moving ? timeOf(moving.datetime, tz) : nextFullHour(now));
   const [busy, setBusy] = useState(false);
 
   const trial = moving ? moving.isTrial : isTrial;
@@ -54,10 +62,15 @@ export default function LessonForm({ data, now, mode }: { data: Data; now: Date;
         moving?.id ?? null,
       )
     : null;
+  // Moving a lesson onto its own time would be applied without changing anything,
+  // so the phone would never learn it is done.
+  const unchanged = !!moving && !!datetime && Date.parse(datetime) === Date.parse(moving.datetime);
+  const { first, last } = snapshotWindow(data.snapshot.generatedAt, tz);
+  const outside = DATE.test(date) && (date < dayKey(first) || date > dayKey(last));
   const students = data.students
     .filter((s) => s.id > 0)
     .sort((a, b) => a.name.localeCompare(b.name, 'uk'));
-  const valid = !!datetime && !taken && (moving || trial || studentId !== '');
+  const valid = !!datetime && !taken && !unchanged && (moving || trial || studentId !== '');
 
   const submit = async () => {
     if (!datetime || !valid || busy) return;
@@ -144,10 +157,14 @@ export default function LessonForm({ data, now, mode }: { data: Data; now: Date;
         <Banner tone="error">
           О {timeOf(taken.datetime, tz)} вже стоїть {lessonTitle(taken)}. ПК відхилить цей час.
         </Banner>
+      ) : unchanged ? (
+        <Hint>Час не змінився.</Hint>
       ) : (
         <Hint>
           {trial ? 'Пробний урок триває 30 хвилин. ' : ''}
-          Урок з’явиться в розкладі, коли ПК його застосує.
+          {outside
+            ? 'Цей день поза вікном синхронізації: ПК застосує урок, але на телефоні його не буде видно.'
+            : 'Урок з’явиться в розкладі, коли ПК його застосує.'}
         </Hint>
       )}
       <BottomButton

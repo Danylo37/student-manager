@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { uk } from 'date-fns/locale';
+import { deniedText } from '../api';
 import { describeIntent } from '../describe';
 import type { Data } from '../hooks';
 import useStore from '../store';
@@ -31,9 +32,7 @@ export default function Banners({ data, now }: { data: Data; now: Date }) {
     <>
       {error && (
         <Banner>
-          {error === 'Unauthorized'
-            ? 'Сесія Telegram застаріла: закрийте застосунок і відкрийте знову. '
-            : 'Немає зв’язку з хмарою. '}
+          {deniedText(error.status) ?? 'Немає зв’язку з хмарою.'}{' '}
           {fetchedAt
             ? `Показано дані від ${when(new Date(fetchedAt).toISOString(), tz, now)}.`
             : 'Показано збережені дані.'}

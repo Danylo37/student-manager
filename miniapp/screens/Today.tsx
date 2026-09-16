@@ -38,7 +38,7 @@ export default function Today({ data, now }: { data: Data; now: Date }) {
           lead="➕"
           title="Поставити урок"
           trail={<Chevron />}
-          onClick={() => push({ name: 'newLesson', date: today })}
+          onClick={() => push({ name: 'newLesson' })}
         />
         <Row
           lead="💳"

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { AppSnapshotResponse, Intent, IntentPayloads, IntentType } from '@shared/types';
-import { fetchSnapshot, isNetworkError, postIntent } from './api';
+import { ApiError, fetchSnapshot, isNetworkError, postIntent } from './api';
 import { haptic } from './telegram';
 
 // The phone has no database: the store keeps the last answer of /app/snapshot,
@@ -19,10 +19,16 @@ export type Screen =
 /** Sent from here, with the snapshot revision the phone had at the time. */
 type LocalIntent = Intent & { sentAtRevision: number };
 
+/** Why the last fetch failed; the status tells a refused initData from a lost connection. */
+export interface Failure {
+  status: number | null;
+  message: string;
+}
+
 interface State {
   data: AppSnapshotResponse | null;
   fetchedAt: number | null;
-  error: string | null;
+  error: Failure | null;
   loading: boolean;
   local: LocalIntent[];
   dismissed: string[];
@@ -91,7 +97,13 @@ const useStore = create<State>((set, get) => ({
       writeCache(DISMISSED_KEY, dismissed);
       set({ data, local, dismissed, fetchedAt: Date.now(), error: null, loading: false });
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error), loading: false });
+      set({
+        error: {
+          status: error instanceof ApiError ? error.status : null,
+          message: error instanceof Error ? error.message : String(error),
+        },
+        loading: false,
+      });
     }
   },
 
