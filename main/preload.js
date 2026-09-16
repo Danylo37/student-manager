@@ -1,5 +1,12 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+/** Listens on a main → renderer channel; returns the unsubscribe. */
+const subscribe = (channel, callback) => {
+  const listener = (_event, payload) => callback(payload);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+};
+
 contextBridge.exposeInMainWorld('electron', {
   // Students
   getStudents: () => ipcRenderer.invoke('db:get-students'),
@@ -75,6 +82,14 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Sync
   syncLessons: () => ipcRenderer.invoke('db:sync-lessons'),
+
+  // Cloud sync
+  getSyncSettings: () => ipcRenderer.invoke('sync:get-settings'),
+  saveSyncSettings: (settings) => ipcRenderer.invoke('sync:save-settings', settings),
+  getSyncStatus: () => ipcRenderer.invoke('sync:get-status'),
+  syncNow: () => ipcRenderer.invoke('sync:now'),
+  onSyncChanged: (callback) => subscribe('sync:changed', callback),
+  onSyncStatus: (callback) => subscribe('sync:status', callback),
 
   // Updates
   getReleaseNotes: () => ipcRenderer.invoke('app:get-release-notes'),

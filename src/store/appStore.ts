@@ -39,6 +39,7 @@ const useAppStore = create<AppState>((set, get) => ({
     schedule: false,
     taxSettings: false,
     discounts: false,
+    syncSettings: false,
   },
 
   selectedLesson: null,
@@ -50,6 +51,7 @@ const useAppStore = create<AppState>((set, get) => ({
 
   theme: (localStorage.getItem('theme') as Theme) || 'default',
   taxSettings: null,
+  syncStatus: null,
 
   // # Students
 
@@ -219,6 +221,10 @@ const useAppStore = create<AppState>((set, get) => ({
     await window.electron.saveTaxSettings(settings);
     await get().loadTaxSettings();
   },
+
+  // # Cloud sync
+
+  setSyncStatus: (syncStatus) => set({ syncStatus }),
 
   // # Navigation
 

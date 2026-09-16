@@ -5,6 +5,7 @@ const actions = require('./actions');
 const { Rejection } = require('./rejection');
 const logger = require('./logger');
 const { initUpdater, consumeReleaseNotes } = require('./updater');
+const sync = require('./sync/client');
 
 let mainWindow;
 
@@ -68,6 +69,7 @@ app.whenReady().then(() => {
   registerIpcHandlers();
   createWindow();
   initUpdater();
+  sync.start();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -88,11 +90,16 @@ process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled promise rejection', { reason });
 });
 
+// Channels that change nothing; every other one is a mutation the cloud snapshot has to follow.
+const READ_ONLY = /^(sync:|db:get-|db:find-|app:get-)/;
+
 function registerIpcHandlers() {
   const handle = (channel, fn) => {
     ipcMain.handle(channel, async (...args) => {
       try {
-        return fn(...args);
+        const result = fn(...args);
+        if (!READ_ONLY.test(channel)) sync.markDirty();
+        return result;
       } catch (e) {
         if (e instanceof Rejection) logger.warn(`IPC ${channel} refused`, { reason: e.message });
         else logger.error(`IPC ${channel} failed`, { error: e.message });
@@ -190,6 +197,12 @@ function registerIpcHandlers() {
     db.autoCreateLessonsForAllStudents();
     return completed;
   });
+
+  // # Cloud sync
+  handle('sync:get-settings', () => sync.getSettings());
+  handle('sync:save-settings', (_, settings) => sync.saveSettings(settings));
+  handle('sync:get-status', () => sync.getStatus());
+  handle('sync:now', () => sync.sync());
 
   logger.debug('IPC handlers registered');
 }

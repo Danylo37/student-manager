@@ -1,7 +1,17 @@
 import { useState } from 'react';
-import { RefreshCw, Users, Palette, BarChart2, CalendarDays } from 'lucide-react';
+import {
+  RefreshCw,
+  Users,
+  Palette,
+  BarChart2,
+  CalendarDays,
+  Cloud,
+  CloudOff,
+  CloudAlert,
+} from 'lucide-react';
 import { formatDateWithMonth } from '@/utils/dateHelpers';
 import { calculateNetEarnings, getFixedTaxMonths, formatUAH, hasAnyTax } from '@/utils/financials';
+import { describeSyncStatus } from '@/utils/syncStatus';
 import useLessons from '@/hooks/useLessons';
 import useAppStore from '@/store/appStore';
 
@@ -16,6 +26,7 @@ function Header() {
   const taxSettings = useAppStore((s) => s.taxSettings);
   const currentWeek = useAppStore((s) => s.currentWeek);
   const students = useAppStore((s) => s.students);
+  const syncStatus = useAppStore((s) => s.syncStatus);
 
   const [syncing, setSyncing] = useState(false);
 
@@ -71,6 +82,15 @@ function Header() {
       ? 'bg-purple-100 hover:bg-purple-200 text-purple-700'
       : 'bg-blue-100 hover:bg-blue-200 text-blue-700';
 
+  const syncState = syncStatus?.state ?? 'off';
+  const SyncIcon = syncState === 'error' ? CloudAlert : syncState === 'off' ? CloudOff : Cloud;
+  const syncClass = {
+    off: 'bg-gray-100 hover:bg-gray-200 text-gray-400',
+    idle: 'bg-green-100 hover:bg-green-200 text-green-700',
+    syncing: `${accent} animate-pulse`,
+    error: 'bg-red-100 hover:bg-red-200 text-red-700',
+  }[syncState];
+
   return (
     <header className="bg-white border-b border-gray-200 shadow-sm">
       <div className="px-6 py-4">
@@ -109,6 +129,13 @@ function Header() {
               title={theme === 'purple' ? 'Стандартна тема' : 'Фіолетова тема'}
             >
               <Palette size={20} />
+            </button>
+            <button
+              onClick={() => openModal('syncSettings')}
+              className={`p-2 rounded-lg transition-colors ${syncClass}`}
+              title={describeSyncStatus(syncStatus)}
+            >
+              <SyncIcon size={20} />
             </button>
 
             {/* View toggle */}

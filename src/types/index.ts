@@ -249,6 +249,16 @@ export interface ElectronAPI {
   // Sync
   syncLessons: () => Promise<number>;
 
+  // Cloud sync
+  getSyncSettings: () => Promise<SyncSettings>;
+  /** An empty secret keeps the stored one; an empty url switches the sync off. */
+  saveSyncSettings: (settings: { url: string; secret: string | null }) => Promise<SyncSettings>;
+  getSyncStatus: () => Promise<SyncStatus>;
+  syncNow: () => Promise<SyncStatus>;
+  /** Intents from the phone were applied; students and lessons need a reload. */
+  onSyncChanged: (callback: (event: { applied: number }) => void) => () => void;
+  onSyncStatus: (callback: (status: SyncStatus) => void) => () => void;
+
   // Updates
   getReleaseNotes: () => Promise<ReleaseNotes | null>;
 }
@@ -256,6 +266,19 @@ export interface ElectronAPI {
 export interface ReleaseNotes {
   version: string;
   notes: string;
+}
+
+export interface SyncSettings {
+  url: string;
+  hasSecret: boolean;
+}
+
+export type SyncState = 'off' | 'idle' | 'syncing' | 'error';
+
+export interface SyncStatus {
+  state: SyncState;
+  lastSyncAt: string | null;
+  error: string | null;
 }
 
 declare global {
@@ -274,6 +297,7 @@ export interface ModalState {
   schedule: boolean;
   taxSettings: boolean;
   discounts: boolean;
+  syncSettings: boolean;
 }
 
 export type ModalName = keyof ModalState;
@@ -309,6 +333,7 @@ export interface AppState {
 
   theme: Theme;
   taxSettings: TaxSettings | null;
+  syncStatus: SyncStatus | null;
 
   // Actions — Students
   loadStudents: () => Promise<void>;
@@ -359,6 +384,9 @@ export interface AppState {
   // Actions — Tax settings
   loadTaxSettings: () => Promise<void>;
   saveTaxSettings: (settings: Omit<TaxSettings, 'id' | 'updated_at'>) => Promise<void>;
+
+  // Actions — Cloud sync
+  setSyncStatus: (status: SyncStatus) => void;
 
   // App lifecycle
   initialize: () => Promise<void>;

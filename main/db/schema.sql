@@ -160,6 +160,15 @@ CREATE TABLE IF NOT EXISTS applied_intents (
   reason TEXT
 );
 
+-- SYNC STATE
+-- Key-value settings and counters of the cloud sync (main/sync/client.js):
+-- worker_url, device_secret (safeStorage ciphertext, base64), snapshot_revision,
+-- snapshot_hash, last_sync_at.
+CREATE TABLE IF NOT EXISTS sync_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 -- # INDEXES
 CREATE INDEX IF NOT EXISTS idx_lessons_datetime ON lessons (datetime);
 

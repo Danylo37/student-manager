@@ -1681,6 +1681,26 @@ function recordAppliedIntent(intent, status, result = null, reason = null) {
   );
 }
 
+// # SYNC STATE
+
+function getSyncState(key) {
+  return db.prepare('SELECT value FROM sync_state WHERE key = ?').get(key)?.value ?? null;
+}
+
+/** null removes the key. */
+function setSyncState(key, value) {
+  if (value == null) {
+    db.prepare('DELETE FROM sync_state WHERE key = ?').run(key);
+    return;
+  }
+  db.prepare(
+    `
+    INSERT INTO sync_state (key, value) VALUES (?, ?)
+    ON CONFLICT (key) DO UPDATE SET value = excluded.value
+  `,
+  ).run(key, String(value));
+}
+
 // # EXPORTS
 
 module.exports = {
@@ -1745,4 +1765,7 @@ module.exports = {
   findOverlappingLesson,
   getAppliedIntent,
   recordAppliedIntent,
+  // Sync state
+  getSyncState,
+  setSyncState,
 };
