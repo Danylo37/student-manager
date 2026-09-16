@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { AppSnapshotResponse, Intent, IntentPayloads, IntentType } from '@shared/types';
-import { fetchSnapshot, postIntent } from './api';
+import { fetchSnapshot, isNetworkError, postIntent } from './api';
 import { haptic } from './telegram';
 
 // The phone has no database: the store keeps the last answer of /app/snapshot,
@@ -125,9 +125,12 @@ const useStore = create<State>((set, get) => ({
     } catch (error) {
       set((s) => ({ local: s.local.filter((i) => i.id !== id) }));
       haptic.error();
-      get().showToast(
-        `Не вдалося надіслати: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      const reason = isNetworkError(error)
+        ? 'немає зв’язку з хмарою'
+        : error instanceof Error
+          ? error.message
+          : String(error);
+      get().showToast(`Не вдалося надіслати: ${reason}`);
       return false;
     }
   },

@@ -3,7 +3,7 @@ import { uk } from 'date-fns/locale';
 import { formatUAH } from '@shared/financials';
 import { lessonsWordUA } from '@shared/plural';
 import LessonRow from '../components/LessonRow';
-import { Card, Chevron, Dot, Empty, GroupLabel, Hint, Pill, Row } from '../components/ui';
+import { Card, Chevron, Dot, Empty, GroupLabel, Pill, Row } from '../components/ui';
 import type { Data } from '../hooks';
 import { balanceStatus } from '../lessonView';
 import useStore from '../store';
@@ -43,10 +43,8 @@ export default function Student({
       <Card>
         <Row
           lead="💳"
-          title="Поповнити баланс"
+          title="Поповнити або зняти уроки"
           trail={<Chevron />}
-          disabled={!hasPrice}
-          faded={!hasPrice}
           onClick={() => push({ name: 'topUp', studentId: student.id })}
         />
         <Row
@@ -56,7 +54,6 @@ export default function Student({
           onClick={() => push({ name: 'newLesson', studentId: student.id })}
         />
       </Card>
-      {!hasPrice && <Hint>Щоб поповнювати баланс, спочатку вкажіть ціну уроку на ПК.</Hint>}
       <GroupLabel>Уроки</GroupLabel>
       {lessons.length === 0 ? (
         <Empty>Уроків у найближчі тижні немає</Empty>

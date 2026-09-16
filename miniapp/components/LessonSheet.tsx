@@ -20,10 +20,10 @@ export default function LessonSheet({ data, now }: { data: Data; now: Date }) {
   if (!lesson) return null;
 
   const close = () => openSheet(null);
-  const sent = (ok: boolean) => {
-    close();
-    if (ok) showToast('Надіслано на ПК');
-  };
+  // The sheet closes before the request goes out, so a second tap cannot send a twin.
+  const sent = (ok: boolean) => ok && showToast('Надіслано на ПК');
+  const student = data.students.find((s) => s.id === lesson.studentId);
+  const canPay = lesson.isCompleted && !lesson.isPaid && !lesson.isTrial;
   const { label } = lessonState(lesson, now);
   const subtitle = `${format(zoned(lesson.datetime, data.tz), 'EEEE, d MMMM', { locale: uk })} о ${timeOf(lesson.datetime, data.tz)} · ${label}`;
 
@@ -54,13 +54,17 @@ export default function LessonSheet({ data, now }: { data: Data; now: Date }) {
           <div className="mt-0.5 text-[12.5px] text-tg-hint">{subtitle}</div>
         </div>
         <div className="overflow-hidden rounded-xl">
-          {lesson.isCompleted &&
-            !lesson.isPaid &&
-            !lesson.isTrial &&
-            action(
-              'Позначити оплаченим',
-              () => void send('lesson.togglePayment', { lessonId: lesson.id }).then(sent),
-            )}
+          {canPay &&
+            student?.priceKopiyky != null &&
+            action('Позначити оплаченим', () => {
+              close();
+              void send('lesson.togglePayment', { lessonId: lesson.id }).then(sent);
+            })}
+          {canPay && student?.priceKopiyky == null && (
+            <div className="border-b border-tg-separator bg-tg-section px-4 py-3 text-center text-[13px] text-tg-hint">
+              Щоб позначити оплаченим, спочатку вкажіть ціну уроку на ПК
+            </div>
+          )}
           {!lesson.isCompleted &&
             action('Перенести', () => {
               close();
@@ -70,7 +74,9 @@ export default function LessonSheet({ data, now }: { data: Data; now: Date }) {
             'Видалити урок',
             () =>
               void confirm(`Видалити урок: ${lessonTitle(lesson)}?`).then((yes) => {
-                if (yes) void send('lesson.delete', { lessonId: lesson.id }).then(sent);
+                if (!yes) return;
+                close();
+                void send('lesson.delete', { lessonId: lesson.id }).then(sent);
               }),
             true,
           )}

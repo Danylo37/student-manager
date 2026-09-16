@@ -1,11 +1,19 @@
-import { useCallback, useState } from 'react';
-import { Banner, Card, Empty, Field, GroupLabel, Hint, inputClass } from '../components/ui';
+import { useState } from 'react';
+import {
+  BottomButton,
+  Banner,
+  Card,
+  Empty,
+  Field,
+  GroupLabel,
+  Hint,
+  inputClass,
+} from '../components/ui';
 import type { Data } from '../hooks';
 import { lessonTitle } from '../lessonView';
 import type { Screen } from '../store';
 import useStore from '../store';
-import { useMainButton } from '../telegram';
-import { dayKey, findBusy, timeOf, toUtcIso, zoned } from '../time';
+import { dayKey, findBusy, nextFullHour, timeOf, toUtcIso, zoned } from '../time';
 
 type Mode = Extract<Screen, { name: 'newLesson' | 'moveLesson' }>;
 
@@ -33,7 +41,7 @@ export default function LessonForm({ data, now, mode }: { data: Data; now: Date;
         ? mode.date
         : dayKey(now),
   );
-  const [time, setTime] = useState(moving ? timeOf(moving.datetime, tz) : '15:00');
+  const [time, setTime] = useState(moving ? timeOf(moving.datetime, tz) : nextFullHour(now));
   const [busy, setBusy] = useState(false);
 
   const trial = moving ? moving.isTrial : isTrial;
@@ -51,8 +59,8 @@ export default function LessonForm({ data, now, mode }: { data: Data; now: Date;
     .sort((a, b) => a.name.localeCompare(b.name, 'uk'));
   const valid = !!datetime && !taken && (moving || trial || studentId !== '');
 
-  const submit = useCallback(async () => {
-    if (!datetime || !valid) return;
+  const submit = async () => {
+    if (!datetime || !valid || busy) return;
     setBusy(true);
     const ok = moving
       ? await send('lesson.move', { lessonId: moving.id, datetime })
@@ -68,14 +76,7 @@ export default function LessonForm({ data, now, mode }: { data: Data; now: Date;
       pop();
       showToast('Надіслано на ПК');
     }
-  }, [send, pop, showToast, datetime, valid, moving, isTrial, studentName, studentId]);
-
-  useMainButton({
-    text: moving ? 'Перенести' : 'Поставити урок',
-    onClick: submit,
-    disabled: !valid,
-    loading: busy,
-  });
+  };
 
   if (mode.name === 'moveLesson' && !moving) return <Empty>Урок не знайдено</Empty>;
 
@@ -149,6 +150,12 @@ export default function LessonForm({ data, now, mode }: { data: Data; now: Date;
           Урок з’явиться в розкладі, коли ПК його застосує.
         </Hint>
       )}
+      <BottomButton
+        text={moving ? 'Перенести' : 'Поставити урок'}
+        onClick={submit}
+        disabled={!valid}
+        loading={busy}
+      />
     </>
   );
 }

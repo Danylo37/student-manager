@@ -1,5 +1,5 @@
 import { TZDate } from '@date-fns/tz';
-import { addDays, format, startOfWeek } from 'date-fns';
+import { addDays, addHours, format, startOfWeek } from 'date-fns';
 import { uk } from 'date-fns/locale';
 import { lessonDurationMinutes } from '@shared/constants';
 import type { SnapshotLesson } from '@shared/types';
@@ -41,6 +41,10 @@ export const dayStart = (date: Date) => {
 export const weekStart = (date: Date) => startOfWeek(date, { weekStartsOn: 1 });
 
 export const weekDays = (start: Date) => Array.from({ length: 7 }, (_, i) => addDays(start, i));
+
+/** "HH:00" of the next hour in the zone the date carries: the default slot for a new lesson. */
+export const nextFullHour = (now: Date) =>
+  format(addHours(dayStart(now), now.getHours() + 1), 'HH:mm');
 
 /** "yyyy-MM-dd" plus "HH:mm" in the tutor's zone → UTC ISO as the desktop stores it. */
 export function toUtcIso(date: string, time: string, tz: string): string {

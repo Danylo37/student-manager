@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Intent, Snapshot } from '@shared/types';
 import { overlay, type View } from './overlay';
 import useStore from './store';
+import { onActivated } from './telegram';
 import { nowIn } from './time';
 
 export interface Data extends View {
@@ -44,9 +45,11 @@ export function usePolling(): void {
       timer = setInterval(() => void refresh(), POLL_MS);
     };
     document.addEventListener('visibilitychange', onVisibility);
+    const offActivated = onActivated(() => void refresh());
     return () => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibility);
+      offActivated();
     };
   }, [refresh]);
 }

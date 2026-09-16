@@ -31,7 +31,9 @@ export default function Banners({ data, now }: { data: Data; now: Date }) {
     <>
       {error && (
         <Banner>
-          Немає зв’язку з хмарою.{' '}
+          {error === 'Unauthorized'
+            ? 'Сесія Telegram застаріла: закрийте застосунок і відкрийте знову. '
+            : 'Немає зв’язку з хмарою. '}
           {fetchedAt
             ? `Показано дані від ${when(new Date(fetchedAt).toISOString(), tz, now)}.`
             : 'Показано збережені дані.'}

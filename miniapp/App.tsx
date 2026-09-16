@@ -19,9 +19,7 @@ function Shell({ children, tabs = false }: { children: React.ReactNode; tabs?: b
   return (
     <div
       className="font-sans text-[15px] leading-snug"
-      style={{
-        paddingBottom: tabs ? 'calc(4rem + var(--tg-safe-area-inset-bottom, 0px))' : '2rem',
-      }}
+      style={{ paddingBottom: 'calc(6rem + var(--tg-safe-area-inset-bottom, 0px))' }}
     >
       {children}
       {tabs && <TabBar />}

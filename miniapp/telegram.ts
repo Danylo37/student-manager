@@ -48,40 +48,9 @@ export function useBackButton(visible: boolean, onBack: () => void): void {
   }, [visible, onBack]);
 }
 
-export interface MainButtonProps {
-  text: string;
-  onClick: () => void;
-  disabled?: boolean;
-  loading?: boolean;
-}
-
-/** The Telegram bottom button for the screen that mounts this; hidden again when it goes. */
-export function useMainButton({
-  text,
-  onClick,
-  disabled = false,
-  loading = false,
-}: MainButtonProps) {
-  useEffect(
-    () => () => {
-      webApp?.MainButton.hide();
-    },
-    [],
-  );
-  useEffect(() => {
-    if (!webApp) return;
-    const button = webApp.MainButton;
-    // hideProgress() re-enables the button, so the active flag goes after it.
-    if (loading) {
-      button.setParams({ text, is_visible: true });
-      button.showProgress(false);
-    } else {
-      button.hideProgress();
-      button.setParams({ text, is_active: !disabled, is_visible: true });
-    }
-    button.onClick(onClick);
-    return () => {
-      button.offClick(onClick);
-    };
-  }, [text, onClick, disabled, loading]);
+/** Telegram tells when the Mini App comes back to the front (Bot API 8.0+). */
+export function onActivated(handler: () => void): () => void {
+  if (!webApp?.isVersionAtLeast('8.0')) return () => {};
+  webApp.onEvent('activated', handler);
+  return () => webApp.offEvent('activated', handler);
 }

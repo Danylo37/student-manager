@@ -13,6 +13,10 @@ export class ApiError extends Error {
   }
 }
 
+const TIMEOUT_MS = 15_000;
+
+export const isNetworkError = (error: unknown) => !(error instanceof ApiError);
+
 async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
     method,
@@ -21,6 +25,7 @@ async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown):
       ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (!response.ok) {
     const error = await response
@@ -34,8 +39,19 @@ async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown):
 
 export const fetchSnapshot = () => request<AppSnapshotResponse>('GET', '/app/snapshot');
 
-export const postIntent = <T extends IntentType>(intent: {
+/**
+ * The id makes the request idempotent, so a timeout is retried with the same id:
+ * the cloud answers with the record it already has instead of a second one.
+ */
+export async function postIntent<T extends IntentType>(intent: {
   id: string;
   type: T;
   payload: IntentPayloads[T];
-}) => request<IntentOf<T>>('POST', '/app/intent', intent);
+}): Promise<IntentOf<T>> {
+  try {
+    return await request<IntentOf<T>>('POST', '/app/intent', intent);
+  } catch (error) {
+    if (!isNetworkError(error)) throw error;
+    return request<IntentOf<T>>('POST', '/app/intent', intent);
+  }
+}

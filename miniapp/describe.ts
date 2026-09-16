@@ -24,7 +24,8 @@ export function describeIntent(intent: Intent, snapshot: Snapshot): string {
     }
     case 'balance.adjust': {
       const { studentId, lessons } = intent.payload;
-      return `Баланс: ${studentName(studentId)}, ${lessons > 0 ? '+' : ''}${lessons}`;
+      const n = Math.abs(lessons);
+      return `${lessons < 0 ? 'Зняття уроків' : 'Поповнення'}: ${studentName(studentId)}, ${n} ${lessonsWordUA(n)}`;
     }
     case 'lesson.add': {
       const p = intent.payload;
@@ -46,5 +47,7 @@ export function describeIntent(intent: Intent, snapshot: Snapshot): string {
       const price = p.priceKopiyky != null ? `, ${formatUAH(p.priceKopiyky)}` : '';
       return `Новий учень: ${p.name}${price}`;
     }
+    default:
+      return (intent as Intent).type;
   }
 }

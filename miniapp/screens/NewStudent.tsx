@@ -1,9 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { parseInputToKopiyky } from '@shared/financials';
 import { lessonsWordUA } from '@shared/plural';
-import { Card, Field, GroupLabel, Hint, inputClass, Stepper } from '../components/ui';
+import { BottomButton, Card, Field, GroupLabel, Hint, inputClass, Stepper } from '../components/ui';
 import useStore from '../store';
-import { useMainButton } from '../telegram';
 
 // Name, price and lessons already paid for. The tax flag and a package stay on
 // the desktop; the starting balance is a payment the desktop records at its price.
@@ -22,8 +21,8 @@ export default function NewStudent() {
   const hasPrice = priceKopiyky !== null;
   const valid = !!name.trim() && !priceInvalid;
 
-  const submit = useCallback(async () => {
-    if (!valid) return;
+  const submit = async () => {
+    if (!valid || busy) return;
     setBusy(true);
     const ok = await send('student.add', {
       name: name.trim(),
@@ -35,9 +34,7 @@ export default function NewStudent() {
       pop();
       showToast('Надіслано на ПК');
     }
-  }, [send, pop, showToast, valid, name, priceKopiyky, hasPrice, balance]);
-
-  useMainButton({ text: 'Додати учня', onClick: submit, disabled: !valid, loading: busy });
+  };
 
   return (
     <>
@@ -83,6 +80,7 @@ export default function NewStudent() {
               ? `Запишеться як оплата сьогодні: ${balance} ${lessonsWordUA(balance)}. Суму порахує ПК за ціною або пакетом.`
               : 'Ціну 0 можна вказати, щоб перенести стару передоплату без грошей.'}
       </Hint>
+      <BottomButton text="Додати учня" onClick={submit} disabled={!valid} loading={busy} />
     </>
   );
 }

@@ -163,3 +163,30 @@ export const Banner = ({
     )}
   </div>
 );
+
+interface BottomButtonProps {
+  text: string;
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+}
+
+/** The form's one action, fixed above the safe area; drawn by React, so it never lags the form. */
+export const BottomButton = ({ text, onClick, disabled, loading }: BottomButtonProps) => (
+  <div
+    className="fixed inset-x-0 bottom-0 z-10 bg-tg-section px-3 pt-2"
+    style={{
+      paddingBottom:
+        'calc(var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 10px)',
+    }}
+  >
+    <button
+      type="button"
+      className="w-full rounded-xl bg-tg-button py-3.5 text-[15.5px] font-semibold text-tg-button-text active:opacity-80 disabled:opacity-50"
+      disabled={disabled || loading}
+      onClick={onClick}
+    >
+      {loading ? 'Надсилаю…' : text}
+    </button>
+  </div>
+);
