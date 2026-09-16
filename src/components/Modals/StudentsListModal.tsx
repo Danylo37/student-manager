@@ -16,7 +16,7 @@ import { useNotification } from '../common/NotificationProvider';
 import { formatUAH, parseInputToKopiyky, kopiykyToInput, hasAnyTax } from '@/utils/financials';
 import { submitOnEnter } from '@/utils/keyboard';
 import { rejectionReason } from '@/utils/ipc';
-import { lessonsWordUA } from '@/utils/plural';
+import { lessonsWordUA } from '@shared/plural';
 import Modal from './Modal';
 import ActionMenu, { type ActionMenuItem } from '../common/ActionMenu';
 import type { Discount, Student } from '@/types';

@@ -68,6 +68,25 @@ export async function writeSnapshot(
   return result.meta.changes > 0;
 }
 
+// # DEVICE
+
+export async function touchDevice(db: D1Database, seenAt: string): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO device (id, seen_at) VALUES (1, ?1)
+       ON CONFLICT (id) DO UPDATE SET seen_at = excluded.seen_at`,
+    )
+    .bind(seenAt)
+    .run();
+}
+
+export async function readDeviceSeenAt(db: D1Database): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT seen_at FROM device WHERE id = 1')
+    .first<{ seen_at: string }>();
+  return row?.seen_at ?? null;
+}
+
 // # INTENTS
 
 export async function pendingIntents(db: D1Database, limit: number): Promise<Intent[]> {

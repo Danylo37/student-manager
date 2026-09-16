@@ -4,7 +4,7 @@ import useAppStore from '@/store/appStore';
 import useStudents from '@/hooks/useStudents';
 import { useNotification } from '../common/NotificationProvider';
 import { formatUAH, hasAnyTax, parseInputToKopiyky } from '@/utils/financials';
-import { lessonsWordUA } from '@/utils/plural';
+import { lessonsWordUA } from '@shared/plural';
 import { rejectionReason } from '@/utils/ipc';
 import Modal from './Modal';
 import type { Discount, DiscountInput, Student } from '@/types';

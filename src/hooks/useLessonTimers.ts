@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import useAppStore from '@/store/appStore';
-import { lessonDurationMinutes } from '../utils/constants';
+import { lessonDurationMinutes } from '@shared/constants';
 import type { Lesson } from '@/types';
 
 /**

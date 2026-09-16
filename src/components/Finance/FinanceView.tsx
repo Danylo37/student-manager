@@ -24,7 +24,7 @@ import type {
   CashStats,
   BalanceTotals,
 } from '@/types';
-import { monthsWordUA, lessonsWordUA } from '@/utils/plural';
+import { monthsWordUA, lessonsWordUA } from '@shared/plural';
 
 // # Bar chart
 function MiniBarChart({ data }: { data: EarningsByDay[] }) {

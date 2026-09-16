@@ -1,37 +1,22 @@
-import { lessonDurationMinutes } from './constants';
+import { LessonStatus, lessonStatusOf } from '@shared/lessonStatus';
 import type { Lesson } from '@/types';
 
-/**
- * Lesson status constants
- */
-export enum LessonStatus {
-  PAID = 'PAID',
-  PENDING = 'PENDING',
-  OVERDUE = 'OVERDUE',
-  TRIAL = 'TRIAL',
-}
+export {
+  LessonStatus,
+  getStatusLabel,
+  getStatusEmoji,
+  shouldBeCompleted,
+} from '@shared/lessonStatus';
 
 /**
  * Get lesson status based on payment and time
  */
 export function getLessonStatus(lesson: Lesson): LessonStatus {
-  // A trial lesson is free, so payment never applies to it
-  if (lesson.is_trial) {
-    return LessonStatus.TRIAL;
-  }
-
-  // If not completed yet, always yellow (pending)
-  if (!lesson.is_completed) {
-    return LessonStatus.PENDING;
-  }
-
-  // If completed and paid, green
-  if (lesson.is_paid) {
-    return LessonStatus.PAID;
-  }
-
-  // If completed and not paid, red
-  return LessonStatus.OVERDUE;
+  return lessonStatusOf({
+    isTrial: !!lesson.is_trial,
+    isCompleted: !!lesson.is_completed,
+    isPaid: !!lesson.is_paid,
+  });
 }
 
 /**
@@ -58,43 +43,6 @@ export function getStatusBgLight(status: LessonStatus): string {
     [LessonStatus.TRIAL]: 'bg-blue-50',
   };
   return colors[status] || 'bg-gray-50';
-}
-
-/**
- * Get status label in Ukrainian
- */
-export function getStatusLabel(status: LessonStatus): string {
-  const labels: Record<LessonStatus, string> = {
-    [LessonStatus.PAID]: 'Проведено та оплачено',
-    [LessonStatus.PENDING]: 'Заплановано',
-    [LessonStatus.OVERDUE]: 'Проведено, не оплачено',
-    [LessonStatus.TRIAL]: 'Пробний урок',
-  };
-  return labels[status] || 'Невідомо';
-}
-
-/**
- * Get status emoji
- */
-export function getStatusEmoji(status: LessonStatus): string {
-  const emojis: Record<LessonStatus, string> = {
-    [LessonStatus.PAID]: '🟢',
-    [LessonStatus.PENDING]: '🟡',
-    [LessonStatus.OVERDUE]: '🔴',
-    [LessonStatus.TRIAL]: '🔵',
-  };
-  return emojis[status] || '⚪';
-}
-
-/**
- * Check if lesson should be marked as completed
- */
-export function shouldBeCompleted(datetime: string, isTrial: boolean | number = false): boolean {
-  const now = new Date();
-  const lessonDate = new Date(datetime);
-
-  const lessonEndTime = new Date(lessonDate.getTime() + lessonDurationMinutes(isTrial) * 60 * 1000);
-  return lessonEndTime < now;
 }
 
 /**

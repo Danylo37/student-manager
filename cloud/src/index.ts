@@ -37,6 +37,8 @@ async function pullIntents(url: URL, env: Env): Promise<Response> {
     Number.isInteger(requested) && requested > 0
       ? Math.min(requested, PULL_LIMIT_MAX)
       : PULL_LIMIT_DEFAULT;
+  // A pull is the desktop's heartbeat: it happens every minute while it runs.
+  await db.touchDevice(env.DB, new Date().toISOString());
   return json({ intents: await db.pendingIntents(env.DB, limit) });
 }
 
@@ -91,11 +93,12 @@ async function notify(request: Request, env: Env): Promise<Response> {
 
 async function appSnapshot(env: Env): Promise<Response> {
   const failedSince = new Date(Date.now() - FAILED_VISIBLE_MS).toISOString();
-  const [snapshot, intents] = await Promise.all([
+  const [snapshot, intents, deviceSeenAt] = await Promise.all([
     db.readSnapshot(env.DB),
     db.openIntents(env.DB, failedSince),
+    db.readDeviceSeenAt(env.DB),
   ]);
-  return json({ snapshot, intents });
+  return json({ snapshot, intents, deviceSeenAt });
 }
 
 async function recordIntent(request: Request, env: Env, tgUserId: number): Promise<Response> {
