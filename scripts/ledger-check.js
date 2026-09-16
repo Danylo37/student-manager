@@ -11,6 +11,11 @@
 //   node scripts/ledger-check.js --before <dir>   # also replay through another
 //        checkout's main/ (a git worktree of an older commit) and diff the two
 //
+// With --before, every scenario must end up byte for byte the same on both
+// trees, except the ones marked `fixed`: those must differ, and their `expect`
+// assertions must fail on the old tree and pass on the new one. That is how a
+// fix commit shows it changed exactly the scenario it meant to.
+//
 // main/ needs electron for app.getPath and ipcMain.handle, so a stand-in is
 // served from here and the handlers are collected instead of registered.
 
@@ -105,13 +110,24 @@ async function loadTree(mainDir) {
 //
 // The same eight operations, sent the way the renderer sends them (IPC
 // channels) or wrapped as intents. Both return promises so scenarios read the
-// same either way.
+// same either way. `attempt` runs an operation that may be refused and returns
+// the refusal instead of throwing, so a scenario can expect one.
+
+async function attempt(fn) {
+  try {
+    await fn();
+    return null;
+  } catch (error) {
+    return error.message;
+  }
+}
 
 function viaHandlers(tree) {
   const call = (channel, ...args) => tree.handlers[channel]({}, ...args);
   return {
     name: 'handlers',
     tree,
+    attempt,
     addStudent: async (name, balance, price) =>
       (await call('db:add-student', name, balance, price)).id,
     pay: (studentId, lessons, total = null) =>
@@ -140,6 +156,7 @@ function viaIntents(tree) {
     name: 'intents',
     tree,
     apply,
+    attempt,
     addStudent: async (name, balance, price) =>
       apply('student.add', { name, balance, priceKopiyky: price }).id,
     pay: async (studentId, lessons, total = null) =>
@@ -232,7 +249,9 @@ async function given(t, studentId, count, from = 0) {
 // `real` is the money that actually changed hands, so the printout shows where
 // the ledger is known to drift (the LEDGER-BUG markers) and that the drift is
 // the same before and after. `intents: false` marks a path the intent guards
-// refuse on purpose; those run through the handlers only.
+// refuse on purpose; those run through the handlers only. `expect` lists
+// assertions as [label, ok] pairs; with `fixed: 'BUG-N'` they must fail on the
+// --before tree and the scenario must come out different there.
 const scenarios = [
   {
     name: 'пополнение со скидкой: 10 уроків за 4000 ₴, 12 проведено',
@@ -365,6 +384,9 @@ const scenarios = [
 ];
 
 // # CHECKS
+//
+// Assertions are [label, ok] pairs, optionally tagged with the fix they prove:
+// [label, ok, 'BUG-N']. Tagged pairs must fail on the --before tree.
 
 let failures = 0;
 const ok = (cond, message) => {
@@ -373,27 +395,56 @@ const ok = (cond, message) => {
   return cond;
 };
 
+/** Report assertions for the tree they ran on: after must pass, before must fail where tagged. */
+function report(pairs, { before }) {
+  for (const [label, passed, fixed] of pairs) {
+    if (!before) ok(passed, label);
+    else if (fixed) ok(!passed, `падает до фикса (${fixed}): ${label}`);
+  }
+}
+
 async function runScenario(scenario, trees) {
   console.log(`\n${scenario.name}`);
   const results = [];
-  for (const { label, mainDir, driver } of trees) {
+  for (const { label, mainDir, driver, before } of trees) {
     if (driver === viaIntents && scenario.intents === false) continue;
     const tree = await loadTree(mainDir);
     if (driver === viaIntents && !tree.intents) continue;
     const t = driver(tree);
     await scenario.run(t);
     const snap = snapshot(tree);
-    results.push({ label, snap });
+    results.push({ label, before, snap, tree });
     console.log(`   ${label.padEnd(16)} ${summary(snap)}`);
   }
 
-  const base = results[0];
-  for (const other of results.slice(1)) {
-    const d = diff(base.snap, other.snap);
-    ok(!d, `${base.label} == ${other.label}${d ? `\n      ${d}` : ''}`);
+  const after = results.filter((r) => !r.before);
+  const before = results.find((r) => r.before);
+  for (const other of after.slice(1)) {
+    const d = diff(after[0].snap, other.snap);
+    ok(!d, `${after[0].label} == ${other.label}${d ? `\n      ${d}` : ''}`);
+  }
+  if (before) {
+    const d = diff(before.snap, after[0].snap);
+    if (scenario.fixed) ok(d, `before ≠ after, намеренно (${scenario.fixed})`);
+    else ok(!d, `before == after${d ? `\n      ${d}` : ''}`);
+  }
+  if (scenario.expect) {
+    report(scenario.expect(after[0].snap, after[0].tree), { before: false });
+    if (before && scenario.fixed) {
+      const pairs = scenario.expect(before.snap, before.tree);
+      ok(
+        pairs.some(([, passed]) => !passed),
+        `падает до фикса (${scenario.fixed}): ${
+          pairs
+            .filter(([, p]) => !p)
+            .map(([l]) => l)
+            .join('; ') || 'ничего не упало'
+        }`,
+      );
+    }
   }
 
-  const { cash, earned, open } = base.snap;
+  const { cash, earned, open } = after[0].snap;
   const identity = cash.total - open.advance === earned.total;
   console.log(
     `   ${identity ? '=' : '≠'} cash − advance ${identity ? '=' : '≠'} earned` +
@@ -402,11 +453,10 @@ async function runScenario(scenario, trees) {
         : `   ledger ${uah(cash.total)} vs real ${uah(scenario.real)}` +
           (cash.total === scenario.real ? '' : '  ← known drift')),
   );
+  return { name: scenario.name, changed: before ? !!diff(before.snap, after[0].snap) : null };
 }
 
-async function checkPastPaidAt(mainDir) {
-  console.log('\nнамерение с createdAt в прошлом: paid_at попадает в тот период');
-  const tree = await loadTree(mainDir);
+async function checkPastPaidAt(tree) {
   const t = viaIntents(tree);
   const s = await t.addStudent('Минуле', 0, PRICE);
   t.apply('balance.pay', { studentId: s, lessons: 5 }, '2024-02-10T10:00:00.000Z');
@@ -422,17 +472,18 @@ async function checkPastPaidAt(mainDir) {
     `   2024 Q1 ${uah(q1.total)}  2024 Q2 ${uah(q2.total)}  ${year} ${uah(thisYear.total)}`,
   );
   console.log(`   paid_at: ${paidAt.map((r) => r.paid_at).join(' | ')}`);
-  ok(q1.total === 250000 && q2.total === -50000, 'оплата и возврат легли в свои кварталы 2024');
-  ok(thisYear.total === 50000, 'IPC-оплата без paidAt осталась в текущем периоде');
-  ok(
-    paidAt.slice(0, 2).every((r) => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(r.paid_at)),
-    "paid_at в формате datetime('now')",
-  );
+  return [
+    ['оплата и возврат легли в свои кварталы 2024', q1.total === 250000 && q2.total === -50000],
+    ['IPC-оплата без paidAt осталась в текущем периоде', thisYear.total === 50000],
+    [
+      "paid_at в формате datetime('now')",
+      paidAt.slice(0, 2).every((r) => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(r.paid_at)),
+    ],
+  ];
 }
 
-async function checkIntents(mainDir) {
-  console.log('\nповторное применение и отказы намерений: база не меняется');
-  const tree = await loadTree(mainDir);
+async function checkIntents(tree) {
+  const pairs = [];
   const t = viaIntents(tree);
   const s = await t.addStudent('Ідемпотентність', 0, PRICE);
   const now = new Date().toISOString();
@@ -444,16 +495,16 @@ async function checkIntents(mainDir) {
     createdAt: now,
     source: 'ledger-check',
   };
-  ok(tree.intents.apply(intent).status === 'applied', 'первое применение: applied');
+  pairs.push(['первое применение: applied', tree.intents.apply(intent).status === 'applied']);
   const after = snapshot(tree);
   const again = tree.intents.apply(intent);
-  ok(
-    again.status === 'duplicate' && again.previous.status === 'applied',
+  pairs.push([
     'второе применение: duplicate',
-  );
+    again.status === 'duplicate' && again.previous.status === 'applied',
+  ]);
   const forged = tree.intents.apply({ ...intent, payload: { studentId: s, lessons: 50 } });
-  ok(forged.status === 'duplicate', 'тот же id с другим payload: duplicate');
-  ok(!diff(after, snapshot(tree)), 'после повторов база не изменилась');
+  pairs.push(['тот же id с другим payload: duplicate', forged.status === 'duplicate']);
+  pairs.push(['после повторов база не изменилась', !diff(after, snapshot(tree))]);
 
   // Fixtures for the rejections
   const [done] = await given(t, s, 1, 0);
@@ -502,13 +553,13 @@ async function checkIntents(mainDir) {
       createdAt: now,
       source: 'ledger-check',
     });
-    ok(
+    pairs.push([
+      `${label}: ${outcome.status} «${outcome.reason}», повтор ${repeat.status}, база без изменений`,
       outcome.status === 'rejected' &&
         outcome.reason === reason &&
         repeat.status === 'duplicate' &&
         !diff(before, snapshot(tree)),
-      `${label}: ${outcome.status} «${outcome.reason}», повтор ${repeat.status}, база без изменений`,
-    );
+    ]);
   }
 
   const malformed = [
@@ -519,10 +570,10 @@ async function checkIntents(mainDir) {
   for (const [label, type, payload] of malformed) {
     const before = snapshot(tree);
     const outcome = tree.intents.apply({ id: randomUUID(), type, payload, createdAt: now });
-    ok(
-      outcome.status === 'rejected' && !diff(before, snapshot(tree)),
+    pairs.push([
       `${label}: rejected «${outcome.reason}»`,
-    );
+      outcome.status === 'rejected' && !diff(before, snapshot(tree)),
+    ]);
   }
 
   // A failure inside the action: rolled back, not remembered, so a retry can succeed
@@ -541,31 +592,26 @@ async function checkIntents(mainDir) {
   const untouched = !diff(before, snapshot(tree));
   tree.db.recordBalanceChange = original;
   const retried = tree.intents.apply(failing);
-  ok(
-    failed.status === 'failed' && untouched && retried.status === 'applied',
+  pairs.push([
     `сбой внутри действия: ${failed.status} «${failed.reason}», база без изменений, повтор после починки: ${retried.status}`,
-  );
+    failed.status === 'failed' && untouched && retried.status === 'applied',
+  ]);
+  return pairs;
 }
 
-async function checkRollback(label, mainDir) {
-  const tree = await loadTree(mainDir);
+async function checkRollback(tree) {
   const t = viaHandlers(tree);
   const s = await t.addStudent('Відкат', 0, PRICE);
   const original = tree.db.recordBalanceChange;
   tree.db.recordBalanceChange = () => {
     throw new Error('disk full (simulated)');
   };
-  let threw = false;
-  try {
-    await t.pay(s, 5);
-  } catch {
-    threw = true;
-  }
+  const threw = (await t.attempt(() => t.pay(s, 5))) !== null;
   tree.db.recordBalanceChange = original;
   const { balance } = tree.raw.prepare('SELECT balance FROM students WHERE id = ?').get(s);
   const bundles = tree.raw.prepare('SELECT COUNT(*) AS n FROM payment_bundles').get().n;
-  console.log(`   ${label.padEnd(16)} threw ${threw}, balance ${balance}, bundles ${bundles}`);
-  return { threw, balance, bundles };
+  console.log(`   threw ${threw}, balance ${balance}, bundles ${bundles}`);
+  return [['транзакция откатила всё', threw && balance === 0 && bundles === 0]];
 }
 
 // # MAIN
@@ -582,29 +628,40 @@ async function main() {
       : null;
 
   const trees = [];
-  if (beforeDir) trees.push({ label: 'before/handlers', mainDir: beforeDir, driver: viaHandlers });
-  trees.push({ label: 'after/handlers', mainDir: afterDir, driver: viaHandlers });
-  trees.push({ label: 'after/intents', mainDir: afterDir, driver: viaIntents });
+  if (beforeDir) {
+    trees.push({ label: 'before/handlers', mainDir: beforeDir, driver: viaHandlers, before: true });
+  }
+  trees.push({ label: 'after/handlers', mainDir: afterDir, driver: viaHandlers, before: false });
+  trees.push({ label: 'after/intents', mainDir: afterDir, driver: viaIntents, before: false });
 
   console.log(`after:  ${afterDir}`);
   if (beforeDir) console.log(`before: ${beforeDir}`);
 
-  for (const scenario of scenarios) await runScenario(scenario, trees);
+  const outcomes = [];
+  for (const scenario of scenarios) outcomes.push(await runScenario(scenario, trees));
 
-  console.log('\nсбой посреди pay-for-lessons (recordBalanceChange бросает)');
+  const checks = [
+    ['сбой посреди pay-for-lessons (recordBalanceChange бросает)', checkRollback],
+    ['намерение с createdAt в прошлом: paid_at попадает в тот период', checkPastPaidAt],
+    ['повторное применение и отказы намерений: база не меняется', checkIntents],
+  ];
+  for (const [title, check] of checks) {
+    console.log(`\n${title}`);
+    const tree = await loadTree(afterDir);
+    if (check !== checkRollback && !tree.intents) continue;
+    report(await check(tree), { before: false });
+    if (beforeDir) {
+      const old = await loadTree(beforeDir);
+      if (check === checkRollback || old.intents) report(await check(old), { before: true });
+    }
+  }
+
   if (beforeDir) {
-    const b = await checkRollback('before/handlers', beforeDir);
-    ok(
-      b.threw && b.balance === 5 && b.bundles === 1,
-      'до: баланс и бандл записаны, истории нет (частичная запись)',
+    const changed = outcomes.filter((o) => o.changed).map((o) => o.name);
+    console.log(
+      `\nсценарии, изменившиеся относительно before: ${changed.length ? changed.join('; ') : 'ни одного'}`,
     );
   }
-  const a = await checkRollback('after/handlers', afterDir);
-  ok(a.threw && a.balance === 0 && a.bundles === 0, 'после: транзакция откатила всё');
-
-  await checkPastPaidAt(afterDir);
-  await checkIntents(afterDir);
-
   console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');
   for (const dir of tempDirs) fs.rmSync(dir, { recursive: true, force: true });
   process.exit(failures ? 1 : 0);
