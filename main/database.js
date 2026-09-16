@@ -1286,7 +1286,7 @@ function updateLesson(lessonId, updates) {
   db.prepare(`UPDATE lessons SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 }
 
-function toggleLessonPayment(lessonId) {
+function toggleLessonPayment(lessonId, paidAt = null) {
   const lesson = db
     .prepare(
       `
@@ -1298,18 +1298,18 @@ function toggleLessonPayment(lessonId) {
   if (!lesson || !lesson.is_completed) throw new Error('Lesson not found or not completed');
   if (lesson.is_trial) throw new Error('Trial lesson is free');
 
-  // Money arrives now, so it needs its own row in the cash ledger. The lesson is
-  // attached to it right away — it is exactly what that payment bought. When the
-  // student is already deleted the row simply has no owner, like every other
-  // payment that outlived its student.
+  // Money arrives, now or at paidAt when it is recorded after the fact, so it
+  // needs its own row in the cash ledger. The lesson is attached to it right
+  // away — it is exactly what that payment bought. When the student is already
+  // deleted the row simply has no owner, like every other payment that outlived
+  // its student.
   let price = lesson.price;
   let bundleId = lesson.payment_bundle_id;
   if (!bundleId) {
     if (price === null && lesson.student_id) {
       price = getStudentPriceAt(lesson.student_id, lesson.datetime);
     }
-    // LEDGER-BUG-8: the bundle is always dated now; no paidAt can reach this call.
-    const bundle = createPaymentBundle(lesson.student_id, 1, price);
+    const bundle = createPaymentBundle(lesson.student_id, 1, price, paidAt);
     if (!bundle) throw new Rejection(REASON.noPrice);
     bundleId = bundle.id;
     price = bundle.total;

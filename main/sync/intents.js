@@ -150,7 +150,7 @@ const TYPES = {
       if (lesson.is_paid) return REASON.alreadyPaid;
       return null;
     },
-    run: (p) => actions.toggleLessonPayment(p.lessonId),
+    run: (p, intent) => actions.toggleLessonPayment(p.lessonId, intent.createdAt),
   },
 
   'student.add': {

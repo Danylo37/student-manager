@@ -28,14 +28,11 @@ function isUtcIso(value) {
 }
 
 /**
- * When the money actually arrived, for a payment recorded after the fact.
- * paid_at is ordered as text next to rows stamped by datetime('now'), so the
- * ISO string is rewritten to that same format; the moment itself is unchanged.
- *
- * LEDGER-BUG-8: this parameter is what closes it for balance.pay and
- * balance.adjust. The desktop still passes null, so money entered there is
- * dated when it is entered, and toggleLessonPayment cannot take a date at all:
- * its bundle is created inside database.js with no way to pass one through.
+ * When the money actually arrived, for a payment recorded after the fact: an
+ * intent carries its own createdAt, the desktop passes null and the money is
+ * dated when it is entered. paid_at is ordered as text next to rows stamped by
+ * datetime('now'), so the ISO string is rewritten to that same format; the
+ * moment itself is unchanged.
  */
 function toLedgerTime(paidAt) {
   if (paidAt == null) return null;
@@ -112,9 +109,12 @@ function deleteLesson(lessonId) {
 }
 
 /** Paying for a single lesson after the fact: a payment like any other. */
-function toggleLessonPayment(lessonId) {
+function toggleLessonPayment(lessonId, paidAt = null) {
   return transaction(() => {
-    const { studentId, studentName, price } = db.toggleLessonPayment(lessonId);
+    const { studentId, studentName, price } = db.toggleLessonPayment(
+      lessonId,
+      toLedgerTime(paidAt),
+    );
     db.recordBalanceChange(studentId, 1, price, studentName);
   });
 }

@@ -504,22 +504,34 @@ async function checkPastPaidAt(tree) {
   t.apply('balance.pay', { studentId: s, lessons: 5 }, '2024-02-10T10:00:00.000Z');
   t.apply('balance.adjust', { studentId: s, lessons: -1 }, '2024-05-03T09:30:00.000Z');
   await viaHandlers(tree).pay(s, 1);
+  // A debt paid through an intent recorded in Q3 2024 belongs to Q3 2024
+  const d = await t.addStudent('Борг', 0, PRICE);
+  const [debt] = await given(t, d, 1, 3);
+  t.apply('lesson.togglePayment', { lessonId: debt }, '2024-08-15T12:00:00.000Z');
 
-  const q1 = tree.db.getCashStats('2024-01-01T00:00:00.000Z', '2024-04-01T00:00:00.000Z');
-  const q2 = tree.db.getCashStats('2024-04-01T00:00:00.000Z', '2024-07-01T00:00:00.000Z');
+  const cash = (from, to) => tree.db.getCashStats(from, to).total;
+  const q1 = cash('2024-01-01T00:00:00.000Z', '2024-04-01T00:00:00.000Z');
+  const q2 = cash('2024-04-01T00:00:00.000Z', '2024-07-01T00:00:00.000Z');
+  const q3 = cash('2024-07-01T00:00:00.000Z', '2024-10-01T00:00:00.000Z');
   const year = new Date().getUTCFullYear();
-  const thisYear = tree.db.getCashStats(`${year}-01-01T00:00:00.000Z`, FAR);
-  const paidAt = tree.raw.prepare('SELECT paid_at FROM payment_bundles ORDER BY id').all();
-  console.log(
-    `   2024 Q1 ${uah(q1.total)}  2024 Q2 ${uah(q2.total)}  ${year} ${uah(thisYear.total)}`,
-  );
-  console.log(`   paid_at: ${paidAt.map((r) => r.paid_at).join(' | ')}`);
+  const thisYear = cash(`${year}-01-01T00:00:00.000Z`, FAR);
+  const paidAt = tree.raw
+    .prepare('SELECT paid_at FROM payment_bundles ORDER BY id')
+    .all()
+    .map((r) => r.paid_at);
+  console.log(`   2024 Q1 ${uah(q1)}  Q2 ${uah(q2)}  Q3 ${uah(q3)}  ${year} ${uah(thisYear)}`);
+  console.log(`   paid_at: ${paidAt.join(' | ')}`);
   return [
-    ['оплата и возврат легли в свои кварталы 2024', q1.total === 250000 && q2.total === -50000],
-    ['IPC-оплата без paidAt осталась в текущем периоде', thisYear.total === 50000],
+    ['оплата и возврат легли в свои кварталы 2024', q1 === 250000 && q2 === -50000],
+    ['IPC-оплата без paidAt осталась в текущем периоде', thisYear === 50000],
     [
       "paid_at в формате datetime('now')",
-      paidAt.slice(0, 2).every((r) => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(r.paid_at)),
+      paidAt.every((p) => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(p)),
+    ],
+    [
+      '💵 по намерению из Q3 2024 лёг в Q3 2024',
+      q3 === 50000 && paidAt[3] === '2024-08-15 12:00:00',
+      'BUG-8',
     ],
   ];
 }

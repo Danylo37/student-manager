@@ -168,7 +168,7 @@ function registerIpcHandlers() {
     ),
   );
   handle('db:update-lesson', (_, id, updates) => actions.updateLesson(id, updates));
-  handle('db:toggle-lesson-payment', (_, id) => actions.toggleLessonPayment(id));
+  handle('db:toggle-lesson-payment', (_, id) => actions.toggleLessonPayment(id, null));
   handle('db:delete-lesson', (_, id) => actions.deleteLesson(id));
 
   // # Schedules
