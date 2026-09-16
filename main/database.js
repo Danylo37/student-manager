@@ -822,21 +822,24 @@ function returnLessonToBundle(bundleId) {
  * Log a payment or balance correction made by the teacher. Only called from the
  * IPC layer: the -1 per completed lesson is bookkeeping, not something the
  * teacher did, and would flood the history.
- * @param {number} studentId
+ * @param {number|null} studentId - null once the student is deleted
  * @param {number} lessons  - signed (+N paid for, -N removed)
  * @param {number|null} amountKopiyky - what it was worth, null if no price is known
+ * @param {string|null} studentName - the name to show when the student is gone
  */
-function recordBalanceChange(studentId, lessons, amountKopiyky = null) {
-  if (!studentId || !lessons) return;
+function recordBalanceChange(studentId, lessons, amountKopiyky = null, studentName = null) {
+  if (!lessons) return;
 
-  const student = db.prepare('SELECT name FROM students WHERE id = ?').get(studentId);
+  const student = studentId
+    ? db.prepare('SELECT name FROM students WHERE id = ?').get(studentId)
+    : null;
 
   db.prepare(
     `
     INSERT INTO balance_history (student_id, student_name_cache, lessons, amount)
     VALUES (?, ?, ?, ?)
   `,
-  ).run(studentId, student ? student.name : null, lessons, amountKopiyky ?? null);
+  ).run(studentId ?? null, student ? student.name : studentName, lessons, amountKopiyky ?? null);
 }
 
 /**
@@ -1295,13 +1298,15 @@ function toggleLessonPayment(lessonId) {
   if (lesson.is_trial) throw new Error('Trial lesson is free');
 
   // Money arrives now, so it needs its own row in the cash ledger. The lesson is
-  // attached to it right away — it is exactly what that payment bought.
+  // attached to it right away — it is exactly what that payment bought. When the
+  // student is already deleted the row simply has no owner, like every other
+  // payment that outlived its student.
   let price = lesson.price;
   let bundleId = lesson.payment_bundle_id;
-  // LEDGER-BUG-1: a lesson whose student was deleted (student_id NULL) skips this
-  // block and is marked paid below with no row in the cash ledger.
-  if (lesson.student_id && !bundleId) {
-    if (price === null) price = getStudentPriceAt(lesson.student_id, lesson.datetime);
+  if (!bundleId) {
+    if (price === null && lesson.student_id) {
+      price = getStudentPriceAt(lesson.student_id, lesson.datetime);
+    }
     // LEDGER-BUG-8: the bundle is always dated now; no paidAt can reach this call.
     const bundle = createPaymentBundle(lesson.student_id, 1, price);
     // LEDGER-BUG-2: with no price there is no bundle, and the lesson is still
@@ -1320,7 +1325,7 @@ function toggleLessonPayment(lessonId) {
   );
   // One lesson less owed, whatever the balance was
   if (lesson.student_id) updateStudentBalance(lesson.student_id, 1);
-  return { studentId: lesson.student_id, price };
+  return { studentId: lesson.student_id, studentName: lesson.student_name_cache, price };
 }
 
 function deleteLesson(lessonId) {

@@ -111,8 +111,8 @@ function deleteLesson(lessonId) {
 /** Paying for a single lesson after the fact: a payment like any other. */
 function toggleLessonPayment(lessonId) {
   return transaction(() => {
-    const { studentId, price } = db.toggleLessonPayment(lessonId);
-    db.recordBalanceChange(studentId, 1, price);
+    const { studentId, studentName, price } = db.toggleLessonPayment(lessonId);
+    db.recordBalanceChange(studentId, 1, price, studentName);
   });
 }
 

@@ -358,15 +358,35 @@ const scenarios = [
     },
   },
   {
-    name: 'LEDGER-BUG-1: должник удалён, 💵 на его уроке (намерение это отклоняет)',
+    name: 'LEDGER-BUG-1: должник удалён, 💵 на его уроке',
     real: 50000,
-    intents: false,
+    fixed: 'BUG-1',
     run: async (t) => {
       const s = await t.addStudent('Боржник', 0, PRICE);
       const [first] = await given(t, s, 2);
       t.tree.db.deleteStudent(s);
       await t.toggle(first);
     },
+    expect: (snap) => [
+      ['деньги в кэше: 500', snap.cash.total === 50000],
+      [
+        'бандл без владельца на 1 урок, слот занят',
+        snap.rows.payment_bundles.some(
+          (b) =>
+            b.student_id === null &&
+            b.lessons_count === 1 &&
+            b.total_price === 50000 &&
+            b.lessons_used === 1,
+        ),
+      ],
+      ['урок привязан к бандлу', snap.rows.lessons[0].payment_bundle_id !== null],
+      [
+        'история: оплата от удалённого ученика',
+        snap.rows.balance_history.some(
+          (h) => h.student_id === null && h.lessons === 1 && h.amount === 50000,
+        ),
+      ],
+    ],
   },
   {
     name: 'LEDGER-BUG-7: пакет по 400, ошибочный +1 по 500, внесён прошлый урок, снято 1',
@@ -534,7 +554,6 @@ async function checkIntents(tree) {
       'Урок уже проведено',
     ],
     ['урок уже оплачен', 'lesson.togglePayment', { lessonId: done }, 'Урок уже оплачено'],
-    ['💵 на уроке удалённого', 'lesson.togglePayment', { lessonId: ghostLesson }, 'Учня видалено'],
   ];
   for (const [label, type, payload, reason] of cases) {
     const before = snapshot(tree);
@@ -561,6 +580,21 @@ async function checkIntents(tree) {
         !diff(before, snapshot(tree)),
     ]);
   }
+
+  // A deleted student's debt can still be paid; the bundle simply has no owner
+  const orphan = tree.intents.apply({
+    id: randomUUID(),
+    type: 'lesson.togglePayment',
+    payload: { lessonId: ghostLesson },
+    createdAt: now,
+  });
+  pairs.push([
+    '💵 на уроке удалённого ученика: applied, бандл без владельца',
+    orphan.status === 'applied' &&
+      tree.raw.prepare('SELECT COUNT(*) AS n FROM payment_bundles WHERE student_id IS NULL').get()
+        .n === 1,
+    'BUG-1',
+  ]);
 
   const malformed = [
     ['дробные копейки', 'balance.pay', { studentId: s, lessons: 1, totalPriceKopiyky: 12.5 }],

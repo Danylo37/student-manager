@@ -147,7 +147,6 @@ const TYPES = {
       if (lesson.is_trial) return REASON.trialIsFree;
       if (!lesson.is_completed) return REASON.notCompleted;
       if (lesson.is_paid) return REASON.alreadyPaid;
-      if (!lesson.student_id) return REASON.studentDeleted;
       return null;
     },
     run: (p) => actions.toggleLessonPayment(p.lessonId),
