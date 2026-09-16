@@ -25,8 +25,8 @@ function AddStudentModal() {
     if (!name.trim()) { setError("Введіть ім'я учня"); return null; }
 
     const priceKopiyky = priceStr !== '' ? parseInputToKopiyky(priceStr) : null;
-    if (priceStr !== '' && (priceKopiyky === null || priceKopiyky <= 0)) {
-      setError('Ціна за урок повинна бути більше 0');
+    if (priceStr !== '' && priceKopiyky === null) {
+      setError('Введіть коректну ціну');
       return null;
     }
 

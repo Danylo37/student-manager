@@ -336,6 +336,37 @@ const scenarios = [
     ],
   },
   {
+    name: 'ціна 0: пополнение 3, 4 проведено, 💵 на долговом — касса не трогается',
+    real: 0,
+    fixed: 'PRICE-0',
+    run: async (t) => {
+      const s = await t.addStudent('Нуль', 0, 0);
+      const pay = await t.attempt(() => t.pay(s, 3));
+      const ids = await given(t, s, 4);
+      const toggle = await t.attempt(() => t.toggle(ids[3]));
+      return { pay, toggle };
+    },
+    expect: (snap, tree, notes) => [
+      ['пополнение и 💵 с ценой 0 не отклонены', notes.pay === null && notes.toggle === null],
+      [
+        'бандлы на 0 ₴: 3 урока и 1 урок',
+        snap.rows.payment_bundles.some((b) => b.lessons_count === 3 && b.total_price === 0) &&
+          snap.rows.payment_bundles.some((b) => b.lessons_count === 1 && b.total_price === 0),
+      ],
+      [
+        'все 4 урока оплачены по 0',
+        snap.rows.lessons.every((l) => l.is_paid === 1 && l.price === 0),
+      ],
+      [
+        'касса 0, аванс 0, долг 0, баланс 0',
+        snap.cash.total === 0 &&
+          snap.open.advance === 0 &&
+          snap.open.debt === 0 &&
+          snap.rows.students[0].balance === 0,
+      ],
+    ],
+  },
+  {
     name: 'LEDGER-BUG-3: стартовый баланс 3, 4 проведено',
     real: 150000,
     run: async (t) => {
@@ -742,6 +773,19 @@ async function checkIntents(tree) {
       fixed,
     ]);
   }
+
+  // 0 is a valid price: the student is created with it and their payments are 0 ₴
+  const zero = tree.intents.apply({
+    id: randomUUID(),
+    type: 'student.add',
+    payload: { name: 'Нуль', balance: 0, priceKopiyky: 0 },
+    createdAt: now,
+  });
+  pairs.push([
+    `ученик с ценой 0: ${zero.status}, цена записана`,
+    zero.status === 'applied' && tree.db.getStudentCurrentPrice(zero.result.id)?.price === 0,
+    'PRICE-0',
+  ]);
 
   // A deleted student's debt can still be paid; the bundle simply has no owner
   const orphan = tree.intents.apply({

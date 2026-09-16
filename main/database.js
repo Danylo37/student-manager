@@ -422,9 +422,8 @@ function addStudent(name, balance, priceKopiyky = null) {
     .prepare('INSERT INTO students (name, balance) VALUES (?, ?)')
     .run(name, balance);
   const studentId = result.lastInsertRowid;
-  if (priceKopiyky !== null && priceKopiyky > 0) {
-    setStudentPrice(studentId, priceKopiyky);
-  }
+  // 0 is a price too: lessons that cost nothing, or were paid before the ledger
+  if (priceKopiyky !== null) setStudentPrice(studentId, priceKopiyky);
   return { id: studentId, name, balance };
 }
 

@@ -102,7 +102,7 @@ function StudentsListModal() {
 
   const handlePriceSubmit = async (studentId: number) => {
     const kopiyky = parseInputToKopiyky(priceStr);
-    if (kopiyky === null || kopiyky <= 0) {
+    if (kopiyky === null) {
       showToast('Введіть коректну ціну', 'error');
       return;
     }
@@ -185,7 +185,7 @@ function StudentsListModal() {
       onClick: () => {
         setEditingStudentId(student.id);
         setEditMode('price');
-        setPriceStr(student.current_price ? kopiykyToInput(student.current_price) : '');
+        setPriceStr(student.current_price != null ? kopiykyToInput(student.current_price) : '');
       },
     },
     {

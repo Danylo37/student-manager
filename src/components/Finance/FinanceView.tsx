@@ -257,7 +257,7 @@ function IncomeSimulator() {
         const next = { ...prev };
         students.forEach((s) => {
           if (next[s.id] === undefined) {
-            next[s.id] = s.current_price ? (s.current_price / 100).toFixed(2) : '';
+            next[s.id] = s.current_price != null ? (s.current_price / 100).toFixed(2) : '';
           }
         });
         return next;

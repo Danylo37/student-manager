@@ -158,9 +158,7 @@ const TYPES = {
       firstError(
         field.text(p, 'name'),
         p.balance == null || Number.isInteger(p.balance) ? null : invalid('balance'),
-        p.priceKopiyky == null || (isKopiyky(p.priceKopiyky) && p.priceKopiyky > 0)
-          ? null
-          : invalid('priceKopiyky'),
+        field.optionalKopiyky(p, 'priceKopiyky'),
       ),
     guard: () => null,
     run: (p) => actions.addStudent(p.name.trim(), p.balance ?? 0, p.priceKopiyky ?? null),
