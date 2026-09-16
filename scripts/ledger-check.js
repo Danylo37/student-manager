@@ -313,13 +313,27 @@ const scenarios = [
     },
   },
   {
-    name: 'LEDGER-BUG-2: учень без цены, 2 проведено, пополнение 3',
+    name: 'LEDGER-BUG-2: учень без цены, 2 проведено, пополнение 3 и 💵',
     real: null,
+    fixed: 'BUG-2',
     run: async (t) => {
       const s = await t.addStudent('Без ціни', 0, null);
-      await given(t, s, 2);
-      await t.pay(s, 3);
+      const [first] = await given(t, s, 2);
+      return {
+        pay: await t.attempt(() => t.pay(s, 3)),
+        toggle: await t.attempt(() => t.toggle(first)),
+      };
     },
+    expect: (snap, tree, notes) => [
+      ['пополнение без цены отклонено', !!notes.pay && notes.pay.includes('Вкажіть ціну уроку')],
+      ['💵 без цены отклонено', !!notes.toggle && notes.toggle.includes('Вкажіть ціну уроку')],
+      ['баланс не изменился: -2', snap.rows.students[0].balance === -2],
+      ['уроки остались неоплаченными', snap.rows.lessons.every((l) => l.is_paid === 0)],
+      [
+        'ни бандлов, ни истории',
+        snap.rows.payment_bundles.length === 0 && snap.rows.balance_history.length === 0,
+      ],
+    ],
   },
   {
     name: 'LEDGER-BUG-3: стартовый баланс 3, 4 проведено',
@@ -438,9 +452,9 @@ async function runScenario(scenario, trees) {
     const tree = await loadTree(mainDir);
     if (driver === viaIntents && !tree.intents) continue;
     const t = driver(tree);
-    await scenario.run(t);
+    const notes = await scenario.run(t);
     const snap = snapshot(tree);
-    results.push({ label, before, snap, tree });
+    results.push({ label, before, snap, tree, notes });
     console.log(`   ${label.padEnd(16)} ${summary(snap)}`);
   }
 
@@ -457,9 +471,9 @@ async function runScenario(scenario, trees) {
     else ok(!d, `before == after${d ? `\n      ${d}` : ''}`);
   }
   if (scenario.expect) {
-    report(scenario.expect(after[0].snap, after[0].tree), { before: false });
+    report(scenario.expect(after[0].snap, after[0].tree, after[0].notes), { before: false });
     if (before && proves) {
-      const pairs = scenario.expect(before.snap, before.tree);
+      const pairs = scenario.expect(before.snap, before.tree, before.notes);
       ok(
         pairs.some(([, passed]) => !passed),
         `падает до фикса (${scenario.fixed}): ${
@@ -539,6 +553,8 @@ async function checkIntents(tree) {
   const ghost = await t.addStudent('Привид', 0, PRICE);
   const [ghostLesson] = await given(t, ghost, 1, 1);
   tree.db.deleteStudent(ghost);
+  const noPrice = await t.addStudent('Без ціни', 0, null);
+  const [unpriced] = await given(t, noPrice, 1, 2);
 
   const cases = [
     ['ученик удалён', 'balance.pay', { studentId: ghost, lessons: 1 }, 'Учня видалено'],
@@ -562,8 +578,22 @@ async function checkIntents(tree) {
       'Урок уже проведено',
     ],
     ['урок уже оплачен', 'lesson.togglePayment', { lessonId: done }, 'Урок уже оплачено'],
+    [
+      'пополнение без цены',
+      'balance.pay',
+      { studentId: noPrice, lessons: 1 },
+      'Вкажіть ціну уроку, щоб записати оплату',
+      'BUG-2',
+    ],
+    [
+      '💵 без цены',
+      'lesson.togglePayment',
+      { lessonId: unpriced },
+      'Вкажіть ціну уроку, щоб записати оплату',
+      'BUG-2',
+    ],
   ];
-  for (const [label, type, payload, reason] of cases) {
+  for (const [label, type, payload, reason, fixed] of cases) {
     const before = snapshot(tree);
     const id = randomUUID();
     const outcome = tree.intents.apply({
@@ -586,6 +616,7 @@ async function checkIntents(tree) {
         outcome.reason === reason &&
         repeat.status === 'duplicate' &&
         !diff(before, snapshot(tree)),
+      fixed,
     ]);
   }
 

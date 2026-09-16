@@ -15,6 +15,7 @@ import useStudents from '@/hooks/useStudents';
 import { useNotification } from '../common/NotificationProvider';
 import { formatUAH, parseInputToKopiyky, kopiykyToInput, hasAnyTax } from '@/utils/financials';
 import { submitOnEnter } from '@/utils/keyboard';
+import { rejectionReason } from '@/utils/ipc';
 import Modal from './Modal';
 import ActionMenu, { type ActionMenuItem } from '../common/ActionMenu';
 import type { Discount, Student } from '@/types';
@@ -93,8 +94,8 @@ function StudentsListModal() {
       const msg = amount >= 0 ? 'Уроків додано:' : 'Уроків знято:';
       showToast(`${msg} ${Math.abs(amount)}`, 'success');
       stopEditing();
-    } catch {
-      showToast('Помилка при оновленні балансу!', 'error');
+    } catch (err) {
+      showToast(rejectionReason(err) ?? 'Помилка при оновленні балансу!', 'error');
     }
   };
 

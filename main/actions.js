@@ -1,4 +1,5 @@
 const db = require('./database');
+const { Rejection, REASON } = require('./rejection');
 
 // Every mutation the app makes goes through here, whether it comes from the
 // desktop UI or from a command recorded elsewhere. Each action repeats, step
@@ -63,9 +64,10 @@ function payForLessons(studentId, lessons, totalPriceKopiyky = null, paidAt = nu
       totalPriceKopiyky,
       toLedgerTime(paidAt),
     );
-    db.recordBalanceChange(studentId, lessons, bundle && bundle.total);
-    // LEDGER-BUG-2: with no price there is no bundle, yet the lessons are still
-    // marked paid below, so the money never reaches the cash ledger.
+    // Money with no price behind it cannot be put in the ledger, so it is refused
+    // outright rather than marked paid on the quiet.
+    if (!bundle) throw new Rejection(REASON.noPrice);
+    db.recordBalanceChange(studentId, lessons, bundle.total);
     db.markOldestUnpaidLessonsAsPaid(studentId, lessons);
   });
 }
@@ -90,7 +92,8 @@ function adjustBalance(studentId, lessons, paidAt = null) {
       refunded && refunded.amount,
       toLedgerTime(paidAt),
     );
-    db.recordBalanceChange(studentId, lessons, bundle && bundle.total);
+    if (!bundle) throw new Rejection(REASON.noPrice);
+    db.recordBalanceChange(studentId, lessons, bundle.total);
   });
 }
 

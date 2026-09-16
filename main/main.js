@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const db = require('./database');
 const actions = require('./actions');
+const { Rejection } = require('./rejection');
 const logger = require('./logger');
 const { initUpdater, consumeReleaseNotes } = require('./updater');
 
@@ -93,7 +94,8 @@ function registerIpcHandlers() {
       try {
         return fn(...args);
       } catch (e) {
-        logger.error(`IPC ${channel} failed`, { error: e.message });
+        if (e instanceof Rejection) logger.warn(`IPC ${channel} refused`, { reason: e.message });
+        else logger.error(`IPC ${channel} failed`, { error: e.message });
         throw e;
       }
     });

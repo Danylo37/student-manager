@@ -4,6 +4,7 @@ const fs = require('fs');
 const { app } = require('electron');
 const { LESSON_DURATION_MINUTES, TRIAL_LESSON_DURATION_MINUTES } = require('./constants');
 const logger = require('./logger');
+const { Rejection, REASON } = require('./rejection');
 
 let db = null;
 
@@ -499,7 +500,7 @@ function getUnpaidCompletedLessons(studentId) {
 /**
  * Close the oldest unpaid lessons with a payment that has just been recorded.
  * Each one takes its slot in the bundle it is paid from, so the advance left on
- * that payment stays correct.
+ * that payment stays correct; once the slots run out the rest stay unpaid.
  */
 function markOldestUnpaidLessonsAsPaid(studentId, count) {
   if (count <= 0) return;
@@ -513,9 +514,9 @@ function markOldestUnpaidLessonsAsPaid(studentId, count) {
       continue;
     }
     const { price, bundleId } = resolveLessonPrice(studentId, l.datetime);
-    // LEDGER-BUG-2: with no bundle to take a slot from, bundleId is null and the
-    // lesson is still marked paid.
-    stmt.run(price ?? l.price, bundleId, l.id);
+    // No slot left means no payment behind this lesson: it stays a debt.
+    if (bundleId === null) break;
+    stmt.run(price, bundleId, l.id);
   }
 }
 
@@ -1309,13 +1310,10 @@ function toggleLessonPayment(lessonId) {
     }
     // LEDGER-BUG-8: the bundle is always dated now; no paidAt can reach this call.
     const bundle = createPaymentBundle(lesson.student_id, 1, price);
-    // LEDGER-BUG-2: with no price there is no bundle, and the lesson is still
-    // marked paid below.
-    if (bundle) {
-      bundleId = bundle.id;
-      price = bundle.total;
-      db.prepare('UPDATE payment_bundles SET lessons_used = 1 WHERE id = ?').run(bundleId);
-    }
+    if (!bundle) throw new Rejection(REASON.noPrice);
+    bundleId = bundle.id;
+    price = bundle.total;
+    db.prepare('UPDATE payment_bundles SET lessons_used = 1 WHERE id = ?').run(bundleId);
   }
 
   db.prepare('UPDATE lessons SET is_paid = 1, price = ?, payment_bundle_id = ? WHERE id = ?').run(

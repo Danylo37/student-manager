@@ -1,6 +1,7 @@
 const actions = require('../actions');
 const db = require('../database');
 const logger = require('../logger');
+const { Rejection } = require('../rejection');
 
 // An intent is a mutation recorded somewhere else (later: the Telegram Mini
 // App) and applied here exactly once: { id, type, payload, createdAt, source }.
@@ -12,7 +13,7 @@ const logger = require('../logger');
 //
 // apply() never throws for a bad intent. It returns one of
 //   { status: 'applied',   result }              written and remembered
-//   { status: 'rejected',  reason }              a precondition failed, nothing written
+//   { status: 'rejected',  reason }              a guard or the action refused, nothing written
 //   { status: 'duplicate', previous }            this id was decided on before
 //   { status: 'failed',    reason }              unexpected error, rolled back, not remembered
 // A malformed envelope or payload is rejected without being remembered, so the
@@ -205,7 +206,15 @@ function apply(intent) {
         return { status: 'rejected', reason };
       }
 
-      const result = type.run(payload, intent) ?? null;
+      let result;
+      try {
+        result = type.run(payload, intent) ?? null;
+      } catch (error) {
+        // The action itself refused: remembered exactly like a guard rejection
+        if (!(error instanceof Rejection)) throw error;
+        db.recordAppliedIntent(intent, 'rejected', null, error.message);
+        return { status: 'rejected', reason: error.message };
+      }
       db.recordAppliedIntent(intent, 'applied', result, null);
       logger.info('Intent applied', { id: intent.id, type: intent.type, source: intent.source });
       return { status: 'applied', result };

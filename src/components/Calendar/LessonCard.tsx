@@ -7,6 +7,8 @@ import {
   getStatusEmoji,
 } from '@/utils/lessonStatus.ts';
 import useAppStore from '@/store/appStore';
+import { useNotification } from '../common/NotificationProvider';
+import { rejectionReason } from '@/utils/ipc';
 import type { Lesson } from '@/types';
 
 interface LessonCardProps {
@@ -20,6 +22,7 @@ interface LessonCardProps {
 function LessonCard({ lesson }: LessonCardProps) {
   const selectLesson = useAppStore((state) => state.selectLesson);
   const toggleLessonPayment = useAppStore((state) => state.toggleLessonPayment);
+  const { showToast } = useNotification();
 
   const status = getLessonStatus(lesson);
   const borderColor = getStatusBorderColor(status);
@@ -35,7 +38,9 @@ function LessonCard({ lesson }: LessonCardProps) {
     try {
       await toggleLessonPayment(lesson.id);
     } catch (error) {
-      console.error('Failed to toggle payment status:', error);
+      const reason = rejectionReason(error);
+      if (reason) showToast(reason, 'error');
+      else console.error('Failed to toggle payment status:', error);
     }
   };
 
