@@ -138,6 +138,24 @@ OR IGNORE INTO tax_settings (id)
 VALUES
   (1);
 
+-- APPLIED INTENTS
+-- One row per intent id ever decided on (see main/sync/intents.js): a mutation
+-- recorded outside the desktop and applied here once. A repeat of the same id
+-- is answered from this table and never touches the ledger.
+-- status: 'applied' | 'rejected'; result and payload are JSON; created_at is the
+-- intent's own UTC ISO timestamp, applied_at is when it reached this database.
+CREATE TABLE IF NOT EXISTS applied_intents (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  source TEXT,
+  payload TEXT,
+  created_at TEXT NOT NULL,
+  applied_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  status TEXT NOT NULL,
+  result TEXT,
+  reason TEXT
+);
+
 -- # INDEXES
 CREATE INDEX IF NOT EXISTS idx_lessons_datetime ON lessons (datetime);
 

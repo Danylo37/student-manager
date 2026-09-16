@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const db = require('./database');
 const actions = require('./actions');
+const intents = require('./sync/intents');
 const logger = require('./logger');
 const { initUpdater, consumeReleaseNotes } = require('./updater');
 
@@ -56,6 +57,7 @@ app.whenReady().then(() => {
   try {
     const connection = db.initDatabase();
     actions.init(connection);
+    intents.init(connection);
     db.syncCompletedLessons();
     db.autoCreateLessonsForAllStudents();
   } catch (error) {
