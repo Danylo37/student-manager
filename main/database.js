@@ -415,6 +415,8 @@ function getStudents() {
 }
 
 function addStudent(name, balance, priceKopiyky = null) {
+  // LEDGER-BUG-3: the starting balance is written straight to the student with
+  // no payment bundle behind it, so that money never reaches the cash ledger.
   const result = db
     .prepare('INSERT INTO students (name, balance) VALUES (?, ?)')
     .run(name, balance);
@@ -436,6 +438,8 @@ function deleteStudent(studentId) {
   // Nobody is left to work off what was paid ahead, and the upcoming lessons are
   // about to be deleted, so close the open slots instead of leaving them as an
   // advance forever. The money of the bundles is untouched.
+  // LEDGER-BUG-6: the slots are closed without a refund row, so money handed
+  // back on parting stays in the cash of its period as income.
   cancelPrepaidLessons(studentId, countPrepaidLessons(studentId), { detachLessons: false });
 
   // Preserve completed lessons
@@ -509,6 +513,8 @@ function markOldestUnpaidLessonsAsPaid(studentId, count) {
       continue;
     }
     const { price, bundleId } = resolveLessonPrice(studentId, l.datetime);
+    // LEDGER-BUG-2: with no bundle to take a slot from, bundleId is null and the
+    // lesson is still marked paid.
     stmt.run(price ?? l.price, bundleId, l.id);
   }
 }
@@ -610,6 +616,8 @@ function createPaymentBundle(studentId, count, totalPriceKopiyky = null, paidAt 
 
   // Snapshot the student's tax exemption: the tax base of a period is settled when
   // the money arrives, so flipping the flag later must not rewrite it.
+  // LEDGER-BUG-5: a refund (count < 0) snapshots the flag as it is today, not as
+  // it was on the payment it undoes, so the two rows can land in different bases.
   const student = db.prepare('SELECT is_tax_exempt FROM students WHERE id = ?').get(studentId);
   const isTaxExempt = student && student.is_tax_exempt ? 1 : 0;
 
@@ -726,6 +734,9 @@ function cancelPrepaidLessons(studentId, count, { detachLessons = true, asOf = n
   `,
   );
 
+  // LEDGER-BUG-7: takes the latest lesson by date, whatever payment it hangs on,
+  // instead of a slot of the payment being undone; with different per-lesson
+  // prices the refund amount is the other bundle's.
   const newestPaidLesson = db.prepare(
     `
     SELECT id, datetime, price, payment_bundle_id FROM lessons
@@ -1287,9 +1298,14 @@ function toggleLessonPayment(lessonId) {
   // attached to it right away — it is exactly what that payment bought.
   let price = lesson.price;
   let bundleId = lesson.payment_bundle_id;
+  // LEDGER-BUG-1: a lesson whose student was deleted (student_id NULL) skips this
+  // block and is marked paid below with no row in the cash ledger.
   if (lesson.student_id && !bundleId) {
     if (price === null) price = getStudentPriceAt(lesson.student_id, lesson.datetime);
+    // LEDGER-BUG-8: the bundle is always dated now; no paidAt can reach this call.
     const bundle = createPaymentBundle(lesson.student_id, 1, price);
+    // LEDGER-BUG-2: with no price there is no bundle, and the lesson is still
+    // marked paid below.
     if (bundle) {
       bundleId = bundle.id;
       price = bundle.total;
