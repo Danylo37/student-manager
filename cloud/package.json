@@ -8,7 +8,8 @@
     "types": "wrangler types --env-interface CloudflareBindings",
     "check": "npm run types && tsc --noEmit",
     "migrate:local": "wrangler d1 migrations apply student-manager --local",
-    "migrate": "wrangler d1 migrations apply student-manager --remote"
+    "migrate": "wrangler d1 migrations apply student-manager --remote",
+    "telegram:setup": "node scripts/telegram-setup.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

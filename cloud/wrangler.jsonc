@@ -3,6 +3,8 @@
   "name": "student-manager",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "preview_urls": false,
   "observability": { "enabled": true },
   // The built Mini App (stage 3) lands in public/; unknown paths fall back to index.html.
   "assets": {
@@ -14,7 +16,7 @@
     {
       "binding": "DB",
       "database_name": "student-manager",
-      "database_id": "REPLACE_WITH_OUTPUT_OF_wrangler_d1_create",
+      "database_id": "6c000eeb-b43e-4647-8c0e-6435130253dd",
       "migrations_dir": "migrations",
     },
   ],
