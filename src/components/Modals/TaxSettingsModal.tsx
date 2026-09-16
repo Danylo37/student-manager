@@ -20,6 +20,7 @@ function TaxSettingsModal() {
 
   const [esvType, setEsvType] = useState<'none' | 'fixed'>('none');
   const [esvFixedStr, setEsvFixedStr] = useState('');
+  const [esvSinceStr, setEsvSinceStr] = useState(''); // YYYY-MM
   const [singleEnabled, setSingleEnabled] = useState(false);
   const [singleRateStr, setSingleRateStr] = useState(String(DEFAULT_SINGLE_TAX_RATE));
   const [militaryEnabled, setMilitaryEnabled] = useState(false);
@@ -30,6 +31,7 @@ function TaxSettingsModal() {
     if (taxSettings && isOpen) {
       setEsvType(taxSettings.esv_type as 'none' | 'fixed');
       setEsvFixedStr(taxSettings.esv_fixed > 0 ? kopiykyToInput(taxSettings.esv_fixed) : '');
+      setEsvSinceStr(taxSettings.esv_since?.slice(0, 7) ?? '');
       setSingleEnabled(!!taxSettings.single_tax_enabled);
       setSingleRateStr(String(taxSettings.single_tax_rate ?? DEFAULT_SINGLE_TAX_RATE));
       setMilitaryEnabled(!!taxSettings.military_tax_enabled);
@@ -37,10 +39,23 @@ function TaxSettingsModal() {
     }
   }, [taxSettings, isOpen]);
 
+  // ЄСВ counts from the month it is switched on, unless another month is picked
+  const chooseEsvType = (type: 'none' | 'fixed') => {
+    setEsvType(type);
+    if (type === 'fixed' && !esvSinceStr) {
+      const now = new Date();
+      setEsvSinceStr(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+    }
+  };
+
   const handleSave = async () => {
     if (saving) return;
 
     const esvFixed = esvType === 'fixed' ? (parseInputToKopiyky(esvFixedStr) ?? 0) : 0;
+    if (esvType === 'fixed' && !/^\d{4}-\d{2}$/.test(esvSinceStr)) {
+      showToast('Вкажіть місяць, з якого рахувати ЄСВ', 'error');
+      return;
+    }
 
     const singleRate = parseFloat(singleRateStr.replace(',', '.')) || 0;
     const militaryRate = parseFloat(militaryRateStr.replace(',', '.')) || 0;
@@ -48,6 +63,7 @@ function TaxSettingsModal() {
     const settings: Omit<TaxSettings, 'id' | 'updated_at'> = {
       esv_type: esvType,
       esv_fixed: esvFixed,
+      esv_since: esvType === 'fixed' ? `${esvSinceStr}-01` : null,
       single_tax_enabled: singleEnabled ? 1 : 0,
       single_tax_rate: singleRate,
       military_tax_enabled: militaryEnabled ? 1 : 0,
@@ -111,7 +127,7 @@ function TaxSettingsModal() {
             {(['none', 'fixed'] as const).map((v) => (
               <button
                 key={v}
-                onClick={() => setEsvType(v)}
+                onClick={() => chooseEsvType(v)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   esvType === v
                     ? 'bg-blue-500 text-white'
@@ -135,6 +151,22 @@ function TaxSettingsModal() {
               />
               <span className="text-gray-600 text-sm">₴/місяць</span>
             </div>
+          )}
+          {esvType === 'fixed' && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-600 text-sm">Рахувати з</span>
+                <input
+                  type="month"
+                  value={esvSinceStr}
+                  onChange={(e) => setEsvSinceStr(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <p className="text-xs text-gray-400">
+                ЄСВ нараховується щомісяця, навіть без уроків, починаючи з цього місяця.
+              </p>
+            </>
           )}
         </div>
 

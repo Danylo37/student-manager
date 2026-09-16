@@ -154,7 +154,6 @@ function registerIpcHandlers() {
   handle('db:get-earnings-stats', (_, s, e) => db.getEarningsStats(s, e));
   handle('db:get-earnings-by-day', (_, s, e) => db.getEarningsByDay(s, e));
   handle('db:get-earnings-by-student', (_, s, e) => db.getEarningsByStudent(s, e));
-  handle('db:get-earnings-date-range', () => db.getEarningsDateRange());
   handle('db:get-cash-stats', (_, s, e) => db.getCashStats(s, e));
   handle('db:get-cash-by-day', (_, s, e) => db.getCashByDay(s, e));
   handle('db:get-cash-by-student', (_, s, e) => db.getCashByStudent(s, e));

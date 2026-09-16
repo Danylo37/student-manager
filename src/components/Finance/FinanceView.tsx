@@ -471,7 +471,6 @@ const PERIODS: { key: EarningsPeriod; label: string }[] = [
 function FinanceView() {
   const openModal = useAppStore((s) => s.openModal);
   const taxSettings = useAppStore((s) => s.taxSettings);
-  const taxStart = useAppStore((s) => s.taxStart);
   const dataVersion = useAppStore((s) => s.dataVersion);
 
   const [period, setPeriod] = useState<EarningsPeriod>('month');
@@ -556,9 +555,11 @@ function FinanceView() {
 
   const activeRange = getActiveRange();
 
-  // ЄСВ is due for every month since the first paid lesson with a price,
+  // ЄСВ is due for every month since the one it was switched on in the settings,
   // including months without lessons, but never before it or in the future.
-  const taxMonths = getFixedTaxMonths(period, taxStart, activeRange.start, activeRange.end);
+  const esvSince = taxSettings?.esv_since ?? null;
+  const esvSinceLabel = esvSince ? `${esvSince.slice(5, 7)}.${esvSince.slice(0, 4)}` : '';
+  const taxMonths = getFixedTaxMonths(period, esvSince, activeRange.start, activeRange.end);
 
   const isCash = basis === 'cash';
   const gross = (isCash ? cash?.total : stats?.total) ?? 0;
@@ -600,9 +601,6 @@ function FinanceView() {
     period !== 'week' &&
     taxSettings?.esv_type === 'fixed' &&
     taxSettings.esv_fixed > 0;
-
-  // No prices anywhere yet → finances are not in use, so nothing is taxed
-  const financesNotStarted = !taxStart;
 
   // The two views differ by the advances that moved in or out of the period
   const basisGap = (cash?.total ?? 0) - (stats?.total ?? 0);
@@ -762,20 +760,12 @@ function FinanceView() {
               </div>
             )}
 
-            {/* Finances not in use yet — nothing is taxed until a price and a lesson exist */}
-            {financesNotStarted && hasTax && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-500 text-sm">
-                ℹ️ Податки поки не нараховуються. Вони почнуть рахуватися з місяця, коли ви
-                встановите ціну учню та проведете й позначите оплаченим перший урок.
-              </div>
-            )}
-
-            {/* ESV basis note — ЄСВ is due every month since finances started */}
-            {showEsvNote && (
+            {/* ESV basis note — ЄСВ is due every month since it was switched on */}
+            {showEsvNote && esvSince && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-500 text-sm">
                 ℹ️ ЄСВ за {taxMonths} {monthsWordUA(taxMonths)}: {formatUAH(taxSettings!.esv_fixed)}{' '}
-                × {taxMonths}. ЄСВ платиться щомісяця, навіть без уроків, — з місяця першого
-                оплаченого уроку з ціною і до поточного.
+                × {taxMonths}. ЄСВ платиться щомісяця, навіть без уроків, — з {esvSinceLabel}{' '}
+                (місяць у налаштуваннях податків) і до поточного.
                 {period === 'quarter' && ' Сплатити до 20 числа після кварталу.'}
               </div>
             )}

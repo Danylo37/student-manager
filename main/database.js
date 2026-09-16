@@ -70,6 +70,14 @@ function addMissingColumns() {
   const additions = [
     ['tax_settings', 'single_tax_enabled', 'INTEGER DEFAULT 0'],
     ['tax_settings', 'single_tax_rate', 'REAL DEFAULT 5.0'],
+    // ЄСВ used to count from the first income; now from the month it was switched
+    // on, and the last save of the settings is the closest thing to that moment.
+    [
+      'tax_settings',
+      'esv_since',
+      'TEXT',
+      "UPDATE tax_settings SET esv_since = date(updated_at) WHERE esv_type = 'fixed'",
+    ],
     // Payments made before paid_at existed happened when they were recorded.
     ['payment_bundles', 'paid_at', 'DATETIME', 'UPDATE payment_bundles SET paid_at = created_at'],
     // Nobody was exempt before the flag existed, so the default already backfills it.
@@ -996,6 +1004,7 @@ function saveTaxSettings(s) {
     UPDATE tax_settings SET
       esv_type             = ?,
       esv_fixed            = ?,
+      esv_since            = CASE WHEN ? = 'fixed' THEN COALESCE(?, date('now')) ELSE NULL END,
       single_tax_enabled   = ?,
       single_tax_rate      = ?,
       military_tax_enabled = ?,
@@ -1006,6 +1015,8 @@ function saveTaxSettings(s) {
   ).run(
     s.esv_type,
     s.esv_fixed,
+    s.esv_type,
+    s.esv_since ?? null,
     s.single_tax_enabled ? 1 : 0,
     s.single_tax_rate,
     s.military_tax_enabled ? 1 : 0,
@@ -1172,45 +1183,6 @@ function getEarningsByStudent(startDate, endDate) {
   `,
     )
     .all(startDate, endDate);
-}
-
-/**
- * First and last income, plus how many months actually had income.
- *
- * `min_date` is the moment the user really started using the finance features:
- * the earlier of the first recorded payment and the first paid lesson with a
- * price. Fixed monthly taxes (ЄСВ) are charged from that month onwards —
- * including months without lessons, as a real ФОП pays — but never before it,
- * so an existing install stays at zero tax until finances are actually used.
- */
-function getEarningsDateRange() {
-  const row = db
-    .prepare(
-      `
-    SELECT
-      MIN(datetime)                                AS min_date,
-      MAX(datetime)                                AS max_date,
-      COUNT(DISTINCT strftime('%Y-%m', datetime))  AS months_count
-    FROM lessons
-    WHERE ${IS_INCOME()}
-  `,
-    )
-    .get();
-
-  const { first_payment, last_payment } = db
-    .prepare(
-      `
-    SELECT MIN(COALESCE(paid_at, created_at)) AS first_payment,
-           MAX(COALESCE(paid_at, created_at)) AS last_payment
-    FROM payment_bundles WHERE total_price > 0
-  `,
-    )
-    .get();
-
-  const earliest = [row.min_date, first_payment].filter(Boolean).sort()[0] ?? null;
-  const latest = [row.max_date, last_payment].filter(Boolean).sort().pop() ?? null;
-
-  return { ...row, min_date: earliest, max_date: latest };
 }
 
 // # LESSONS
@@ -1748,7 +1720,6 @@ module.exports = {
   getEarningsStats,
   getEarningsByDay,
   getEarningsByStudent,
-  getEarningsDateRange,
   getCashStats,
   getCashByDay,
   getCashByStudent,

@@ -84,6 +84,7 @@ export interface Discount {
  * Tax settings — single row.
  * esv_type: 'none' | 'fixed'
  * esv_fixed: kopiyky/month
+ * esv_since: YYYY-MM-DD, the first day of the month ЄСВ is counted from; null while it is off
  * single_tax_rate: percent (єдиний податок, 5.0 = 5% for ФОП group 3)
  * military_tax_rate: percent (e.g. 1.0 = 1%)
  */
@@ -91,6 +92,7 @@ export interface TaxSettings {
   id: 1;
   esv_type: 'none' | 'fixed';
   esv_fixed: number; // kopiyky/month
+  esv_since: string | null;
   single_tax_enabled: number; // 0 | 1
   single_tax_rate: number; // percent
   military_tax_enabled: number; // 0 | 1
@@ -140,12 +142,6 @@ export interface BalanceHistoryEntry {
 export interface BalanceTotals {
   advance: number; // kopiyky, always >= 0
   debt: number; // kopiyky, always >= 0
-}
-
-export interface EarningsDateRange {
-  min_date: string | null;
-  max_date: string | null;
-  months_count: number;
 }
 
 // # API TYPES
@@ -229,7 +225,6 @@ export interface ElectronAPI {
   getEarningsStats: (startDate: string, endDate: string) => Promise<EarningsStats>;
   getEarningsByDay: (startDate: string, endDate: string) => Promise<EarningsByDay[]>;
   getEarningsByStudent: (startDate: string, endDate: string) => Promise<EarningsByStudent[]>;
-  getEarningsDateRange: () => Promise<EarningsDateRange>;
   getCashStats: (startDate: string, endDate: string) => Promise<CashStats>;
   getCashByDay: (startDate: string, endDate: string) => Promise<EarningsByDay[]>;
   getCashByStudent: (startDate: string, endDate: string) => Promise<EarningsByStudent[]>;
@@ -314,8 +309,6 @@ export interface AppState {
 
   theme: Theme;
   taxSettings: TaxSettings | null;
-  /** ISO date of the first paid lesson with a price; null until finances are used. */
-  taxStart: string | null;
 
   // Actions — Students
   loadStudents: () => Promise<void>;
@@ -365,7 +358,6 @@ export interface AppState {
 
   // Actions — Tax settings
   loadTaxSettings: () => Promise<void>;
-  refreshTaxStart: () => Promise<void>;
   saveTaxSettings: (settings: Omit<TaxSettings, 'id' | 'updated_at'>) => Promise<void>;
 
   // App lifecycle

@@ -14,7 +14,6 @@ function Header() {
   const currentView = useAppStore((s) => s.currentView);
   const setView = useAppStore((s) => s.setView);
   const taxSettings = useAppStore((s) => s.taxSettings);
-  const taxStart = useAppStore((s) => s.taxStart);
   const currentWeek = useAppStore((s) => s.currentWeek);
   const students = useAppStore((s) => s.students);
 
@@ -43,7 +42,12 @@ function Header() {
     weekGrossKopiyky,
     taxSettings,
     'week',
-    getFixedTaxMonths('week', taxStart, weekStart.toISOString(), weekEndExclusive.toISOString()),
+    getFixedTaxMonths(
+      'week',
+      taxSettings?.esv_since ?? null,
+      weekStart.toISOString(),
+      weekEndExclusive.toISOString(),
+    ),
     weekTaxableKopiyky,
   );
 

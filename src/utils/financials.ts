@@ -138,14 +138,15 @@ function monthIndex(date: Date): number {
  *
  * A ФОП pays ЄСВ every month regardless of income, so months without lessons
  * count too. Two limits keep the number honest:
- *  - nothing is charged before `taxStart` (the first paid lesson with a price),
- *    so the app shows zero tax until the user actually starts using finances;
+ *  - nothing is charged before `taxStart`, the month ЄСВ was switched on in the
+ *    settings, so the months from before it stay untaxed;
  *  - nothing is charged for months that have not happened yet, so a year viewed
  *    in July charges 7 months, not 12.
  *
  * Day and week periods are shorter than a month and stay proportional instead.
  *
- * @param taxStart    - ISO date of the first income, or null if there is none yet
+ * @param taxStart    - YYYY-MM-DD, first day of the month ЄСВ is counted from
+ *                      (tax_settings.esv_since), or null while it is off
  * @param periodStart - ISO start of the period (inclusive)
  * @param periodEnd   - ISO end of the period (exclusive)
  */
@@ -162,7 +163,7 @@ function countChargeableMonths(
   const lastDay = new Date(periodEnd);
   lastDay.setDate(lastDay.getDate() - 1);
 
-  const first = Math.max(monthIndex(new Date(taxStart)), monthIndex(new Date(periodStart)));
+  const first = Math.max(monthIndex(fromInputDate(taxStart)), monthIndex(new Date(periodStart)));
   const last = Math.min(monthIndex(lastDay), monthIndex(now));
 
   return Math.max(0, last - first + 1);
@@ -170,8 +171,7 @@ function countChargeableMonths(
 
 /**
  * Fixed-tax multiplier for a period: whole months for month/quarter/year/all,
- * a fraction of a month for day/week. Returns 0 before the first income so an
- * existing install shows no tax until prices and lessons exist.
+ * a fraction of a month for day/week. Returns 0 while ЄСВ is off (no start month).
  */
 export function getFixedTaxMonths(
   period: EarningsPeriod,
@@ -184,7 +184,7 @@ export function getFixedTaxMonths(
 
   if (period === 'day' || period === 'week') {
     // Only charge once the period has actually reached the tax start month.
-    const started = monthIndex(new Date(periodStart)) >= monthIndex(new Date(taxStart));
+    const started = monthIndex(new Date(periodStart)) >= monthIndex(fromInputDate(taxStart));
     const notFuture = new Date(periodStart) <= now;
     if (!started || !notFuture) return 0;
     return period === 'day' ? 1 / 30 : 1 / WEEKS_PER_MONTH;
