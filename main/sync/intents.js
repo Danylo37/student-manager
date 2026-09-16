@@ -59,8 +59,8 @@ const firstError = (...errors) => errors.find(Boolean) ?? null;
 // What has to be true right before an action runs, read inside the transaction.
 
 const studentExists = (studentId) => (db.getStudentById(studentId) ? null : REASON.studentDeleted);
-const slotTaken = (datetime, exceptLessonId = null) =>
-  db.findLessonAt(datetime, exceptLessonId) !== null;
+const slotTaken = (datetime, isTrial, exceptLessonId = null) =>
+  db.findOverlappingLesson(datetime, isTrial, exceptLessonId) !== null;
 
 // # REGISTRY (v1)
 //
@@ -102,7 +102,7 @@ const TYPES = {
     guard: (p) =>
       firstError(
         p.isTrial ? null : studentExists(p.studentId),
-        slotTaken(p.datetime) ? REASON.slotTaken : null,
+        slotTaken(p.datetime, !!p.isTrial) ? REASON.slotTaken : null,
       ),
     // A scheduled lesson: completion comes as its own intent, or from the
     // regular sync once the time has passed.
@@ -116,7 +116,7 @@ const TYPES = {
       const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
       if (lesson.is_completed) return REASON.alreadyCompleted;
-      return slotTaken(p.datetime, p.lessonId) ? REASON.slotTaken : null;
+      return slotTaken(p.datetime, !!lesson.is_trial, p.lessonId) ? REASON.slotTaken : null;
     },
     run: (p) => actions.updateLesson(p.lessonId, { datetime: p.datetime }),
   },

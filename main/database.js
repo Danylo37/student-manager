@@ -1621,12 +1621,36 @@ function getLessonById(lessonId) {
   return db.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId) ?? null;
 }
 
-/** The tutor gives one lesson at a time, so a datetime is a slot for everyone. */
-function findLessonAt(datetime, exceptLessonId = null) {
+/**
+ * A lesson whose time overlaps the given one, because the tutor gives one lesson
+ * at a time: a regular lesson lasts LESSON_DURATION_MINUTES, a trial one
+ * TRIAL_LESSON_DURATION_MINUTES, and two lessons clash when their intervals
+ * intersect. datetime is a UTC ISO string; both sides are compared as seconds
+ * since the epoch.
+ */
+function findOverlappingLesson(datetime, isTrial = false, exceptLessonId = null) {
+  const start = Date.parse(datetime) / 1000;
+  const end = start + (isTrial ? TRIAL_LESSON_DURATION_MINUTES : LESSON_DURATION_MINUTES) * 60;
   return (
     db
-      .prepare('SELECT id FROM lessons WHERE datetime = ? AND (? IS NULL OR id <> ?)')
-      .get(datetime, exceptLessonId, exceptLessonId) ?? null
+      .prepare(
+        `
+    SELECT id FROM lessons
+    WHERE (? IS NULL OR id <> ?)
+      AND CAST(strftime('%s', datetime) AS INTEGER) < ?
+      AND CAST(strftime('%s', datetime) AS INTEGER)
+        + CASE WHEN is_trial = 1 THEN ? ELSE ? END * 60 > ?
+    ORDER BY datetime ASC LIMIT 1
+  `,
+      )
+      .get(
+        exceptLessonId,
+        exceptLessonId,
+        end,
+        TRIAL_LESSON_DURATION_MINUTES,
+        LESSON_DURATION_MINUTES,
+        start,
+      ) ?? null
   );
 }
 
@@ -1722,7 +1746,7 @@ module.exports = {
   // Intent log
   getStudentById,
   getLessonById,
-  findLessonAt,
+  findOverlappingLesson,
   getAppliedIntent,
   recordAppliedIntent,
 };

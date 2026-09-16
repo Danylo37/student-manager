@@ -758,6 +758,57 @@ async function checkIntents(tree) {
     'BUG-1',
   ]);
 
+  // Lessons take time, so a slot is an interval: 50 minutes, 30 for a trial
+  const shift = (iso, minutes) => new Date(Date.parse(iso) + minutes * 60e3).toISOString();
+  const scheduled = t.apply('lesson.add', { studentId: s, datetime: at(6) }).id;
+  const overlaps = [
+    [
+      'урок через 30 хв після початку заняття',
+      'lesson.add',
+      { studentId: s, datetime: shift(at(0), 30) },
+    ],
+    [
+      'пробний за 20 хв до заняття',
+      'lesson.add',
+      { datetime: shift(at(0), -20), isTrial: true, studentName: 'Проба' },
+    ],
+    [
+      'перенос на 20 хв після початку заняття',
+      'lesson.move',
+      { lessonId: scheduled, datetime: shift(at(0), 20) },
+    ],
+  ];
+  for (const [label, type, payload] of overlaps) {
+    const before = snapshot(tree);
+    const outcome = tree.intents.apply({ id: randomUUID(), type, payload, createdAt: now });
+    pairs.push([
+      `${label}: ${outcome.status} «${outcome.reason}»`,
+      outcome.status === 'rejected' &&
+        outcome.reason === 'Цей час уже зайнято' &&
+        !diff(before, snapshot(tree)),
+      'OVERLAP',
+    ]);
+  }
+  const edges = [
+    [
+      'пробний, що закінчується рівно на початку заняття',
+      { datetime: shift(at(0), -30), isTrial: true, studentName: 'Проба' },
+    ],
+    [
+      'урок, що закінчується рівно на початку пробного',
+      { studentId: s, datetime: shift(at(0), -80) },
+    ],
+  ];
+  for (const [label, payload] of edges) {
+    const outcome = tree.intents.apply({
+      id: randomUUID(),
+      type: 'lesson.add',
+      payload,
+      createdAt: now,
+    });
+    pairs.push([`${label}: ${outcome.status}`, outcome.status === 'applied']);
+  }
+
   const malformed = [
     ['дробные копейки', 'balance.pay', { studentId: s, lessons: 1, totalPriceKopiyky: 12.5 }],
     ['datetime без Z', 'lesson.add', { studentId: s, datetime: '2030-01-01T10:00:00' }],
