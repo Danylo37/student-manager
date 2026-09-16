@@ -428,6 +428,7 @@ const scenarios = [
   {
     name: 'LEDGER-BUG-7: пакет по 400, ошибочный +1 по 500, внесён прошлый урок, снято 1',
     real: 400000 + 50000 - 50000,
+    fixed: 'BUG-7',
     run: async (t) => {
       const s = await t.addStudent('Пакет', 0, PRICE);
       t.tree.db.addDiscount(s, 10, 400000, '10 уроків');
@@ -437,6 +438,22 @@ const scenarios = [
       await given(t, s, 1, 0);
       await t.adjust(s, -1);
     },
+    expect: (snap) => [
+      ['кэш сошёлся с реальными деньгами: 4000', snap.cash.total === 400000],
+      [
+        'возврат снял слот ошибочной оплаты: -1/-500',
+        snap.rows.payment_bundles.some((b) => b.lessons_count === -1 && b.total_price === -50000),
+      ],
+      [
+        'пакет цел: 10 оплаченных уроков по 400',
+        snap.rows.lessons.filter((l) => l.is_paid === 1 && l.price === 40000).length === 10,
+      ],
+      [
+        'отцеплен урок ошибочной оплаты: долг 500',
+        snap.open.debt === 50000 &&
+          snap.rows.lessons.some((l) => l.is_paid === 0 && l.price === 50000),
+      ],
+    ],
   },
   {
     name: 'LEDGER-BUG-9: оплата 2, знято 5; стартовый баланс 3, знято 2; нечего снимать',

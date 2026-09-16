@@ -769,15 +769,18 @@ function cancelPrepaidLessons(studentId, count, { detachLessons = true, asOf = n
   `,
   );
 
-  // LEDGER-BUG-7: takes the latest lesson by date, whatever payment it hangs on,
-  // instead of a slot of the payment being undone; with different per-lesson
-  // prices the refund amount is the other bundle's.
+  // Undo the newest payment first, like the open slots above: the lesson to
+  // detach is the latest one hanging on that payment, so the slot cancelled and
+  // the lesson released always belong to the same bundle.
   const newestPaidLesson = db.prepare(
     `
-    SELECT id, datetime, price, payment_bundle_id FROM lessons
-    WHERE student_id = ? AND payment_bundle_id IS NOT NULL
-      AND (? IS NULL OR datetime(datetime) <= datetime(?))
-    ORDER BY datetime DESC, id DESC LIMIT 1
+    SELECT l.id, l.datetime, l.price, l.payment_bundle_id FROM lessons l
+    JOIN payment_bundles b ON b.id = l.payment_bundle_id
+    WHERE l.student_id = ?
+      AND (? IS NULL OR ${PAID_AT('b.')} <= datetime(?))
+      AND (? IS NULL OR datetime(l.datetime) <= datetime(?))
+    ORDER BY COALESCE(b.paid_at, b.created_at) DESC, b.id DESC, l.datetime DESC, l.id DESC
+    LIMIT 1
   `,
   );
 
@@ -799,7 +802,7 @@ function cancelPrepaidLessons(studentId, count, { detachLessons = true, asOf = n
   }
 
   while (left > 0 && detachLessons) {
-    const lesson = newestPaidLesson.get(studentId, asOf, asOf);
+    const lesson = newestPaidLesson.get(studentId, asOf, asOf, asOf, asOf);
     if (!lesson) break;
     // The lesson was given, so it stays a debt at the price of its date.
     detach.run(getStudentPriceAt(studentId, lesson.datetime) ?? lesson.price, lesson.id);
