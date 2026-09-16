@@ -415,16 +415,20 @@ function getStudents() {
     .all();
 }
 
-function addStudent(name, balance, priceKopiyky = null) {
-  // LEDGER-BUG-3: the starting balance is written straight to the student with
-  // no payment bundle behind it, so that money never reaches the cash ledger.
+/**
+ * A new student. The balance starts at zero: lessons already paid for are a
+ * payment, recorded by the caller (actions.addStudent) once the row exists, never
+ * a number written straight to the student. The tax flag is set here so that
+ * first payment already snapshots it.
+ */
+function addStudent(name, priceKopiyky = null, isTaxExempt = false) {
   const result = db
-    .prepare('INSERT INTO students (name, balance) VALUES (?, ?)')
-    .run(name, balance);
+    .prepare('INSERT INTO students (name, balance, is_tax_exempt) VALUES (?, 0, ?)')
+    .run(name, isTaxExempt ? 1 : 0);
   const studentId = result.lastInsertRowid;
   // 0 is a price too: lessons that cost nothing, or were paid before the ledger
   if (priceKopiyky !== null) setStudentPrice(studentId, priceKopiyky);
-  return { id: studentId, name, balance };
+  return { id: studentId, name };
 }
 
 /**
@@ -701,10 +705,11 @@ function countPrepaidLessons(studentId) {
 }
 
 /**
- * Prepaid lessons a student holds outside the ledger: a balance typed in by
- * hand (LEDGER-BUG-3) that no payment bundle stands behind. balance = open
- * slots + hand prepaid - unpaid lessons, so this is what is left of the balance
- * once the ledger's own numbers are taken out; never below zero.
+ * Prepaid lessons a student holds outside the ledger: a starting balance that an
+ * older version wrote straight to the student, so no payment bundle stands
+ * behind it. balance = open slots + hand prepaid - unpaid lessons, so this is
+ * what is left of the balance once the ledger's own numbers are taken out;
+ * never below zero.
  */
 function countHandPrepaidLessons(studentId) {
   const student = db.prepare('SELECT balance FROM students WHERE id = ?').get(studentId);

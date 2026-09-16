@@ -106,8 +106,10 @@ function registerIpcHandlers() {
 
   // # Students
   handle('db:get-students', () => db.getStudents());
-  handle('db:add-student', (_, name, balance, price) => actions.addStudent(name, balance, price));
   // Money entered on the desktop is received right now, so no paidAt is given.
+  handle('db:add-student', (_, name, balance, price, isTaxExempt, discount) =>
+    actions.addStudent(name, balance, price, { isTaxExempt: !!isTaxExempt, discount }),
+  );
   handle('db:update-balance', (_, studentId, amount) =>
     actions.adjustBalance(studentId, amount, null),
   );

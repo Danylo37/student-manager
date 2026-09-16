@@ -153,15 +153,23 @@ const TYPES = {
     run: (p, intent) => actions.toggleLessonPayment(p.lessonId, intent.createdAt),
   },
 
+  // The balance is lessons already paid for, so it is a payment dated by the
+  // intent and it needs a price; the action refuses it otherwise. Tax flags and
+  // packages stay on the desktop.
   'student.add': {
     validate: (p) =>
       firstError(
         field.text(p, 'name'),
-        p.balance == null || Number.isInteger(p.balance) ? null : invalid('balance'),
+        p.balance == null || (Number.isInteger(p.balance) && p.balance >= 0)
+          ? null
+          : invalid('balance'),
         field.optionalKopiyky(p, 'priceKopiyky'),
       ),
     guard: () => null,
-    run: (p) => actions.addStudent(p.name.trim(), p.balance ?? 0, p.priceKopiyky ?? null),
+    run: (p, intent) =>
+      actions.addStudent(p.name.trim(), p.balance ?? 0, p.priceKopiyky ?? null, {
+        paidAt: intent.createdAt,
+      }),
   },
 };
 

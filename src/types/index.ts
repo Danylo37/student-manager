@@ -150,6 +150,12 @@ export interface EarningsDateRange {
 
 // # API TYPES
 
+/** A package written together with a new student: N lessons for a fixed total. */
+export interface DiscountInput {
+  lessonsCount: number;
+  totalPriceKopiyky: number;
+}
+
 export interface AddLessonData {
   studentId: number | null; // null for a trial lesson
   datetime: string;
@@ -171,10 +177,13 @@ export interface UpdateLessonData {
 export interface ElectronAPI {
   // Students
   getStudents: () => Promise<Student[]>;
+  /** balance is lessons already paid for: it is recorded as a payment and needs a price. */
   addStudent: (
     name: string,
     balance: number,
     priceKopiyky?: number | null,
+    isTaxExempt?: boolean,
+    discount?: DiscountInput | null,
   ) => Promise<{ id: number; name: string; balance: number }>;
   updateBalance: (
     studentId: number,
@@ -307,7 +316,13 @@ export interface AppState {
 
   // Actions — Students
   loadStudents: () => Promise<void>;
-  addStudent: (name: string, balance: number, priceKopiyky?: number | null) => Promise<Student>;
+  addStudent: (
+    name: string,
+    balance: number,
+    priceKopiyky?: number | null,
+    isTaxExempt?: boolean,
+    discount?: DiscountInput | null,
+  ) => Promise<Student>;
   deleteStudent: (studentId: number) => Promise<void>;
   updateBalance: (studentId: number, amount: number) => Promise<number>;
   setStudentTaxExempt: (studentId: number, exempt: boolean) => Promise<void>;

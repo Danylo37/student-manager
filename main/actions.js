@@ -42,8 +42,45 @@ function toLedgerTime(paidAt) {
 
 // # STUDENTS
 
-function addStudent(name, balance, priceKopiyky) {
-  return transaction(() => db.addStudent(name, balance, priceKopiyky ?? null));
+/**
+ * A new student, with the lessons they have already paid for recorded as the
+ * payment they are: money received the day the student appeared, priced like
+ * any other payment (a package when the count matches one, else price × lessons;
+ * a price of 0 for lessons paid before the ledger existed keeps the cash
+ * untouched), so it lands in the cash and the tax base of that day. The tax
+ * flag and the package are written first: the payment snapshots the one and is
+ * priced by the other.
+ * @param {number} balance - lessons already paid for, never negative
+ * @param {{isTaxExempt?: boolean, discount?: {lessonsCount: number,
+ *   totalPriceKopiyky: number}|null, paidAt?: string|null}} [options]
+ */
+function addStudent(name, balance, priceKopiyky = null, options = {}) {
+  const { isTaxExempt = false, discount = null, paidAt = null } = options;
+  if (!Number.isInteger(balance) || balance < 0) {
+    throw new Error(`starting balance must be a whole number of lessons, got ${balance}`);
+  }
+  if (
+    discount &&
+    !(
+      Number.isInteger(discount.lessonsCount) &&
+      discount.lessonsCount >= 2 &&
+      Number.isInteger(discount.totalPriceKopiyky) &&
+      discount.totalPriceKopiyky >= 0
+    )
+  ) {
+    throw new Error(`malformed package: ${JSON.stringify(discount)}`);
+  }
+  return transaction(() => {
+    const { id } = db.addStudent(name, priceKopiyky ?? null, isTaxExempt);
+    if (discount) db.addDiscount(id, discount.lessonsCount, discount.totalPriceKopiyky, null);
+    if (balance > 0) {
+      // Money with no price behind it cannot be put in the ledger: the student is
+      // refused as a whole rather than created with a balance nobody paid for.
+      if (priceKopiyky == null) throw new Rejection(REASON.noPrice);
+      payForLessons(id, balance, null, paidAt);
+    }
+    return { id, name, balance };
+  });
 }
 
 // # BALANCE
@@ -78,7 +115,7 @@ function payForLessons(studentId, lessons, totalPriceKopiyky = null, paidAt = nu
  * Taking lessons off gives back what the ledger holds, open slots first and
  * then lessons already worked off, newest payment first; what those slots cost
  * is exactly the money going back, the price list of today has nothing to do
- * with it. A balance typed in by hand (LEDGER-BUG-3) has no money behind it and
+ * with it. A balance an older version wrote by hand has no money behind it and
  * gives the rest while it lasts. Whatever is left over is not applied: a lesson
  * nobody paid for cannot be taken back, so the balance moves by what actually
  * happened and the caller learns that number.

@@ -1,6 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import useAppStore from '@/store/appStore';
-import type { Student } from '@/types';
+import type { DiscountInput, Student } from '@/types';
 
 interface StudentStats {
   total: number;
@@ -22,7 +22,13 @@ interface UseStudentsReturn {
 
   // Actions
   loadStudents: () => Promise<void>;
-  addStudent: (name: string, balance: number, price?: number | null) => Promise<Student>;
+  addStudent: (
+    name: string,
+    balance: number,
+    price?: number | null,
+    isTaxExempt?: boolean,
+    discount?: DiscountInput | null,
+  ) => Promise<Student>;
   deleteStudent: (studentId: number) => Promise<void>;
   updateBalance: (studentId: number, amount: number) => Promise<number>;
 

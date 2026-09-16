@@ -131,8 +131,8 @@ function viaHandlers(tree) {
     name: 'handlers',
     tree,
     attempt,
-    addStudent: async (name, balance, price) =>
-      (await call('db:add-student', name, balance, price)).id,
+    addStudent: async (name, balance, price, exempt = false, discount = null) =>
+      (await call('db:add-student', name, balance, price, exempt, discount)).id,
     pay: (studentId, lessons, total = null) =>
       call('db:pay-for-lessons', studentId, lessons, total),
     adjust: (studentId, lessons) => call('db:update-balance', studentId, lessons),
@@ -367,12 +367,84 @@ const scenarios = [
     ],
   },
   {
-    name: 'LEDGER-BUG-3: стартовый баланс 3, 4 проведено',
+    name: 'LEDGER-BUG-3: стартовый баланс 3 — оплата в день создания, 4 проведено; перенос старой предоплаты ценой 0; баланс без цены',
     real: 150000,
+    fixed: 'BUG-3',
     run: async (t) => {
       const s = await t.addStudent('Старт', 3, PRICE);
       await given(t, s, 4);
+      // Lessons paid before the ledger existed: a price of 0 keeps the cash untouched
+      const old = await t.addStudent('Перенос', 2, 0);
+      await given(t, old, 1, 10);
+      return { noPrice: await t.attempt(() => t.addStudent('Без ціни', 2, null)) };
     },
+    expect: (snap, tree, notes) => [
+      [
+        'стартовый баланс — платёж: касса 1500, бандл на 3 урока',
+        snap.cash.total === 150000 &&
+          snap.rows.payment_bundles.some(
+            (b) => b.student_id === 1 && b.lessons_count === 3 && b.total_price === 150000,
+          ),
+      ],
+      [
+        '3 урока оплачены из бандла, четвёртый — долг 500',
+        snap.rows.lessons.filter((l) => l.student_id === 1 && l.is_paid === 1).length === 3 &&
+          snap.open.debt === 50000,
+      ],
+      [
+        'история: +3 на 1500',
+        snap.rows.balance_history.some(
+          (h) => h.student_id === 1 && h.lessons === 3 && h.amount === 150000,
+        ),
+      ],
+      [
+        'перенос ценой 0: бандл 2 урока на 0 ₴, урок оплачен по 0',
+        snap.rows.payment_bundles.some(
+          (b) => b.student_id === 2 && b.lessons_count === 2 && b.total_price === 0,
+        ) && snap.rows.lessons.some((l) => l.student_id === 2 && l.is_paid === 1 && l.price === 0),
+      ],
+      [
+        'баланс без цены отклонён, ученик не создан',
+        !!notes.noPrice &&
+          notes.noPrice.includes('Вкажіть ціну уроку') &&
+          snap.rows.students.length === 2,
+      ],
+      [
+        'балансы -1 и 1',
+        snap.rows.students[0].balance === -1 && snap.rows.students[1].balance === 1,
+      ],
+    ],
+  },
+  {
+    name: 'создание с пакетом из формы и без податків: баланс 10 по пакету 4000, 2 проведено',
+    real: 400000,
+    intents: false,
+    fixed: 'BUG-3',
+    run: async (t) => {
+      const s = await t.addStudent('Пакет', 10, PRICE, true, {
+        lessonsCount: 10,
+        totalPriceKopiyky: 400000,
+      });
+      await given(t, s, 2);
+    },
+    expect: (snap) => [
+      [
+        'платёж по пакету: касса 4000, taxable 0',
+        snap.cash.total === 400000 && snap.cash.taxable === 0,
+      ],
+      [
+        'бандл 10 уроков на 4000 со снимком пільги',
+        snap.rows.payment_bundles.some(
+          (b) => b.lessons_count === 10 && b.total_price === 400000 && b.is_tax_exempt === 1,
+        ),
+      ],
+      ['ученик без податків', snap.rows.students[0].is_tax_exempt === 1],
+      [
+        '2 урока по 400 из пакета, баланс 8',
+        snap.rows.lessons.filter((l) => l.is_paid === 1 && l.price === 40000).length === 2 &&
+          snap.rows.students[0].balance === 8,
+      ],
+    ],
   },
   {
     name: 'LEDGER-BUG-4: оплата 5, 6 проведено, удалён оплаченный, 💵 на бывшем долговом; отмена проведения',
@@ -517,14 +589,16 @@ const scenarios = [
     ],
   },
   {
-    name: 'LEDGER-BUG-9: оплата 2, знято 5; стартовый баланс 3, знято 2; нечего снимать',
+    name: 'LEDGER-BUG-9: оплата 2, знято 5; ручной баланс 3 (старая версия), знято 2; нечего снимать',
     real: 100000 - 100000,
     fixed: 'BUG-9',
     run: async (t) => {
       const a = await t.addStudent('Двічі', 0, PRICE);
       await t.pay(a, 2);
       const over = await t.attempt(() => t.adjust(a, -5));
-      const h = await t.addStudent('Рука', 3, PRICE);
+      // A balance an older version wrote straight to the student: no payment behind it
+      const h = await t.addStudent('Рука', 0, PRICE);
+      t.tree.raw.prepare('UPDATE students SET balance = 3 WHERE id = ?').run(h);
       const hand = await t.attempt(() => t.adjust(h, -2));
       const n = await t.addStudent('Нуль', 0, PRICE);
       const nothing = await t.attempt(() => t.adjust(n, -1));
@@ -746,6 +820,13 @@ async function checkIntents(tree) {
       'Немає оплачених уроків, які можна зняти',
       'BUG-9',
     ],
+    [
+      'ученик с балансом без цены',
+      'student.add',
+      { name: 'Без ціни', balance: 2 },
+      'Вкажіть ціну уроку, щоб записати оплату',
+      'BUG-3',
+    ],
   ];
   for (const [label, type, payload, reason, fixed] of cases) {
     const before = snapshot(tree);
@@ -856,6 +937,7 @@ async function checkIntents(tree) {
   const malformed = [
     ['дробные копейки', 'balance.pay', { studentId: s, lessons: 1, totalPriceKopiyky: 12.5 }],
     ['datetime без Z', 'lesson.add', { studentId: s, datetime: '2030-01-01T10:00:00' }],
+    ['отрицательный стартовый баланс', 'student.add', { name: 'Мінус', balance: -2 }],
     ['неизвестный тип', 'lesson.pay', { lessonId: done }],
   ];
   for (const [label, type, payload] of malformed) {

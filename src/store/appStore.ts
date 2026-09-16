@@ -67,8 +67,14 @@ const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  addStudent: async (name, balance, priceKopiyky) => {
-    const { id } = await window.electron.addStudent(name, balance, priceKopiyky ?? null);
+  addStudent: async (name, balance, priceKopiyky, isTaxExempt, discount) => {
+    const { id } = await window.electron.addStudent(
+      name,
+      balance,
+      priceKopiyky ?? null,
+      !!isTaxExempt,
+      discount ?? null,
+    );
     await get().loadStudents();
     return get().students.find((s) => s.id === id)!;
   },
