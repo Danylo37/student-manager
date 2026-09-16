@@ -197,7 +197,10 @@ export interface ElectronAPI {
   markUnpaidLessonsPaid: (studentId: number, count: number) => Promise<void>;
   setStudentTaxExempt: (studentId: number, exempt: boolean) => Promise<void>;
   updateStudentName: (studentId: number, name: string) => Promise<void>;
-  deleteStudent: (studentId: number) => Promise<void>;
+  /** Open slots and their money: what a refund on deletion gives back. */
+  getStudentAdvance: (studentId: number) => Promise<{ lessons: number; amount: number }>;
+  /** refundAdvance: hand the advance back as a refund, otherwise it stays as income. */
+  deleteStudent: (studentId: number, refundAdvance: boolean) => Promise<void>;
 
   // Lesson prices (all in kopiyky)
   setStudentPrice: (studentId: number, priceKopiyky: number) => Promise<{ id: number }>;
@@ -323,7 +326,7 @@ export interface AppState {
     isTaxExempt?: boolean,
     discount?: DiscountInput | null,
   ) => Promise<Student>;
-  deleteStudent: (studentId: number) => Promise<void>;
+  deleteStudent: (studentId: number, refundAdvance: boolean) => Promise<void>;
   updateBalance: (studentId: number, amount: number) => Promise<number>;
   setStudentTaxExempt: (studentId: number, exempt: boolean) => Promise<void>;
   updateStudentName: (studentId: number, name: string) => Promise<void>;

@@ -441,9 +441,9 @@ function addStudent(name, priceKopiyky = null, isTaxExempt = false) {
 function deleteStudent(studentId) {
   // Nobody is left to work off what was paid ahead, and the upcoming lessons are
   // about to be deleted, so close the open slots instead of leaving them as an
-  // advance forever. The money of the bundles is untouched.
-  // LEDGER-BUG-6: the slots are closed without a refund row, so money handed
-  // back on parting stays in the cash of its period as income.
+  // advance forever. The money stays in the cash of its period as income: handing
+  // it back is the caller's decision, recorded as a refund before this runs
+  // (actions.deleteStudent), while the student still exists to be named on it.
   cancelPrepaidLessons(studentId, countPrepaidLessons(studentId), { detachLessons: false });
 
   // Preserve completed lessons
@@ -702,6 +702,26 @@ function countPrepaidLessons(studentId) {
     )
     .get(studentId);
   return free;
+}
+
+/**
+ * The advance a student holds: the open slots and what they were paid for,
+ * which is exactly what a refund of them gives back.
+ * @returns {{lessons: number, amount: number}}
+ */
+function getStudentAdvance(studentId) {
+  const bundles = db
+    .prepare(`SELECT * FROM payment_bundles WHERE student_id = ? AND ${FREE_SLOTS}`)
+    .all(studentId);
+  let lessons = 0;
+  let amount = 0;
+  for (const bundle of bundles) {
+    for (let i = bundle.lessons_used; i < bundle.lessons_count - bundle.lessons_cancelled; i++) {
+      lessons++;
+      amount += slotPrice(bundle, i);
+    }
+  }
+  return { lessons, amount };
 }
 
 /**
@@ -1709,6 +1729,7 @@ module.exports = {
   // Payment bundles
   createPaymentBundle,
   cancelPrepaidLessons,
+  getStudentAdvance,
   countHandPrepaidLessons,
   // Balance history
   recordBalanceChange,

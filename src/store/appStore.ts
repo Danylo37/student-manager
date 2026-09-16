@@ -79,8 +79,8 @@ const useAppStore = create<AppState>((set, get) => ({
     return get().students.find((s) => s.id === id)!;
   },
 
-  deleteStudent: async (studentId) => {
-    await window.electron.deleteStudent(studentId);
+  deleteStudent: async (studentId, refundAdvance) => {
+    await window.electron.deleteStudent(studentId, refundAdvance);
     await get().loadStudents();
     await get().loadLessons();
   },

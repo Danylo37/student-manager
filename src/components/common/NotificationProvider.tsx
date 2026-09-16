@@ -20,13 +20,22 @@ export interface ConfirmOptions {
   danger?: boolean;
 }
 
-interface ConfirmState extends ConfirmOptions {
-  resolve: (value: boolean) => void;
+/** A question with more than one way to go ahead; cancelling resolves null. */
+export interface ChoiceOptions<T extends string> {
+  title: string;
+  message: string;
+  choices: Array<{ value: T; label: string; danger?: boolean }>;
+  cancelLabel?: string;
+}
+
+interface DialogState extends ChoiceOptions<string> {
+  resolve: (value: string | null) => void;
 }
 
 interface NotificationContextValue {
   showToast: (message: string, type?: ToastType, duration?: number) => void;
   showConfirm: (options: ConfirmOptions) => Promise<boolean>;
+  showChoice: <T extends string>(options: ChoiceOptions<T>) => Promise<T | null>;
 }
 
 // # Context
@@ -151,33 +160,37 @@ function ConfirmDialog({
   state,
   onAnswer,
 }: {
-  state: ConfirmState;
-  onAnswer: (value: boolean) => void;
+  state: DialogState;
+  onAnswer: (value: string | null) => void;
 }) {
-  const {
-    title,
-    message,
-    confirmLabel = 'Підтвердити',
-    cancelLabel = 'Скасувати',
-    danger = false,
-  } = state;
+  const { title, message, choices, cancelLabel = 'Скасувати' } = state;
+  const danger = choices.some((c) => c.danger);
 
-  // Close on Escape
+  // Close on Escape; Enter only confirms when there is one way to go ahead
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onAnswer(false);
-      if (e.key === 'Enter') onAnswer(true);
+      if (e.key === 'Escape') onAnswer(null);
+      if (e.key === 'Enter' && choices.length === 1) onAnswer(choices[0].value);
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [onAnswer]);
+  }, [onAnswer, choices]);
+
+  const cancelButton = (
+    <button
+      onClick={() => onAnswer(null)}
+      className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+    >
+      {cancelLabel}
+    </button>
+  );
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-gray-900/40 backdrop-blur-[2px] animate-fade-in"
-        onClick={() => onAnswer(false)}
+        onClick={() => onAnswer(null)}
       />
 
       {/* Dialog */}
@@ -229,28 +242,27 @@ function ConfirmDialog({
           {/* Message */}
           <p className="text-sm text-gray-500 leading-relaxed mb-6">{message}</p>
 
-          {/* Buttons */}
-          <div className="flex gap-3">
-            <button
-              onClick={() => onAnswer(false)}
-              className="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
-            >
-              {cancelLabel}
-            </button>
-            <button
-              onClick={() => onAnswer(true)}
-              className={`
-                flex-1 px-4 py-2.5 text-sm font-semibold text-white rounded-xl transition-all active:scale-95
-                ${
-                  danger
-                    ? 'bg-red-500 hover:bg-red-600 shadow-md shadow-red-200'
-                    : 'bg-blue-500 hover:bg-blue-600 shadow-md shadow-blue-200'
-                }
-              `}
-              autoFocus
-            >
-              {confirmLabel}
-            </button>
+          {/* Buttons: one choice sits next to cancel, several stack above it */}
+          <div className={choices.length === 1 ? 'flex gap-3' : 'flex flex-col gap-2'}>
+            {choices.length === 1 && cancelButton}
+            {choices.map((c, i) => (
+              <button
+                key={c.value}
+                onClick={() => onAnswer(c.value)}
+                className={`
+                  flex-1 px-4 py-2.5 text-sm font-semibold text-white rounded-xl transition-all active:scale-95
+                  ${
+                    c.danger
+                      ? 'bg-red-500 hover:bg-red-600 shadow-md shadow-red-200'
+                      : 'bg-blue-500 hover:bg-blue-600 shadow-md shadow-blue-200'
+                  }
+                `}
+                autoFocus={i === 0}
+              >
+                {c.label}
+              </button>
+            ))}
+            {choices.length > 1 && cancelButton}
           </div>
         </div>
       </div>
@@ -262,7 +274,7 @@ function ConfirmDialog({
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [confirmState, setConfirmState] = useState<DialogState | null>(null);
   const counterRef = useRef(0);
 
   const removeToast = useCallback((id: string) => {
@@ -282,14 +294,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     [removeToast],
   );
 
-  const showConfirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setConfirmState({ ...options, resolve });
-    });
-  }, []);
+  const showChoice = useCallback(
+    <T extends string>(options: ChoiceOptions<T>): Promise<T | null> => {
+      return new Promise((resolve) => {
+        setConfirmState({ ...options, resolve: (value) => resolve(value as T | null) });
+      });
+    },
+    [],
+  );
+
+  const showConfirm = useCallback(
+    ({ title, message, confirmLabel = 'Підтвердити', cancelLabel, danger }: ConfirmOptions) =>
+      showChoice({
+        title,
+        message,
+        cancelLabel,
+        choices: [{ value: 'confirm', label: confirmLabel, danger }],
+      }).then((value) => value === 'confirm'),
+    [showChoice],
+  );
 
   const handleConfirmAnswer = useCallback(
-    (value: boolean) => {
+    (value: string | null) => {
       confirmState?.resolve(value);
       setConfirmState(null);
     },
@@ -297,7 +323,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   );
 
   return (
-    <NotificationContext.Provider value={{ showToast, showConfirm }}>
+    <NotificationContext.Provider value={{ showToast, showConfirm, showChoice }}>
       {children}
 
       {/* Toast container */}

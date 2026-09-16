@@ -14,7 +14,9 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.invoke('db:set-student-tax-exempt', studentId, exempt),
   updateStudentName: (studentId, name) =>
     ipcRenderer.invoke('db:update-student-name', studentId, name),
-  deleteStudent: (studentId) => ipcRenderer.invoke('db:delete-student', studentId),
+  getStudentAdvance: (studentId) => ipcRenderer.invoke('db:get-student-advance', studentId),
+  deleteStudent: (studentId, refundAdvance) =>
+    ipcRenderer.invoke('db:delete-student', studentId, refundAdvance),
 
   // Lesson prices
   setStudentPrice: (studentId, priceKopiyky) =>

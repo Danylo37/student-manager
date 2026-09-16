@@ -123,7 +123,10 @@ function registerIpcHandlers() {
     db.setStudentTaxExempt(studentId, exempt),
   );
   handle('db:update-student-name', (_, studentId, name) => db.updateStudentName(studentId, name));
-  handle('db:delete-student', (_, studentId) => db.deleteStudent(studentId));
+  handle('db:get-student-advance', (_, studentId) => db.getStudentAdvance(studentId));
+  handle('db:delete-student', (_, studentId, refundAdvance) =>
+    actions.deleteStudent(studentId, !!refundAdvance),
+  );
 
   // # Lesson prices
   handle('db:set-student-price', (_, studentId, price) => db.setStudentPrice(studentId, price));

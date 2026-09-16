@@ -29,7 +29,7 @@ interface UseStudentsReturn {
     isTaxExempt?: boolean,
     discount?: DiscountInput | null,
   ) => Promise<Student>;
-  deleteStudent: (studentId: number) => Promise<void>;
+  deleteStudent: (studentId: number, refundAdvance: boolean) => Promise<void>;
   updateBalance: (studentId: number, amount: number) => Promise<number>;
 
   // Helpers

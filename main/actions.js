@@ -83,6 +83,20 @@ function addStudent(name, balance, priceKopiyky = null, options = {}) {
   });
 }
 
+/**
+ * Parting with a student. What they paid ahead is either handed back — a refund
+ * like any other, recorded before the row goes so it can still name them — or
+ * kept as the income of its period. One transaction, so a deletion that fails
+ * leaves no refund behind.
+ */
+function deleteStudent(studentId, refundAdvance = false) {
+  return transaction(() => {
+    const open = db.getStudentAdvance(studentId).lessons;
+    if (refundAdvance && open > 0) adjustBalance(studentId, -open, null);
+    db.deleteStudent(studentId);
+  });
+}
+
 // # BALANCE
 
 /**
@@ -177,6 +191,7 @@ module.exports = {
   transaction,
   isUtcIso,
   addStudent,
+  deleteStudent,
   payForLessons,
   adjustBalance,
   addLesson,

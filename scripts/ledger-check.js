@@ -125,12 +125,17 @@ async function attempt(fn) {
   }
 }
 
+/** Deleting a student is desktop-only, so both drivers send it the IPC way. */
+const removeStudent = (tree) => (studentId, refundAdvance) =>
+  tree.handlers['db:delete-student']({}, studentId, refundAdvance);
+
 function viaHandlers(tree) {
   const call = (channel, ...args) => tree.handlers[channel]({}, ...args);
   return {
     name: 'handlers',
     tree,
     attempt,
+    removeStudent: removeStudent(tree),
     addStudent: async (name, balance, price, exempt = false, discount = null) =>
       (await call('db:add-student', name, balance, price, exempt, discount)).id,
     pay: (studentId, lessons, total = null) =>
@@ -160,6 +165,7 @@ function viaIntents(tree) {
     tree,
     apply,
     attempt,
+    removeStudent: removeStudent(tree),
     addStudent: async (name, balance, price) =>
       apply('student.add', { name, balance, priceKopiyky: price }).id,
     pay: async (studentId, lessons, total = null) =>
@@ -518,14 +524,67 @@ const scenarios = [
     },
   },
   {
-    name: 'LEDGER-BUG-6: оплата 5, 2 проведено, ученик удалён',
+    name: 'LEDGER-BUG-6: оплата 5, 2 проведено, ученик удалён, аванс оставлен как доход',
     real: 250000,
     run: async (t) => {
       const s = await t.addStudent('Пішов', 0, PRICE);
       await t.pay(s, 5);
       await given(t, s, 2);
-      t.tree.db.deleteStudent(s);
+      await t.removeStudent(s, false);
     },
+    expect: (snap) => [
+      [
+        'деньги остались в кассе: 2500, аванс закрыт',
+        snap.cash.total === 250000 && snap.open.advance === 0,
+      ],
+      ['строки возврата нет', snap.rows.payment_bundles.length === 1],
+    ],
+  },
+  {
+    name: 'LEDGER-BUG-6: оплата 5, 2 проведено, ученик удалён, аванс возвращён',
+    real: 250000 - 150000,
+    fixed: 'BUG-6',
+    run: async (t) => {
+      const s = await t.addStudent('Пішов', 0, PRICE);
+      await t.pay(s, 5);
+      await given(t, s, 2);
+      // What the dialog offers to give back, read the way the renderer reads it
+      const advance = t.tree.handlers['db:get-student-advance']
+        ? await t.tree.handlers['db:get-student-advance']({}, s)
+        : null;
+      await t.removeStudent(s, true);
+      return { advance };
+    },
+    expect: (snap, tree, notes) => [
+      [
+        'диалогу показано: 3 урока на 1500',
+        !!notes.advance && notes.advance.lessons === 3 && notes.advance.amount === 150000,
+      ],
+      ['возврат 3 уроков на 1500: касса 1000', snap.cash.total === 100000],
+      [
+        'строка возврата -3/-1500 без владельца',
+        snap.rows.payment_bundles.some(
+          (b) => b.student_id === null && b.lessons_count === -3 && b.total_price === -150000,
+        ),
+      ],
+      [
+        'история: -3 на 1500 с именем ученика',
+        snap.rows.balance_history.some(
+          (h) =>
+            h.student_id === null &&
+            h.student_name_cache === 'Пішов' &&
+            h.lessons === -3 &&
+            h.amount === -150000,
+        ),
+      ],
+      [
+        'аванс 0, ученика нет, проведённые уроки оплачены и остались',
+        snap.open.advance === 0 &&
+          snap.rows.students.length === 0 &&
+          snap.rows.lessons.length === 2 &&
+          snap.rows.lessons.every((l) => l.student_id === null && l.is_paid === 1),
+      ],
+    ],
   },
   {
     name: 'LEDGER-BUG-1: должник удалён, 💵 на его уроке',
@@ -534,7 +593,7 @@ const scenarios = [
     run: async (t) => {
       const s = await t.addStudent('Боржник', 0, PRICE);
       const [first] = await given(t, s, 2);
-      t.tree.db.deleteStudent(s);
+      await t.removeStudent(s, false);
       await t.toggle(first);
     },
     expect: (snap) => [

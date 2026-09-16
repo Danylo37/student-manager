@@ -16,6 +16,7 @@ import { useNotification } from '../common/NotificationProvider';
 import { formatUAH, parseInputToKopiyky, kopiykyToInput, hasAnyTax } from '@/utils/financials';
 import { submitOnEnter } from '@/utils/keyboard';
 import { rejectionReason } from '@/utils/ipc';
+import { lessonsWordUA } from '@/utils/plural';
 import Modal from './Modal';
 import ActionMenu, { type ActionMenuItem } from '../common/ActionMenu';
 import type { Discount, Student } from '@/types';
@@ -34,7 +35,7 @@ function StudentsListModal() {
   const updateStudentName = useAppStore((s) => s.updateStudentName);
   const setStudentTaxExempt = useAppStore((s) => s.setStudentTaxExempt);
   const taxSettings = useAppStore((s) => s.taxSettings);
-  const { showToast, showConfirm } = useNotification();
+  const { showToast, showConfirm, showChoice } = useNotification();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingStudentId, setEditingStudentId] = useState<number | null>(null);
@@ -66,20 +67,53 @@ function StudentsListModal() {
     setDiscountHint(null);
   };
 
+  /**
+   * A student who paid ahead leaves with a choice: the money goes back as a
+   * refund, or stays as the income it already is. Either way the lessons given
+   * stay in the statistics.
+   */
   const handleDelete = async (studentId: number, studentName: string) => {
-    const confirmed = await showConfirm({
-      title: 'Видалити учня?',
-      message: `Учень "${studentName}" буде видалений. Проведені уроки залишаться в статистиці.`,
-      confirmLabel: 'Видалити',
-      cancelLabel: 'Скасувати',
-      danger: true,
-    });
-    if (!confirmed) return;
+    let advance = { lessons: 0, amount: 0 };
     try {
-      await deleteStudent(studentId);
-      showToast(`Учня "${studentName}" видалено!`, 'success');
+      advance = await window.electron.getStudentAdvance(studentId);
     } catch {
       showToast('Помилка при видаленні!', 'error');
+      return;
+    }
+
+    let refund = false;
+    if (advance.lessons > 0) {
+      const choice = await showChoice({
+        title: 'Видалити учня?',
+        message: `У "${studentName}" є аванс: ${advance.lessons} ${lessonsWordUA(advance.lessons)} на ${formatUAH(advance.amount)}. Повернути гроші чи залишити як дохід? Проведені уроки залишаться в статистиці.`,
+        choices: [
+          { value: 'refund', label: `Повернути ${formatUAH(advance.amount)}`, danger: true },
+          { value: 'keep', label: 'Залишити як дохід', danger: true },
+        ],
+      });
+      if (!choice) return;
+      refund = choice === 'refund';
+    } else {
+      const confirmed = await showConfirm({
+        title: 'Видалити учня?',
+        message: `Учень "${studentName}" буде видалений. Проведені уроки залишаться в статистиці.`,
+        confirmLabel: 'Видалити',
+        cancelLabel: 'Скасувати',
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
+
+    try {
+      await deleteStudent(studentId, refund);
+      showToast(
+        refund
+          ? `Учня "${studentName}" видалено, повернено ${formatUAH(advance.amount)}`
+          : `Учня "${studentName}" видалено!`,
+        'success',
+      );
+    } catch (err) {
+      showToast(rejectionReason(err) ?? 'Помилка при видаленні!', 'error');
     }
   };
 
