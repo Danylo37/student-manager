@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { uk } from 'date-fns/locale';
 import type { Data } from '../hooks';
-import { lessonState, lessonTitle } from '../lessonView';
+import { lessonHint, lessonState, lessonTitle } from '../lessonView';
 import useStore from '../store';
 import { confirm, haptic } from '../telegram';
 import { timeOf, zoned } from '../time';
@@ -58,7 +58,10 @@ export default function LessonSheet({ data, now }: { data: Data; now: Date }) {
             student?.priceKopiyky != null &&
             action('Позначити оплаченим', () => {
               close();
-              void send('lesson.togglePayment', { lessonId: lesson.id }).then(sent);
+              void send('lesson.togglePayment', {
+                lessonId: lesson.id,
+                was: lessonHint(lesson),
+              }).then(sent);
             })}
           {canPay && student?.priceKopiyky == null && (
             <div className="border-b border-tg-separator bg-tg-section px-4 py-3 text-center text-[13px] text-tg-hint">
@@ -76,7 +79,9 @@ export default function LessonSheet({ data, now }: { data: Data; now: Date }) {
               void confirm(`Видалити урок: ${lessonTitle(lesson)}?`).then((yes) => {
                 if (!yes) return;
                 close();
-                void send('lesson.delete', { lessonId: lesson.id }).then(sent);
+                void send('lesson.delete', { lessonId: lesson.id, was: lessonHint(lesson) }).then(
+                  sent,
+                );
               }),
             true,
           )}

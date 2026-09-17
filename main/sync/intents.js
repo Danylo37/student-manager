@@ -50,6 +50,16 @@ const field = {
   text: (p, name) => (typeof p[name] === 'string' && p[name].trim() ? null : invalid(name)),
   optionalText: (p, name) =>
     p[name] == null || typeof p[name] === 'string' ? null : invalid(name),
+  optionalHint: (p, name) => {
+    const h = p[name];
+    if (h == null) return null;
+    const ok =
+      typeof h === 'object' &&
+      (h.studentName == null || typeof h.studentName === 'string') &&
+      actions.isUtcIso(h.datetime) &&
+      typeof h.isTrial === 'boolean';
+    return ok ? null : invalid(name);
+  },
 };
 
 /** The first failed check, or null when every check passed. */
@@ -86,12 +96,18 @@ const money = (result, word = '') => (result.amount > 0 ? `, ${word}${uah(result
 const studentName = (id) => db.getStudentById(id)?.name ?? `учень #${id}`;
 const balanceAfter = (id) => ` · баланс ${db.getStudentById(id)?.balance ?? '?'}`;
 
-/** "Іван: урок пт 18.09 14:00", or the id when the lesson is already gone. */
-function lessonLabel(id) {
+/**
+ * "Іван: урок пт 18.09 14:00" from the row, or from what the phone saw when the
+ * row is already gone, or the bare id when neither is there.
+ */
+function lessonLabel(id, was) {
   const lesson = db.getLessonById(id);
-  if (!lesson) return `урок #${id}`;
-  const name = lesson.student_name_cache || 'Без імені';
-  return `${lesson.is_trial ? `${name} (пробний)` : name}: урок ${when(lesson.datetime)}`;
+  const known = lesson
+    ? { name: lesson.student_name_cache, datetime: lesson.datetime, isTrial: lesson.is_trial }
+    : was && { name: was.studentName, datetime: was.datetime, isTrial: was.isTrial };
+  if (!known) return `урок #${id}`;
+  const name = known.name || 'Без імені';
+  return `${known.isTrial ? `${name} (пробний)` : name}: урок ${when(known.datetime)}`;
 }
 
 // # GUARDS
@@ -170,8 +186,13 @@ const TYPES = {
   },
 
   'lesson.move': {
-    validate: (p) => firstError(field.id(p, 'lessonId'), field.datetime(p, 'datetime')),
-    describe: (p) => `🔁 ${lessonLabel(p.lessonId)} → ${when(p.datetime)}`,
+    validate: (p) =>
+      firstError(
+        field.id(p, 'lessonId'),
+        field.datetime(p, 'datetime'),
+        field.optionalHint(p, 'was'),
+      ),
+    describe: (p) => `🔁 ${lessonLabel(p.lessonId, p.was)} → ${when(p.datetime)}`,
     guard: (p) => {
       const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
@@ -182,11 +203,16 @@ const TYPES = {
   },
 
   'lesson.complete': {
-    validate: (p) => firstError(field.id(p, 'lessonId'), field.boolean(p, 'isCompleted')),
+    validate: (p) =>
+      firstError(
+        field.id(p, 'lessonId'),
+        field.boolean(p, 'isCompleted'),
+        field.optionalHint(p, 'was'),
+      ),
     describe: (p) =>
       p.isCompleted
-        ? `✅ ${lessonLabel(p.lessonId)} проведено`
-        : `↩️ ${lessonLabel(p.lessonId)} знову заплановано`,
+        ? `✅ ${lessonLabel(p.lessonId, p.was)} проведено`
+        : `↩️ ${lessonLabel(p.lessonId, p.was)} знову заплановано`,
     guard: (p) => {
       const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
@@ -199,16 +225,16 @@ const TYPES = {
   },
 
   'lesson.delete': {
-    validate: (p) => field.id(p, 'lessonId'),
-    describe: (p) => `🗑 ${lessonLabel(p.lessonId)} видалено`,
+    validate: (p) => firstError(field.id(p, 'lessonId'), field.optionalHint(p, 'was')),
+    describe: (p) => `🗑 ${lessonLabel(p.lessonId, p.was)} видалено`,
     guard: (p) => (db.getLessonById(p.lessonId) ? null : REASON.lessonNotFound),
     run: (p) => actions.deleteLesson(p.lessonId),
   },
 
   'lesson.togglePayment': {
-    validate: (p) => field.id(p, 'lessonId'),
-    describe: (p) => `💳 ${lessonLabel(p.lessonId)} оплачено`,
-    applied: (p, r) => `💳 ${lessonLabel(p.lessonId)} оплачено${money(r)}`,
+    validate: (p) => firstError(field.id(p, 'lessonId'), field.optionalHint(p, 'was')),
+    describe: (p) => `💳 ${lessonLabel(p.lessonId, p.was)} оплачено`,
+    applied: (p, r) => `💳 ${lessonLabel(p.lessonId, p.was)} оплачено${money(r)}`,
     guard: (p) => {
       const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;

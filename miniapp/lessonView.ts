@@ -5,6 +5,7 @@ import {
   shouldBeCompleted,
 } from '@shared/lessonStatus';
 import { lessonsWordUA } from '@shared/plural';
+import type { LessonHint } from '@shared/types';
 import type { ViewLesson, ViewStudent } from './overlay';
 
 const PENDING_LABEL = {
@@ -14,6 +15,13 @@ const PENDING_LABEL = {
   pay: 'Оплачено · очікує ПК',
   complete: 'Проведено · очікує ПК',
 };
+
+/** What the desktop needs to name the lesson in its history once the row is gone. */
+export const lessonHint = (lesson: ViewLesson): LessonHint => ({
+  studentName: lesson.studentName,
+  datetime: lesson.datetime,
+  isTrial: lesson.isTrial,
+});
 
 export function lessonTitle(lesson: ViewLesson): string {
   if (lesson.isTrial)

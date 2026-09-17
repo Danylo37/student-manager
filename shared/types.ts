@@ -34,6 +34,13 @@ export interface Snapshot {
 
 // # INTENTS (registry v1)
 
+/** The lesson as the phone saw it, so the desktop can still name it once it is gone. */
+export interface LessonHint {
+  studentName: string | null;
+  datetime: string;
+  isTrial: boolean;
+}
+
 export interface IntentPayloads {
   'balance.pay': { studentId: number; lessons: number; totalPriceKopiyky?: number };
   'balance.adjust': { studentId: number; lessons: number };
@@ -43,10 +50,10 @@ export interface IntentPayloads {
     isTrial?: boolean;
     studentName?: string;
   };
-  'lesson.move': { lessonId: number; datetime: string };
-  'lesson.complete': { lessonId: number; isCompleted: boolean };
-  'lesson.delete': { lessonId: number };
-  'lesson.togglePayment': { lessonId: number };
+  'lesson.move': { lessonId: number; datetime: string; was?: LessonHint };
+  'lesson.complete': { lessonId: number; isCompleted: boolean; was?: LessonHint };
+  'lesson.delete': { lessonId: number; was?: LessonHint };
+  'lesson.togglePayment': { lessonId: number; was?: LessonHint };
   'student.add': { name: string; balance?: number; priceKopiyky?: number };
 }
 

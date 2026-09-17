@@ -10,7 +10,7 @@ import {
   inputClass,
 } from '../components/ui';
 import type { Data } from '../hooks';
-import { lessonTitle } from '../lessonView';
+import { lessonHint, lessonTitle } from '../lessonView';
 import type { Screen } from '../store';
 import useStore from '../store';
 import {
@@ -76,7 +76,7 @@ export default function LessonForm({ data, now, mode }: { data: Data; now: Date;
     if (!datetime || !valid || busy) return;
     setBusy(true);
     const ok = moving
-      ? await send('lesson.move', { lessonId: moving.id, datetime })
+      ? await send('lesson.move', { lessonId: moving.id, datetime, was: lessonHint(moving) })
       : isTrial
         ? await send('lesson.add', {
             isTrial: true,
