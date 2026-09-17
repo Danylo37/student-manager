@@ -57,8 +57,10 @@ const firstError = (...errors) => errors.find(Boolean) ?? null;
 
 // # SUMMARY
 //
-// One line per intent for the desktop, in its own words: what the phone asked
-// for, whoever it was about, so a refused or long-gone intent still reads.
+// One line per intent for the desktop, the way the tutor would say it: who,
+// how many lessons, which time, and once it is applied, what it cost and the
+// balance it left. Written before the guard, so a refused intent has its line
+// too, and again after the action when the numbers are known.
 
 const WEEKDAYS = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 const pad = (n) => String(n).padStart(2, '0');
@@ -79,21 +81,17 @@ function lessonsWord(n) {
 const count = (n) => `${n} ${lessonsWord(n)}`;
 const uah = (kopiyky) =>
   `${(kopiyky / 100).toLocaleString('uk-UA', { maximumFractionDigits: 2 })} ₴`;
+const money = (result, word = '') => (result.amount > 0 ? `, ${word}${uah(result.amount)}` : '');
 
 const studentName = (id) => db.getStudentById(id)?.name ?? `учень #${id}`;
+const balanceAfter = (id) => ` · баланс ${db.getStudentById(id)?.balance ?? '?'}`;
 
-/** "Іван, пт 18.09 14:00", or the id when the lesson is already gone. */
+/** "Іван: урок пт 18.09 14:00", or the id when the lesson is already gone. */
 function lessonLabel(id) {
   const lesson = db.getLessonById(id);
   if (!lesson) return `урок #${id}`;
   const name = lesson.student_name_cache || 'Без імені';
-  return `${lesson.is_trial ? `${name} (пробний)` : name}, ${when(lesson.datetime)}`;
-}
-
-/** The money an action reports back, appended to the line of an applied intent. */
-function withAmount(summary, result, refund) {
-  if (!result || !Number.isInteger(result.amount) || result.amount <= 0) return summary;
-  return `${summary}, ${refund ? 'повернуто ' : ''}${uah(result.amount)}`;
+  return `${lesson.is_trial ? `${name} (пробний)` : name}: урок ${when(lesson.datetime)}`;
 }
 
 // # GUARDS
@@ -108,6 +106,7 @@ const slotTaken = (datetime, isTrial, exceptLessonId = null) =>
 //
 // validate: the payload's shape, before anything is read.
 // describe: the line for the desktop, read before the guard so it is there either way.
+// applied:  the line once the action ran, with what it reported; describe's when absent.
 // guard:    the preconditions; a reason rejects.
 // run:      the action, with the intent's own time as the payment date.
 
@@ -119,7 +118,9 @@ const TYPES = {
         Number.isInteger(p.lessons) && p.lessons > 0 ? null : invalid('lessons'),
         field.optionalKopiyky(p, 'totalPriceKopiyky'),
       ),
-    describe: (p) => `Поповнення: ${studentName(p.studentId)}, +${count(p.lessons)}`,
+    describe: (p) => `💳 ${studentName(p.studentId)}: +${count(p.lessons)}`,
+    applied: (p, r) =>
+      `💳 ${studentName(p.studentId)}: +${count(r.lessons)}${money(r)}${balanceAfter(p.studentId)}`,
     guard: (p) => studentExists(p.studentId),
     run: (p, intent) =>
       actions.payForLessons(p.studentId, p.lessons, p.totalPriceKopiyky ?? null, intent.createdAt),
@@ -133,8 +134,14 @@ const TYPES = {
       ),
     describe: (p) =>
       p.lessons > 0
-        ? `Поповнення: ${studentName(p.studentId)}, +${count(p.lessons)}`
-        : `Зняття: ${studentName(p.studentId)}, −${count(-p.lessons)}`,
+        ? `💳 ${studentName(p.studentId)}: +${count(p.lessons)}`
+        : `↩️ ${studentName(p.studentId)}: −${count(-p.lessons)}`,
+    // Taking lessons off gives back what the ledger holds, so the line says
+    // how many actually went, not how many were asked for.
+    applied: (p, r) =>
+      p.lessons > 0
+        ? `💳 ${studentName(p.studentId)}: +${count(r.lessons)}${money(r)}${balanceAfter(p.studentId)}`
+        : `↩️ ${studentName(p.studentId)}: −${count(r.lessons)}${money(r, 'повернуто ')}${balanceAfter(p.studentId)}`,
     guard: (p) => studentExists(p.studentId),
     run: (p, intent) => actions.adjustBalance(p.studentId, p.lessons, intent.createdAt),
   },
@@ -149,8 +156,8 @@ const TYPES = {
       ),
     describe: (p) =>
       p.isTrial
-        ? `Пробний урок: ${(p.studentName ?? '').trim() || 'Без імені'}, ${when(p.datetime)}`
-        : `Новий урок: ${studentName(p.studentId)}, ${when(p.datetime)}`,
+        ? `📅 ${(p.studentName ?? '').trim() || 'Без імені'} (пробний): урок ${when(p.datetime)}`
+        : `📅 ${studentName(p.studentId)}: урок ${when(p.datetime)}`,
     guard: (p) =>
       firstError(
         p.isTrial ? null : studentExists(p.studentId),
@@ -164,7 +171,7 @@ const TYPES = {
 
   'lesson.move': {
     validate: (p) => firstError(field.id(p, 'lessonId'), field.datetime(p, 'datetime')),
-    describe: (p) => `Перенесення: ${lessonLabel(p.lessonId)} → ${when(p.datetime)}`,
+    describe: (p) => `🔁 ${lessonLabel(p.lessonId)} → ${when(p.datetime)}`,
     guard: (p) => {
       const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
@@ -176,7 +183,10 @@ const TYPES = {
 
   'lesson.complete': {
     validate: (p) => firstError(field.id(p, 'lessonId'), field.boolean(p, 'isCompleted')),
-    describe: (p) => `${p.isCompleted ? 'Проведено' : 'Не проведено'}: ${lessonLabel(p.lessonId)}`,
+    describe: (p) =>
+      p.isCompleted
+        ? `✅ ${lessonLabel(p.lessonId)} проведено`
+        : `↩️ ${lessonLabel(p.lessonId)} знову заплановано`,
     guard: (p) => {
       const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
@@ -190,14 +200,15 @@ const TYPES = {
 
   'lesson.delete': {
     validate: (p) => field.id(p, 'lessonId'),
-    describe: (p) => `Видалення уроку: ${lessonLabel(p.lessonId)}`,
+    describe: (p) => `🗑 ${lessonLabel(p.lessonId)} видалено`,
     guard: (p) => (db.getLessonById(p.lessonId) ? null : REASON.lessonNotFound),
     run: (p) => actions.deleteLesson(p.lessonId),
   },
 
   'lesson.togglePayment': {
     validate: (p) => field.id(p, 'lessonId'),
-    describe: (p) => `Оплата уроку: ${lessonLabel(p.lessonId)}`,
+    describe: (p) => `💳 ${lessonLabel(p.lessonId)} оплачено`,
+    applied: (p, r) => `💳 ${lessonLabel(p.lessonId)} оплачено${money(r)}`,
     guard: (p) => {
       const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
@@ -222,7 +233,7 @@ const TYPES = {
         field.optionalKopiyky(p, 'priceKopiyky'),
       ),
     describe: (p) =>
-      `Новий учень: ${p.name.trim()}${p.balance ? `, ${count(p.balance)} наперед` : ''}`,
+      `👤 Новий учень ${p.name.trim()}${p.balance ? `, оплачено ${count(p.balance)} наперед` : ''}`,
     guard: () => null,
     run: (p, intent) =>
       actions.addStudent(p.name.trim(), p.balance ?? 0, p.priceKopiyky ?? null, {
@@ -281,11 +292,7 @@ function apply(intent) {
         db.recordAppliedIntent(intent, 'rejected', null, error.message, summary);
         return { status: 'rejected', reason: error.message, summary };
       }
-      summary = withAmount(
-        summary,
-        result,
-        intent.type === 'balance.adjust' && payload.lessons < 0,
-      );
+      if (type.applied && result) summary = type.applied(payload, result);
       db.recordAppliedIntent(intent, 'applied', result, null, summary);
       logger.info('Intent applied', { id: intent.id, type: intent.type, source: intent.source });
       return { status: 'applied', result, summary };
@@ -296,4 +303,27 @@ function apply(intent) {
   }
 }
 
-module.exports = { apply, TYPES: Object.keys(TYPES) };
+// # HISTORY
+
+/**
+ * The decided intents, newest first, each with its line. Rows decided on before
+ * lines were written get one now, from the payload and today's names.
+ */
+function history(limit) {
+  return db.listAppliedIntents(limit).map((row) => {
+    if (row.summary != null) return row;
+    const type = TYPES[row.type];
+    let summary = row.type;
+    try {
+      summary =
+        row.status === 'applied' && type.applied && row.result
+          ? type.applied(row.payload, row.result)
+          : type.describe(row.payload);
+    } catch {
+      // A payload from an older registry: the type name is all there is to show
+    }
+    return { ...row, summary };
+  });
+}
+
+module.exports = { apply, history, TYPES: Object.keys(TYPES) };

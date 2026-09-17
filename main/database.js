@@ -1694,7 +1694,7 @@ function listAppliedIntents(limit) {
   return db
     .prepare(
       `
-    SELECT id, type, source, status, reason, summary, created_at, applied_at
+    SELECT id, type, source, status, reason, summary, payload, result, created_at, applied_at
     FROM applied_intents
     ORDER BY rowid DESC
     LIMIT ?
@@ -1708,6 +1708,8 @@ function listAppliedIntents(limit) {
       status: row.status,
       reason: row.reason,
       summary: row.summary,
+      payload: row.payload === null ? null : JSON.parse(row.payload),
+      result: row.result === null ? null : JSON.parse(row.result),
       createdAt: row.created_at,
       appliedAt: new Date(row.applied_at.replace(' ', 'T') + 'Z').toISOString(),
     }));

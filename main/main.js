@@ -6,6 +6,7 @@ const { Rejection } = require('./rejection');
 const logger = require('./logger');
 const { initUpdater, consumeReleaseNotes } = require('./updater');
 const sync = require('./sync/client');
+const intents = require('./sync/intents');
 
 let mainWindow;
 
@@ -204,7 +205,7 @@ function registerIpcHandlers() {
   handle('sync:get-status', () => sync.getStatus());
   handle('sync:now', () => sync.sync());
   handle('sync:take-changes', () => sync.takeChanges());
-  handle('sync:get-history', () => db.listAppliedIntents(200));
+  handle('sync:get-history', () => intents.history(200));
 
   logger.debug('IPC handlers registered');
 }
