@@ -202,7 +202,8 @@ async function pullAndApply(config) {
         decided++;
         unseenChanges.push({
           status: outcome.status,
-          summary: outcome.summary,
+          // A malformed payload is refused before it is described
+          summary: outcome.summary ?? intent.type,
           reason: outcome.reason ?? null,
           createdAt: intent.createdAt,
         });

@@ -70,7 +70,8 @@ export default function LessonForm({ data, now, mode }: { data: Data; now: Date;
   const students = data.students
     .filter((s) => s.id > 0)
     .sort((a, b) => a.name.localeCompare(b.name, 'uk'));
-  const valid = !!datetime && !taken && !unchanged && (moving || trial || studentId !== '');
+  const named = moving || (trial ? studentName.trim() !== '' : studentId !== '');
+  const valid = !!datetime && !taken && !unchanged && named;
 
   const submit = async () => {
     if (!datetime || !valid || busy) return;
@@ -78,11 +79,7 @@ export default function LessonForm({ data, now, mode }: { data: Data; now: Date;
     const ok = moving
       ? await send('lesson.move', { lessonId: moving.id, datetime, was: lessonHint(moving) })
       : isTrial
-        ? await send('lesson.add', {
-            isTrial: true,
-            datetime,
-            ...(studentName.trim() ? { studentName: studentName.trim() } : {}),
-          })
+        ? await send('lesson.add', { isTrial: true, datetime, studentName: studentName.trim() })
         : await send('lesson.add', { studentId: studentId as number, datetime });
     setBusy(false);
     if (ok) {
@@ -125,7 +122,7 @@ export default function LessonForm({ data, now, mode }: { data: Data; now: Date;
           </Field>
         )}
         {!moving && isTrial && (
-          <Field label="Ім’я (необов’язково)">
+          <Field label="Ім’я">
             <input
               type="text"
               className={inputClass}

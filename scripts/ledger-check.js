@@ -1008,6 +1008,26 @@ async function checkIntents(tree) {
     ]);
   }
 
+  // A trial lesson without a name: refused like the desktop form does, and remembered
+  {
+    const before = snapshot(tree);
+    const intent = {
+      id: randomUUID(),
+      type: 'lesson.add',
+      payload: { datetime: shift(at(0), 120), isTrial: true, studentName: '  ' },
+      createdAt: now,
+    };
+    const outcome = tree.intents.apply(intent);
+    const repeat = tree.intents.apply(intent);
+    pairs.push([
+      `пробний без імені: ${outcome.status} «${outcome.reason}», повтор ${repeat.status}`,
+      outcome.status === 'rejected' &&
+        outcome.reason === "Вкажіть ім'я" &&
+        repeat.status === 'duplicate' &&
+        !diff(before, snapshot(tree)),
+    ]);
+  }
+
   // A failure inside the action: rolled back, not remembered, so a retry can succeed
   const original = tree.db.recordBalanceChange;
   tree.db.recordBalanceChange = () => {

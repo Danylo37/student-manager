@@ -34,6 +34,7 @@ const REASON = {
   alreadyPaid: REFUSAL.alreadyPaid,
   trialIsFree: 'Пробний урок безкоштовний',
   noStudent: 'Не вказано учня',
+  noName: "Вкажіть ім'я",
 };
 
 function invalid(field) {
@@ -115,6 +116,8 @@ function lessonLabel(id, was) {
 // What has to be true right before an action runs, read inside the transaction.
 
 const studentExists = (studentId) => (db.getStudentById(studentId) ? null : REASON.studentDeleted);
+// The desktop form demands a name for a trial lesson; the phone gets the same answer.
+const trialNamed = (studentName) => ((studentName ?? '').trim() ? null : REASON.noName);
 const slotTaken = (datetime, isTrial, exceptLessonId = null) =>
   db.findOverlappingLesson(datetime, isTrial, exceptLessonId) !== null;
 
@@ -176,7 +179,7 @@ const TYPES = {
         : `📅 ${studentName(p.studentId)}: урок ${when(p.datetime)}`,
     guard: (p) =>
       firstError(
-        p.isTrial ? null : studentExists(p.studentId),
+        p.isTrial ? trialNamed(p.studentName) : studentExists(p.studentId),
         slotTaken(p.datetime, !!p.isTrial) ? REASON.slotTaken : null,
       ),
     // A scheduled lesson: completion comes as its own intent, or from the
