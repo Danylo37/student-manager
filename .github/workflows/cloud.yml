@@ -1,0 +1,43 @@
+name: Cloud
+
+# Manual on purpose: a Worker change that breaks the desktop contract has to
+# wait until the desktop release with the matching code is published.
+on:
+  workflow_dispatch:
+
+concurrency: cloud-deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            cloud/package-lock.json
+
+      - run: npm ci
+      - run: npm run check:miniapp
+      - run: npm run build:miniapp
+
+      - run: npm ci
+        working-directory: cloud
+      - run: npm run check
+        working-directory: cloud
+
+      - run: npm run migrate
+        working-directory: cloud
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - run: npm run deploy
+        working-directory: cloud
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
