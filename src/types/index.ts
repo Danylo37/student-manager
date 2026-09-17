@@ -255,8 +255,12 @@ export interface ElectronAPI {
   saveSyncSettings: (settings: { url: string; secret: string | null }) => Promise<SyncSettings>;
   getSyncStatus: () => Promise<SyncStatus>;
   syncNow: () => Promise<SyncStatus>;
-  /** Intents from the phone were applied; students and lessons need a reload. */
-  onSyncChanged: (callback: (event: { applied: number }) => void) => () => void;
+  /** What the phone did since the last call; main forgets it once handed over. */
+  takeSyncChanges: () => Promise<SyncChange[]>;
+  /** Every intent the desktop decided on, newest first. */
+  getSyncHistory: () => Promise<SyncHistoryEntry[]>;
+  /** Intents from the phone were decided on; students and lessons need a reload. */
+  onSyncChanged: (callback: (event: { decided: number }) => void) => () => void;
   onSyncStatus: (callback: (status: SyncStatus) => void) => () => void;
 
   // Updates
@@ -274,6 +278,28 @@ export interface SyncSettings {
 }
 
 export type SyncState = 'off' | 'idle' | 'syncing' | 'error';
+
+export interface SyncChange {
+  status: 'applied' | 'rejected';
+  /** One line in Ukrainian, e.g. "Поповнення: Іван, +4 уроки, 1 400 ₴". */
+  summary: string;
+  reason: string | null;
+  /** When the phone recorded it, UTC ISO. */
+  createdAt: string;
+}
+
+export interface SyncHistoryEntry {
+  id: string;
+  type: string;
+  source: string | null;
+  status: 'applied' | 'rejected';
+  /** Rows decided on before the history existed carry no line. */
+  summary: string | null;
+  reason: string | null;
+  /** When the phone recorded it and when the desktop decided on it, both UTC ISO. */
+  createdAt: string;
+  appliedAt: string;
+}
 
 export interface SyncStatus {
   state: SyncState;
@@ -298,6 +324,7 @@ export interface ModalState {
   taxSettings: boolean;
   discounts: boolean;
   syncSettings: boolean;
+  syncHistory: boolean;
 }
 
 export type ModalName = keyof ModalState;

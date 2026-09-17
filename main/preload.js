@@ -88,6 +88,8 @@ contextBridge.exposeInMainWorld('electron', {
   saveSyncSettings: (settings) => ipcRenderer.invoke('sync:save-settings', settings),
   getSyncStatus: () => ipcRenderer.invoke('sync:get-status'),
   syncNow: () => ipcRenderer.invoke('sync:now'),
+  takeSyncChanges: () => ipcRenderer.invoke('sync:take-changes'),
+  getSyncHistory: () => ipcRenderer.invoke('sync:get-history'),
   onSyncChanged: (callback) => subscribe('sync:changed', callback),
   onSyncStatus: (callback) => subscribe('sync:status', callback),
 

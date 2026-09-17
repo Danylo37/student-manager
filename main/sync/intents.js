@@ -12,12 +12,13 @@ const { Rejection, REASON: REFUSAL } = require('../rejection');
 // anything.
 //
 // apply() never throws for a bad intent. It returns one of
-//   { status: 'applied',   result }              written and remembered
-//   { status: 'rejected',  reason }              a guard or the action refused, nothing written
+//   { status: 'applied',   result, summary }     written and remembered
+//   { status: 'rejected',  reason, summary }     a guard or the action refused, nothing written
 //   { status: 'duplicate', previous }            this id was decided on before
-//   { status: 'failed',    reason }              unexpected error, rolled back, not remembered
+//   { status: 'failed',    reason, summary }     unexpected error, rolled back, not remembered
 // A malformed envelope or payload is rejected without being remembered, so the
-// same id can come back corrected.
+// same id can come back corrected. summary is the one line the desktop shows
+// for the intent, written with the names as they are at that moment.
 
 // # VALIDATION
 
@@ -54,6 +55,47 @@ const field = {
 /** The first failed check, or null when every check passed. */
 const firstError = (...errors) => errors.find(Boolean) ?? null;
 
+// # SUMMARY
+//
+// One line per intent for the desktop, in its own words: what the phone asked
+// for, whoever it was about, so a refused or long-gone intent still reads.
+
+const WEEKDAYS = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const pad = (n) => String(n).padStart(2, '0');
+
+function when(iso) {
+  const d = new Date(iso);
+  return `${WEEKDAYS[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function lessonsWord(n) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'урок';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'уроки';
+  return 'уроків';
+}
+
+const count = (n) => `${n} ${lessonsWord(n)}`;
+const uah = (kopiyky) =>
+  `${(kopiyky / 100).toLocaleString('uk-UA', { maximumFractionDigits: 2 })} ₴`;
+
+const studentName = (id) => db.getStudentById(id)?.name ?? `учень #${id}`;
+
+/** "Іван, пт 18.09 14:00", or the id when the lesson is already gone. */
+function lessonLabel(id) {
+  const lesson = db.getLessonById(id);
+  if (!lesson) return `урок #${id}`;
+  const name = lesson.student_name_cache || 'Без імені';
+  return `${lesson.is_trial ? `${name} (пробний)` : name}, ${when(lesson.datetime)}`;
+}
+
+/** The money an action reports back, appended to the line of an applied intent. */
+function withAmount(summary, result, refund) {
+  if (!result || !Number.isInteger(result.amount) || result.amount <= 0) return summary;
+  return `${summary}, ${refund ? 'повернуто ' : ''}${uah(result.amount)}`;
+}
+
 // # GUARDS
 //
 // What has to be true right before an action runs, read inside the transaction.
@@ -65,6 +107,7 @@ const slotTaken = (datetime, isTrial, exceptLessonId = null) =>
 // # REGISTRY (v1)
 //
 // validate: the payload's shape, before anything is read.
+// describe: the line for the desktop, read before the guard so it is there either way.
 // guard:    the preconditions; a reason rejects.
 // run:      the action, with the intent's own time as the payment date.
 
@@ -76,6 +119,7 @@ const TYPES = {
         Number.isInteger(p.lessons) && p.lessons > 0 ? null : invalid('lessons'),
         field.optionalKopiyky(p, 'totalPriceKopiyky'),
       ),
+    describe: (p) => `Поповнення: ${studentName(p.studentId)}, +${count(p.lessons)}`,
     guard: (p) => studentExists(p.studentId),
     run: (p, intent) =>
       actions.payForLessons(p.studentId, p.lessons, p.totalPriceKopiyky ?? null, intent.createdAt),
@@ -87,6 +131,10 @@ const TYPES = {
         field.id(p, 'studentId'),
         Number.isInteger(p.lessons) && p.lessons !== 0 ? null : invalid('lessons'),
       ),
+    describe: (p) =>
+      p.lessons > 0
+        ? `Поповнення: ${studentName(p.studentId)}, +${count(p.lessons)}`
+        : `Зняття: ${studentName(p.studentId)}, −${count(-p.lessons)}`,
     guard: (p) => studentExists(p.studentId),
     run: (p, intent) => actions.adjustBalance(p.studentId, p.lessons, intent.createdAt),
   },
@@ -99,6 +147,10 @@ const TYPES = {
         field.optionalText(p, 'studentName'),
         p.isTrial ? null : p.studentId == null ? REASON.noStudent : field.id(p, 'studentId'),
       ),
+    describe: (p) =>
+      p.isTrial
+        ? `Пробний урок: ${(p.studentName ?? '').trim() || 'Без імені'}, ${when(p.datetime)}`
+        : `Новий урок: ${studentName(p.studentId)}, ${when(p.datetime)}`,
     guard: (p) =>
       firstError(
         p.isTrial ? null : studentExists(p.studentId),
@@ -112,6 +164,7 @@ const TYPES = {
 
   'lesson.move': {
     validate: (p) => firstError(field.id(p, 'lessonId'), field.datetime(p, 'datetime')),
+    describe: (p) => `Перенесення: ${lessonLabel(p.lessonId)} → ${when(p.datetime)}`,
     guard: (p) => {
       const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
@@ -123,6 +176,7 @@ const TYPES = {
 
   'lesson.complete': {
     validate: (p) => firstError(field.id(p, 'lessonId'), field.boolean(p, 'isCompleted')),
+    describe: (p) => `${p.isCompleted ? 'Проведено' : 'Не проведено'}: ${lessonLabel(p.lessonId)}`,
     guard: (p) => {
       const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
@@ -136,12 +190,14 @@ const TYPES = {
 
   'lesson.delete': {
     validate: (p) => field.id(p, 'lessonId'),
+    describe: (p) => `Видалення уроку: ${lessonLabel(p.lessonId)}`,
     guard: (p) => (db.getLessonById(p.lessonId) ? null : REASON.lessonNotFound),
     run: (p) => actions.deleteLesson(p.lessonId),
   },
 
   'lesson.togglePayment': {
     validate: (p) => field.id(p, 'lessonId'),
+    describe: (p) => `Оплата уроку: ${lessonLabel(p.lessonId)}`,
     guard: (p) => {
       const lesson = db.getLessonById(p.lessonId);
       if (!lesson) return REASON.lessonNotFound;
@@ -165,6 +221,8 @@ const TYPES = {
           : invalid('balance'),
         field.optionalKopiyky(p, 'priceKopiyky'),
       ),
+    describe: (p) =>
+      `Новий учень: ${p.name.trim()}${p.balance ? `, ${count(p.balance)} наперед` : ''}`,
     guard: () => null,
     run: (p, intent) =>
       actions.addStudent(p.name.trim(), p.balance ?? 0, p.priceKopiyky ?? null, {
@@ -200,16 +258,18 @@ function apply(intent) {
   if (shape) return { status: 'rejected', reason: shape };
 
   const payload = canonical(intent.payload);
+  let summary = null;
 
   try {
     return actions.transaction(() => {
       const previous = db.getAppliedIntent(intent.id);
       if (previous) return { status: 'duplicate', previous };
 
+      summary = type.describe(payload);
       const reason = type.guard(payload);
       if (reason) {
-        db.recordAppliedIntent(intent, 'rejected', null, reason);
-        return { status: 'rejected', reason };
+        db.recordAppliedIntent(intent, 'rejected', null, reason, summary);
+        return { status: 'rejected', reason, summary };
       }
 
       let result;
@@ -218,16 +278,21 @@ function apply(intent) {
       } catch (error) {
         // The action itself refused: remembered exactly like a guard rejection
         if (!(error instanceof Rejection)) throw error;
-        db.recordAppliedIntent(intent, 'rejected', null, error.message);
-        return { status: 'rejected', reason: error.message };
+        db.recordAppliedIntent(intent, 'rejected', null, error.message, summary);
+        return { status: 'rejected', reason: error.message, summary };
       }
-      db.recordAppliedIntent(intent, 'applied', result, null);
+      summary = withAmount(
+        summary,
+        result,
+        intent.type === 'balance.adjust' && payload.lessons < 0,
+      );
+      db.recordAppliedIntent(intent, 'applied', result, null, summary);
       logger.info('Intent applied', { id: intent.id, type: intent.type, source: intent.source });
-      return { status: 'applied', result };
+      return { status: 'applied', result, summary };
     });
   } catch (error) {
     logger.error('Intent failed', { id: intent.id, type: intent.type, error: error.message });
-    return { status: 'failed', reason: error.message };
+    return { status: 'failed', reason: error.message, summary };
   }
 }
 

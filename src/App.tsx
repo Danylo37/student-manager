@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import useAppStore from './store/appStore';
 import useBalanceSync from './hooks/useBalanceSync';
 import useLessonTimers from './hooks/useLessonTimers';
-import useCloudSync from './hooks/useCloudSync';
 import Header from './components/Header/Header';
 import WeekView from './components/Calendar/WeekView';
 import FinanceView from './components/Finance/FinanceView';
@@ -14,8 +13,10 @@ import ScheduleModal from './components/Modals/ScheduleModal';
 import TaxSettingsModal from './components/Modals/TaxSettingsModal';
 import DiscountsModal from './components/Modals/DiscountsModal';
 import SyncSettingsModal from './components/Modals/SyncSettingsModal';
+import SyncHistoryModal from './components/Modals/SyncHistoryModal';
 import WhatsNewModal from './components/Modals/WhatsNewModal';
 import { NotificationProvider } from './components/common/NotificationProvider';
+import CloudSync from './components/common/CloudSync';
 
 function App() {
   const initialize = useAppStore((state) => state.initialize);
@@ -26,7 +27,6 @@ function App() {
 
   useBalanceSync();
   useLessonTimers();
-  useCloudSync();
 
   useEffect(() => {
     void initialize();
@@ -34,6 +34,7 @@ function App() {
 
   return (
     <NotificationProvider>
+      <CloudSync />
       <div className="flex flex-col h-screen bg-gray-50" data-theme={theme}>
         <Header />
 
@@ -55,6 +56,7 @@ function App() {
         <TaxSettingsModal />
         <DiscountsModal />
         <SyncSettingsModal />
+        <SyncHistoryModal />
         <WhatsNewModal />
       </div>
     </NotificationProvider>

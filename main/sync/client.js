@@ -162,6 +162,17 @@ async function request(config, method, path, body) {
 
 // # PULL
 
+// What the phone did, kept for the renderer until it asks: a window that is
+// still loading would miss a broadcast, and the intents applied on start are
+// exactly the ones the tutor forgot about.
+let unseenChanges = [];
+
+function takeChanges() {
+  const changes = unseenChanges;
+  unseenChanges = [];
+  return changes;
+}
+
 /** The cloud knows applied and failed; a repeat answers with what was decided the first time. */
 function toAck(id, outcome) {
   switch (outcome.status) {
@@ -176,8 +187,10 @@ function toAck(id, outcome) {
   }
 }
 
+/** @returns {number} how many intents were decided on this time, applied or refused */
 async function pullAndApply(config) {
   let applied = 0;
+  let decided = 0;
   for (let page = 0; page < MAX_PAGES_PER_CYCLE; page++) {
     const { body } = await request(config, 'GET', `/device/intents?limit=${PULL_LIMIT}`);
     const list = Array.isArray(body?.intents) ? body.intents : [];
@@ -185,13 +198,22 @@ async function pullAndApply(config) {
     const results = list.map((intent) => {
       const outcome = intents.apply(intent);
       if (outcome.status === 'applied') applied++;
+      if (outcome.status === 'applied' || outcome.status === 'rejected') {
+        decided++;
+        unseenChanges.push({
+          status: outcome.status,
+          summary: outcome.summary,
+          reason: outcome.reason ?? null,
+          createdAt: intent.createdAt,
+        });
+      }
       return toAck(intent.id, outcome);
     });
     await request(config, 'POST', '/device/intents/ack', { results });
     logger.info('Intents pulled', { received: list.length, applied });
     if (list.length < PULL_LIMIT) break;
   }
-  return applied;
+  return decided;
 }
 
 // # PUSH
@@ -244,8 +266,8 @@ async function runCycle() {
   }
   setStatus({ state: 'syncing' });
   try {
-    const applied = await pullAndApply(config);
-    if (applied > 0) broadcast('sync:changed', { applied });
+    const decided = await pullAndApply(config);
+    if (decided > 0) broadcast('sync:changed', { decided });
     await pushSnapshot(config);
     failures = 0;
     const lastSyncAt = new Date().toISOString();
@@ -312,4 +334,4 @@ function start() {
   void sync();
 }
 
-module.exports = { start, sync, markDirty, getStatus, getSettings, saveSettings };
+module.exports = { start, sync, markDirty, getStatus, getSettings, saveSettings, takeChanges };

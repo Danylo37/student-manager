@@ -11,6 +11,7 @@ import Modal from './Modal';
 function SyncSettingsModal() {
   const isOpen = useAppStore((s) => s.modals.syncSettings);
   const closeModal = useAppStore((s) => s.closeModal);
+  const openModal = useAppStore((s) => s.openModal);
   const syncStatus = useAppStore((s) => s.syncStatus);
   const { showToast, showConfirm } = useNotification();
 
@@ -109,7 +110,7 @@ function SyncSettingsModal() {
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
             className={inputClass}
-            placeholder={hasSecret ? '•••••••• (збережено, залиште порожнім)' : 'DEVICE_SECRET'}
+            placeholder={hasSecret ? '(збережено, залиште порожнім)' : 'DEVICE_SECRET'}
             autoComplete="off"
           />
           <p className="text-xs text-gray-500 mt-1">
@@ -140,6 +141,17 @@ function SyncSettingsModal() {
               Синхронізувати зараз
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              closeModal('syncSettings');
+              openModal('syncHistory');
+            }}
+            disabled={saving}
+            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            Зміни з телефону
+          </button>
           <div className="flex-1" />
           <button
             type="button"

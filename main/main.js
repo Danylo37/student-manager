@@ -203,6 +203,8 @@ function registerIpcHandlers() {
   handle('sync:save-settings', (_, settings) => sync.saveSettings(settings));
   handle('sync:get-status', () => sync.getStatus());
   handle('sync:now', () => sync.sync());
+  handle('sync:take-changes', () => sync.takeChanges());
+  handle('sync:get-history', () => db.listAppliedIntents(200));
 
   logger.debug('IPC handlers registered');
 }

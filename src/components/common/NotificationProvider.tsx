@@ -136,7 +136,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: (id: string) => 
       <div className={`flex-shrink-0 rounded-lg p-1.5 ${style.icon}`}>{icons[toast.type]}</div>
 
       {/* Message */}
-      <p className="flex-1 text-sm font-medium text-gray-700 pt-0.5 leading-snug">
+      <p className="flex-1 text-sm font-medium text-gray-700 pt-0.5 leading-snug whitespace-pre-line">
         {toast.message}
       </p>
 

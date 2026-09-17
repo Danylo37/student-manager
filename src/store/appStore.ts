@@ -40,6 +40,7 @@ const useAppStore = create<AppState>((set, get) => ({
     taxSettings: false,
     discounts: false,
     syncSettings: false,
+    syncHistory: false,
   },
 
   selectedLesson: null,

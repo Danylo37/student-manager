@@ -102,6 +102,7 @@ function deleteStudent(studentId, refundAdvance = false) {
 /**
  * Explicit payment for N lessons, with a known total when a discount applies,
  * otherwise priced from the discount table or the current price.
+ * @returns {{lessons: number, amount: number}} the lessons paid for and what they cost
  */
 function payForLessons(studentId, lessons, totalPriceKopiyky = null, paidAt = null) {
   return transaction(() => {
@@ -117,6 +118,7 @@ function payForLessons(studentId, lessons, totalPriceKopiyky = null, paidAt = nu
     if (!bundle) throw new Rejection(REASON.noPrice);
     db.recordBalanceChange(studentId, lessons, bundle.total);
     db.markOldestUnpaidLessonsAsPaid(studentId, lessons);
+    return { lessons, amount: bundle.total };
   });
 }
 
@@ -175,7 +177,10 @@ function deleteLesson(lessonId) {
   return transaction(() => db.deleteLesson(lessonId));
 }
 
-/** Paying for a single lesson after the fact: a payment like any other. */
+/**
+ * Paying for a single lesson after the fact: a payment like any other.
+ * @returns {{lessons: number, amount: number}} the one lesson and its price
+ */
 function toggleLessonPayment(lessonId, paidAt = null) {
   return transaction(() => {
     const { studentId, studentName, price } = db.toggleLessonPayment(
@@ -183,6 +188,7 @@ function toggleLessonPayment(lessonId, paidAt = null) {
       toLedgerTime(paidAt),
     );
     db.recordBalanceChange(studentId, 1, price, studentName);
+    return { lessons: 1, amount: price };
   });
 }
 

@@ -9,12 +9,21 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   /** Shows a back arrow next to the title — for modals reached from another one. */
   onBack?: () => void;
+  backTitle?: string;
 }
 
 /**
  * Base modal component with overlay
  */
-function Modal({ isOpen, onClose, title, children, size = 'md', onBack }: ModalProps) {
+function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  size = 'md',
+  onBack,
+  backTitle = 'Назад до списку учнів',
+}: ModalProps) {
   // Close on Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent): void => {
@@ -53,7 +62,7 @@ function Modal({ isOpen, onClose, title, children, size = 'md', onBack }: ModalP
             {onBack && (
               <button
                 onClick={onBack}
-                title="Назад до списку учнів"
+                title={backTitle}
                 className="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 flex-shrink-0"
               >
                 <ArrowLeft size={20} />

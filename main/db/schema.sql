@@ -148,6 +148,8 @@ VALUES
 -- is answered from this table and never touches the ledger.
 -- status: 'applied' | 'rejected'; result and payload are JSON; created_at is the
 -- intent's own UTC ISO timestamp, applied_at is when it reached this database.
+-- summary is the one-line Ukrainian description written when the intent was
+-- decided on, with the names as they were then; the history window lists it.
 CREATE TABLE IF NOT EXISTS applied_intents (
   id TEXT PRIMARY KEY,
   type TEXT NOT NULL,
@@ -157,7 +159,8 @@ CREATE TABLE IF NOT EXISTS applied_intents (
   applied_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   status TEXT NOT NULL,
   result TEXT,
-  reason TEXT
+  reason TEXT,
+  summary TEXT
 );
 
 -- SYNC STATE

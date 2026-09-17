@@ -88,6 +88,8 @@ function addMissingColumns() {
     ['payment_bundles', 'amount_cancelled', 'INTEGER DEFAULT 0'],
     // Every lesson that existed before trial lessons was a normal paid one.
     ['lessons', 'is_trial', 'INTEGER DEFAULT 0'],
+    // Intents decided on before the history window existed stay without a line.
+    ['applied_intents', 'summary', 'TEXT'],
   ];
 
   for (const [table, column, definition, backfill] of additions) {
@@ -1652,22 +1654,24 @@ function findOverlappingLesson(datetime, isTrial = false, exceptLessonId = null)
 
 function getAppliedIntent(id) {
   const row = db
-    .prepare('SELECT status, result, reason, applied_at FROM applied_intents WHERE id = ?')
+    .prepare('SELECT status, result, reason, summary, applied_at FROM applied_intents WHERE id = ?')
     .get(id);
   if (!row) return null;
   return {
     status: row.status,
     result: row.result === null ? null : JSON.parse(row.result),
     reason: row.reason,
+    summary: row.summary,
     appliedAt: row.applied_at,
   };
 }
 
-function recordAppliedIntent(intent, status, result = null, reason = null) {
+function recordAppliedIntent(intent, status, result = null, reason = null, summary = null) {
   db.prepare(
     `
-    INSERT INTO applied_intents (id, type, source, payload, created_at, status, result, reason)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO applied_intents
+      (id, type, source, payload, created_at, status, result, reason, summary)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
     intent.id,
@@ -1678,7 +1682,35 @@ function recordAppliedIntent(intent, status, result = null, reason = null) {
     status,
     result === null ? null : JSON.stringify(result),
     reason,
+    summary,
   );
+}
+
+/**
+ * The intents decided on most recently first (rowid is the order they were
+ * decided in), for the history window; applied_at is UTC without a zone.
+ */
+function listAppliedIntents(limit) {
+  return db
+    .prepare(
+      `
+    SELECT id, type, source, status, reason, summary, created_at, applied_at
+    FROM applied_intents
+    ORDER BY rowid DESC
+    LIMIT ?
+  `,
+    )
+    .all(limit)
+    .map((row) => ({
+      id: row.id,
+      type: row.type,
+      source: row.source,
+      status: row.status,
+      reason: row.reason,
+      summary: row.summary,
+      createdAt: row.created_at,
+      appliedAt: new Date(row.applied_at.replace(' ', 'T') + 'Z').toISOString(),
+    }));
 }
 
 // # SYNC STATE
@@ -1765,6 +1797,7 @@ module.exports = {
   findOverlappingLesson,
   getAppliedIntent,
   recordAppliedIntent,
+  listAppliedIntents,
   // Sync state
   getSyncState,
   setSyncState,
