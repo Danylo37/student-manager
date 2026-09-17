@@ -88,7 +88,7 @@ function SyncSettingsModal() {
       isOpen={isOpen}
       onClose={() => closeModal('syncSettings')}
       title="Синхронізація з телефоном"
-      size="md"
+      size="auto"
     >
       <form onSubmit={handleSave} className="space-y-4">
         <div>
@@ -130,7 +130,7 @@ function SyncSettingsModal() {
           {describeSyncStatus(syncStatus)}
         </div>
 
-        <div className="flex flex-wrap gap-3 pt-1">
+        <div className="flex gap-3 pt-1">
           {enabled && (
             <button
               type="button"
@@ -152,7 +152,6 @@ function SyncSettingsModal() {
           >
             Зміни з телефону
           </button>
-          <div className="flex-1" />
           <button
             type="button"
             onClick={() => closeModal('syncSettings')}
@@ -161,14 +160,14 @@ function SyncSettingsModal() {
           >
             Скасувати
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-2 whitespace-nowrap bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
-          >
-            {saving ? 'Збереження...' : 'Зберегти'}
-          </button>
         </div>
+        <button
+          type="submit"
+          disabled={saving}
+          className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+        >
+          {saving ? 'Збереження...' : 'Зберегти'}
+        </button>
 
         {enabled && (
           <button

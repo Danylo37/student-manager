@@ -6,7 +6,8 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  /** auto: as wide as its content, never narrower than sm — for a form whose button row sets the width. */
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'auto';
   /** Shows a back arrow next to the title — for modals reached from another one. */
   onBack?: () => void;
   backTitle?: string;
@@ -41,10 +42,11 @@ function Modal({
   if (!isOpen) return null;
 
   const sizeClasses: Record<string, string> = {
-    sm: 'max-w-md',
-    md: 'max-w-2xl',
-    lg: 'max-w-4xl',
-    xl: 'max-w-6xl',
+    sm: 'w-full max-w-md',
+    md: 'w-full max-w-2xl',
+    lg: 'w-full max-w-4xl',
+    xl: 'w-full max-w-6xl',
+    auto: 'w-auto min-w-[28rem] max-w-2xl',
   };
 
   return (
@@ -53,7 +55,7 @@ function Modal({
       onClick={onClose}
     >
       <div
-        className={`bg-white rounded-lg shadow-xl ${sizeClasses[size]} w-full mx-4 max-h-[90vh] flex flex-col`}
+        className={`bg-white rounded-lg shadow-xl ${sizeClasses[size]} mx-4 max-h-[90vh] flex flex-col`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
