@@ -143,6 +143,15 @@ export async function insertIntent(
   return toIntent(stored);
 }
 
+/** Drops applied and failed intents decided before the cutoff; returns how many. */
+export async function deleteDecidedIntentsBefore(db: D1Database, cutoff: string): Promise<number> {
+  const result = await db
+    .prepare(`DELETE FROM intents WHERE status != 'pending' AND acked_at < ?1`)
+    .bind(cutoff)
+    .run();
+  return result.meta.changes;
+}
+
 export interface Ack {
   id: string;
   status: Exclude<IntentStatus, 'pending'>;

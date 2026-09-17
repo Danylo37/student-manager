@@ -28,7 +28,14 @@ export function safeEqual(a: string, b: string): boolean {
 
 // # DESKTOP
 
+const DEVICE_SECRET_MIN_LENGTH = 32;
+
 export function requireDevice(request: Request, env: Env): void {
+  // A short secret is a misconfigured deployment, not a client to let in.
+  if ((env.DEVICE_SECRET ?? '').length < DEVICE_SECRET_MIN_LENGTH) {
+    console.error('DEVICE_SECRET is shorter than 32 characters');
+    throw new HttpError(503, 'Device secret not configured');
+  }
   const header = request.headers.get('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
   if (!token || !safeEqual(token, env.DEVICE_SECRET)) throw new HttpError(401, 'Unauthorized');

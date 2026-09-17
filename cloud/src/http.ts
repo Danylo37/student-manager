@@ -28,3 +28,9 @@ export async function readJson<T>(request: Request): Promise<T> {
 
 export const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** Counts the request against the limiter's window for the key; over it, 429. */
+export async function throttle(limiter: RateLimit, key: string): Promise<void> {
+  const { success } = await limiter.limit({ key });
+  if (!success) throw new HttpError(429, 'Too many requests');
+}

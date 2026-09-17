@@ -6,6 +6,16 @@
   "workers_dev": true,
   "preview_urls": false,
   "observability": { "enabled": true },
+  // Decided intents older than 30 days are dropped once a day (see scheduled()).
+  "triggers": { "crons": ["0 3 * * *"] },
+  // Per Telegram user on POST /app/intent; a stuck client cannot flood the queue.
+  "ratelimits": [
+    {
+      "name": "INTENT_RATE_LIMIT",
+      "namespace_id": "1001",
+      "simple": { "limit": 30, "period": 60 },
+    },
+  ],
   // The built Mini App (stage 3) lands in public/; unknown paths fall back to index.html.
   "assets": {
     "directory": "./public",

@@ -1,7 +1,7 @@
 import type { Env } from './env';
 import { allowedIds } from './env';
 import { requireDevice, requireTelegramUser } from './auth';
-import { HttpError, isRecord, json, readJson } from './http';
+import { HttpError, isRecord, json, readJson, throttle } from './http';
 import { handleWebhook, sendMessage } from './telegram';
 import * as db from './db';
 import type { Ack } from './db';
@@ -9,6 +9,7 @@ import type { Ack } from './db';
 const PULL_LIMIT_DEFAULT = 100;
 const PULL_LIMIT_MAX = 500;
 const FAILED_VISIBLE_MS = 48 * 60 * 60 * 1000;
+const DECIDED_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
 const INTENT_ID = /^[A-Za-z0-9-]{8,64}$/;
 const ACK_STATUSES = new Set<Ack['status']>(['applied', 'failed']);
 
@@ -142,6 +143,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
       return appSnapshot(env);
     case 'POST /app/intent': {
       const user = await requireTelegramUser(request, env);
+      await throttle(env.INTENT_RATE_LIMIT, String(user.id));
       return recordIntent(request, env, user.id);
     }
     case 'POST /webhook/telegram':
@@ -167,5 +169,13 @@ export default {
       });
       return json({ error: 'Internal error' }, 500);
     }
+  },
+
+  // The desktop remembers every intent it decided on; the cloud only needs the
+  // pending ones and the failures the Mini App still shows.
+  async scheduled(_controller, env) {
+    const cutoff = new Date(Date.now() - DECIDED_KEEP_MS).toISOString();
+    const deleted = await db.deleteDecidedIntentsBefore(env.DB, cutoff);
+    console.log('decided intents cleaned', { deleted });
   },
 } satisfies ExportedHandler<Env>;
