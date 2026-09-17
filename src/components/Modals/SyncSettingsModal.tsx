@@ -130,13 +130,13 @@ function SyncSettingsModal() {
           {describeSyncStatus(syncStatus)}
         </div>
 
-        <div className="flex gap-3 pt-1">
+        <div className="grid grid-flow-col auto-cols-fr gap-3 pt-1">
           {enabled && (
             <button
               type="button"
               onClick={handleSyncNow}
               disabled={saving}
-              className="flex-1 basis-0 px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Синхронізувати зараз
             </button>
@@ -148,7 +148,7 @@ function SyncSettingsModal() {
               openModal('syncHistory');
             }}
             disabled={saving}
-            className="flex-1 basis-0 px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Зміни з телефону
           </button>
@@ -156,7 +156,7 @@ function SyncSettingsModal() {
             type="button"
             onClick={() => closeModal('syncSettings')}
             disabled={saving}
-            className="flex-1 basis-0 px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Скасувати
           </button>
