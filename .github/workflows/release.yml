@@ -1,10 +1,9 @@
 name: Release
 
+# Started by hand only: publishing the draft creates the tag, and a tag trigger
+# would run the build a second time into the same release.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
 
 jobs:
   windows:

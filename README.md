@@ -287,7 +287,7 @@ The database lives outside the app (`~/.config/student-manager/students.db`, `%A
 Windows builds are produced by the `Release` workflow on GitHub Actions — a Windows runner is required, because `better-sqlite3` is compiled natively.
 
 1. Bump `version` in `package.json` and push to `main`. Versions follow semver and must strictly increase, otherwise installed copies will not see the update.
-2. Start the workflow: **Actions** → **Release** → **Run workflow**, or push a matching tag (`git tag v1.0.2 && git push origin v1.0.2`).
+2. Start the workflow: **Actions** → **Release** → **Run workflow**. The `v<version>` tag is created by GitHub when the release is published, so do not push one by hand.
 3. The workflow uploads `Student Manager Setup <version>.exe`, `latest.yml` and the blockmap to a **draft** release.
 4. Write what changed into the release body, then publish it. Updates only start flowing once the release is published, and that body is the text users see in the app after updating — write it in Ukrainian, as a short bullet list.
 
