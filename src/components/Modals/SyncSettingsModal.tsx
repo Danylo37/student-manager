@@ -88,7 +88,7 @@ function SyncSettingsModal() {
       isOpen={isOpen}
       onClose={() => closeModal('syncSettings')}
       title="Синхронізація з телефоном"
-      size="sm"
+      size="md"
     >
       <form onSubmit={handleSave} className="space-y-4">
         <div>
@@ -130,13 +130,13 @@ function SyncSettingsModal() {
           {describeSyncStatus(syncStatus)}
         </div>
 
-        <div className="flex gap-3 pt-1">
+        <div className="flex flex-wrap gap-3 pt-1">
           {enabled && (
             <button
               type="button"
               onClick={handleSyncNow}
               disabled={saving}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Синхронізувати зараз
             </button>
@@ -148,7 +148,7 @@ function SyncSettingsModal() {
               openModal('syncHistory');
             }}
             disabled={saving}
-            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Зміни з телефону
           </button>
@@ -157,14 +157,14 @@ function SyncSettingsModal() {
             type="button"
             onClick={() => closeModal('syncSettings')}
             disabled={saving}
-            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Скасувати
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+            className="px-4 py-2 whitespace-nowrap bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
           >
             {saving ? 'Збереження...' : 'Зберегти'}
           </button>
