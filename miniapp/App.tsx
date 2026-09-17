@@ -36,6 +36,7 @@ function Shell({ children, tabs = false }: { children: React.ReactNode; tabs?: b
 export default function App() {
   usePolling();
   const data = useData();
+  const paired = useStore((s) => s.data?.paired !== false);
   const error = useStore((s) => s.error);
   const refresh = useStore((s) => s.refresh);
   const tab = useStore((s) => s.tab);
@@ -56,6 +57,20 @@ export default function App() {
     return (
       <Shell>
         <Empty>Відкрийте застосунок через Telegram.</Empty>
+      </Shell>
+    );
+  }
+
+  if (!data && !paired) {
+    return (
+      <Shell>
+        <Empty>
+          ПК ще не підключено.
+          <div className="mt-3 text-xs">
+            Надішліть боту /connect і введіть код на комп’ютері, або відкрийте посилання запрошення
+            від власника.
+          </div>
+        </Empty>
       </Shell>
     );
   }

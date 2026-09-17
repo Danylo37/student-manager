@@ -201,7 +201,8 @@ function registerIpcHandlers() {
 
   // # Cloud sync
   handle('sync:get-settings', () => sync.getSettings());
-  handle('sync:save-settings', (_, settings) => sync.saveSettings(settings));
+  handle('sync:pair', (_, code) => sync.pair(code));
+  handle('sync:disable', () => sync.disable());
   handle('sync:get-status', () => sync.getStatus());
   handle('sync:now', () => sync.sync());
   handle('sync:take-changes', () => sync.takeChanges());

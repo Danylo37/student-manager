@@ -251,8 +251,9 @@ export interface ElectronAPI {
 
   // Cloud sync
   getSyncSettings: () => Promise<SyncSettings>;
-  /** An empty secret keeps the stored one; an empty url switches the sync off. */
-  saveSyncSettings: (settings: { url: string; secret: string | null }) => Promise<SyncSettings>;
+  /** The six digits the bot answered /connect with; wrong or expired is a Rejection. */
+  pairSync: (code: string) => Promise<SyncSettings>;
+  disableSync: () => Promise<SyncSettings>;
   getSyncStatus: () => Promise<SyncStatus>;
   syncNow: () => Promise<SyncStatus>;
   /** What the phone did since the last call; main forgets it once handed over. */
@@ -273,7 +274,6 @@ export interface ReleaseNotes {
 }
 
 export interface SyncSettings {
-  url: string;
   hasSecret: boolean;
 }
 
@@ -305,6 +305,8 @@ export interface SyncStatus {
   state: SyncState;
   lastSyncAt: string | null;
   error: string | null;
+  /** The cloud refused the secret: paired again elsewhere or the account is closed. */
+  needsPairing: boolean;
 }
 
 declare global {

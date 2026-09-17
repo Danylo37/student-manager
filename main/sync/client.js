@@ -2,6 +2,8 @@ const { app, BrowserWindow, safeStorage } = require('electron');
 const db = require('../database');
 const intents = require('./intents');
 const { buildSnapshot, hashSnapshot } = require('./snapshot');
+const { DEFAULT_WORKER_URL } = require('../constants');
+const { Rejection } = require('../rejection');
 const logger = require('../logger');
 
 // The desktop side of the sync loop against the Worker in cloud/: pull the
@@ -34,8 +36,10 @@ const KEY = {
 // idle:    the last cycle finished
 // syncing: a cycle is running
 // error:   the last cycle failed; the reason is for the user
+// needsPairing: the cloud no longer knows our secret (paired again elsewhere,
+//   or the account was closed from the bot); only a new code helps
 
-let status = { state: 'off', lastSyncAt: null, error: null };
+let status = { state: 'off', lastSyncAt: null, error: null, needsPairing: false };
 
 function broadcast(channel, payload) {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channel, payload);
@@ -72,55 +76,58 @@ function readSecret() {
   try {
     return safeStorage.decryptString(Buffer.from(stored, 'base64'));
   } catch {
-    throw new Error('Секрет пристрою не вдалося розшифрувати, введіть його знову');
+    throw new Error('Секрет пристрою не вдалося розшифрувати, підключіть комп’ютер заново');
   }
 }
 
 function getSettings() {
-  return { url: db.getSyncState(KEY.url) ?? '', hasSecret: db.getSyncState(KEY.secret) != null };
-}
-
-function normalizeUrl(input) {
-  const trimmed = String(input ?? '').trim();
-  if (!trimmed) return '';
-  let parsed;
-  try {
-    parsed = new URL(trimmed);
-  } catch {
-    throw new Error('Некоректна адреса сервера');
-  }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new Error('Адреса має починатися з https://');
-  }
-  return parsed.origin + parsed.pathname.replace(/\/+$/, '');
+  return { hasSecret: db.getSyncState(KEY.secret) != null };
 }
 
 /**
- * @param {{url: string, secret?: string|null}} settings - secret null or empty
- *   keeps the one already stored; an empty url switches the sync off and drops
- *   the secret.
+ * Trades the six digits the bot answered /connect with for this desktop's
+ * secret. A wrong or expired code is a Rejection; the secret is stored and
+ * the first cycle starts right away.
  */
-function saveSettings({ url, secret }) {
-  const normalized = normalizeUrl(url);
-  if (!normalized) {
-    db.setSyncState(KEY.url, null);
-    db.setSyncState(KEY.secret, null);
-    setStatus({ state: 'off', error: null });
-    return getSettings();
+async function pair(code) {
+  const digits = String(code ?? '').replace(/\D/g, '');
+  if (digits.length !== 6) throw new Rejection('Код має шість цифр');
+  ensureEncryption();
+  let response;
+  try {
+    response = await fetch(`${DEFAULT_WORKER_URL}/device/pair`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: digits }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new Error(describe(error));
   }
-  if (secret) {
-    ensureEncryption();
-    db.setSyncState(KEY.secret, safeStorage.encryptString(secret.trim()).toString('base64'));
-  } else if (db.getSyncState(KEY.secret) == null) {
-    throw new Error('Вкажіть секрет пристрою');
+  if (response.status === 403) {
+    throw new Rejection('Код невірний або прострочений. Надішліть боту /connect ще раз');
   }
-  if (normalized !== db.getSyncState(KEY.url)) {
-    db.setSyncState(KEY.url, normalized);
-    // A different server has its own revision counter; the first push learns it from a 409.
-    db.setSyncState(KEY.hash, null);
+  if (response.status === 429) {
+    throw new Rejection('Забагато спроб. Зачекайте хвилину і спробуйте ще раз');
   }
-  setStatus({ state: 'idle', error: null });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || typeof body?.secret !== 'string') {
+    throw new Error(`Сервер відповів ${response.status}: ${body?.error ?? response.statusText}`);
+  }
+  db.setSyncState(KEY.secret, safeStorage.encryptString(body.secret).toString('base64'));
+  db.setSyncState(KEY.url, DEFAULT_WORKER_URL);
+  // A new or re-paired account has no snapshot of ours yet: the next cycle must push.
+  // The revision stays; a 409 teaches us the cloud's counter if it is ahead.
+  db.setSyncState(KEY.hash, null);
+  setStatus({ state: 'idle', error: null, needsPairing: false });
   void sync();
+  return getSettings();
+}
+
+function disable() {
+  db.setSyncState(KEY.url, null);
+  db.setSyncState(KEY.secret, null);
+  setStatus({ state: 'off', error: null, needsPairing: false });
   return getSettings();
 }
 
@@ -155,7 +162,13 @@ async function request(config, method, path, body) {
     json = null;
   }
   if (response.ok || response.status === 409) return { status: response.status, body: json };
-  if (response.status === 401) throw new Error('Невірний секрет пристрою');
+  if (response.status === 401) {
+    const error = new Error(
+      'Комп’ютер від’єднано від хмари, підключіть його заново кодом від бота',
+    );
+    error.needsPairing = true;
+    throw error;
+  }
   if (response.status === 404) throw new Error('Сервер не знайдено за цією адресою');
   throw new Error(`Сервер відповів ${response.status}: ${json?.error ?? response.statusText}`);
 }
@@ -262,7 +275,7 @@ async function runCycle() {
     return;
   }
   if (!config) {
-    setStatus({ state: 'off', error: null });
+    setStatus({ state: 'off', error: null, needsPairing: false });
     return;
   }
   setStatus({ state: 'syncing' });
@@ -273,11 +286,11 @@ async function runCycle() {
     failures = 0;
     const lastSyncAt = new Date().toISOString();
     db.setSyncState(KEY.lastSyncAt, lastSyncAt);
-    setStatus({ state: 'idle', lastSyncAt, error: null });
+    setStatus({ state: 'idle', lastSyncAt, error: null, needsPairing: false });
   } catch (error) {
     failures++;
     logger.warn('Sync failed', { error: error.message, failures });
-    setStatus({ state: 'error', error: describe(error) });
+    setStatus({ state: 'error', error: describe(error), needsPairing: !!error.needsPairing });
     scheduleRetry();
   }
 }
@@ -324,15 +337,15 @@ function onFocus() {
 }
 
 function start() {
-  const settings = getSettings();
   status = {
-    state: settings.url && settings.hasSecret ? 'idle' : 'off',
+    state: db.getSyncState(KEY.url) && getSettings().hasSecret ? 'idle' : 'off',
     lastSyncAt: db.getSyncState(KEY.lastSyncAt),
     error: null,
+    needsPairing: false,
   };
   setInterval(() => void sync(), TICK_MS).unref();
   app.on('browser-window-focus', onFocus);
   void sync();
 }
 
-module.exports = { start, sync, markDirty, getStatus, getSettings, saveSettings, takeChanges };
+module.exports = { start, sync, markDirty, getStatus, getSettings, pair, disable, takeChanges };

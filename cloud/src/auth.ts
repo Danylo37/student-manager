@@ -1,6 +1,7 @@
 import type { Env } from './env';
 import { isAllowed } from './env';
 import { HttpError } from './http';
+import * as db from './db';
 
 const encoder = new TextEncoder();
 
@@ -18,6 +19,10 @@ async function hmacSha256(key: BufferSource, message: string): Promise<ArrayBuff
 const hex = (buffer: ArrayBuffer) =>
   [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
+export async function sha256Hex(text: string): Promise<string> {
+  return hex(await crypto.subtle.digest('SHA-256', encoder.encode(text)));
+}
+
 /** Constant-time comparison; a length mismatch is answered without comparing. */
 export function safeEqual(a: string, b: string): boolean {
   const x = encoder.encode(a);
@@ -27,18 +32,18 @@ export function safeEqual(a: string, b: string): boolean {
 }
 
 // # DESKTOP
+//
+// The Bearer is the secret handed out at pairing; only its hash is stored, so
+// the lookup by hash is the whole check. A secret replaced by a later pairing
+// simply matches nothing.
 
-const DEVICE_SECRET_MIN_LENGTH = 32;
-
-export function requireDevice(request: Request, env: Env): void {
-  // A short secret is a misconfigured deployment, not a client to let in.
-  if ((env.DEVICE_SECRET ?? '').length < DEVICE_SECRET_MIN_LENGTH) {
-    console.error('DEVICE_SECRET is shorter than 32 characters');
-    throw new HttpError(503, 'Device secret not configured');
-  }
+export async function requireDevice(request: Request, env: Env): Promise<number> {
   const header = request.headers.get('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
-  if (!token || !safeEqual(token, env.DEVICE_SECRET)) throw new HttpError(401, 'Unauthorized');
+  if (!token) throw new HttpError(401, 'Unauthorized');
+  const accountId = await db.accountBySecretHash(env.DB, await sha256Hex(token));
+  if (accountId == null) throw new HttpError(401, 'Unauthorized');
+  return accountId;
 }
 
 // # MINI APP
@@ -50,7 +55,7 @@ const INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60;
 
 export interface TelegramUser {
   id: number;
-  first_name?: string;
+  first_name: string;
   username?: string;
 }
 
@@ -85,5 +90,5 @@ export async function requireTelegramUser(request: Request, env: Env): Promise<T
   }
   if (!user || !Number.isInteger(user.id)) throw new HttpError(401, 'Unauthorized');
   if (!isAllowed(env, user.id)) throw new HttpError(403, 'Forbidden');
-  return user;
+  return { ...user, first_name: typeof user.first_name === 'string' ? user.first_name : '' };
 }

@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import useAppStore from '@/store/appStore';
 import { useNotification } from '../common/NotificationProvider';
 import { describeSyncStatus } from '@/utils/syncStatus';
+import { rejectionReason } from '@/utils/ipc';
 import Modal from './Modal';
 
 /**
- * Where the desktop talks to the cloud from: the Worker address and the device
- * secret. The secret is never shown back; an empty field keeps the stored one.
+ * Where the desktop is connected to the phone. Not yet connected, or the cloud
+ * no longer accepts our secret: the three steps and the code from the bot.
+ * Connected: the status and the actions.
  */
 function SyncSettingsModal() {
   const isOpen = useAppStore((s) => s.modals.syncSettings);
@@ -15,73 +17,67 @@ function SyncSettingsModal() {
   const syncStatus = useAppStore((s) => s.syncStatus);
   const { showToast, showConfirm } = useNotification();
 
-  const [url, setUrl] = useState('');
-  const [secret, setSecret] = useState('');
+  const [code, setCode] = useState('');
   const [hasSecret, setHasSecret] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
-    setSecret('');
-    void window.electron.getSyncSettings().then((settings) => {
-      setUrl(settings.url);
-      setHasSecret(settings.hasSecret);
-    });
+    setCode('');
+    void window.electron.getSyncSettings().then((settings) => setHasSecret(settings.hasSecret));
   }, [isOpen]);
 
   const enabled = syncStatus != null && syncStatus.state !== 'off';
+  const pairing = !hasSecret || syncStatus?.needsPairing === true;
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handlePair = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (saving) return;
-    if (!url.trim()) {
-      showToast('Вкажіть адресу сервера', 'error');
+    if (busy) return;
+    if (code.replace(/\D/g, '').length !== 6) {
+      showToast('Введіть шість цифр коду з Telegram', 'error');
       return;
     }
-    if (!secret.trim() && !hasSecret) {
-      showToast('Вкажіть секрет пристрою', 'error');
-      return;
-    }
-    setSaving(true);
+    setBusy(true);
     try {
-      await window.electron.saveSyncSettings({ url, secret: secret.trim() || null });
-      showToast('Налаштування збережено, синхронізація запущена', 'success');
+      await window.electron.pairSync(code);
+      showToast('Комп’ютер підключено, синхронізація запущена', 'success');
       closeModal('syncSettings');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      showToast(message.replace(/^.*Error: /, ''), 'error');
+      showToast(rejectionReason(err) ?? message.replace(/^.*Error: /, ''), 'error');
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
 
   const handleSyncNow = async () => {
-    if (saving) return;
-    setSaving(true);
+    if (busy) return;
+    setBusy(true);
     try {
       const status = await window.electron.syncNow();
       showToast(describeSyncStatus(status), status.state === 'error' ? 'error' : 'success');
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
 
   const handleDisable = async () => {
     const confirmed = await showConfirm({
       title: 'Вимкнути синхронізацію?',
-      message: 'Адресу і секрет буде видалено. Дані на телефоні перестануть оновлюватися.',
+      message:
+        'Комп’ютер від’єднається від хмари, дані на телефоні перестануть оновлюватися. Щоб підключити знову, знадобиться новий код від бота.',
       confirmLabel: 'Вимкнути',
       cancelLabel: 'Скасувати',
       danger: true,
     });
     if (!confirmed) return;
-    await window.electron.saveSyncSettings({ url: '', secret: null });
+    await window.electron.disableSync();
     showToast('Синхронізацію вимкнено', 'info');
     closeModal('syncSettings');
   };
 
-  const inputClass =
-    'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent';
+  const secondaryClass =
+    'px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50';
 
   return (
     <Modal
@@ -90,33 +86,31 @@ function SyncSettingsModal() {
       title="Синхронізація з телефоном"
       size="auto"
     >
-      <form onSubmit={handleSave} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Адреса сервера</label>
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            className={inputClass}
-            placeholder="https://….workers.dev"
-            autoFocus
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Секрет пристрою</label>
-          <input
-            type="password"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            className={inputClass}
-            placeholder={hasSecret ? '(збережено, залиште порожнім)' : 'DEVICE_SECRET'}
-            autoComplete="off"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Зберігається зашифрованим і більше не показується.
-          </p>
-        </div>
+      <form onSubmit={handlePair} className="space-y-4">
+        {pairing ? (
+          <>
+            <ol className="list-decimal pl-5 space-y-1 text-sm text-gray-700">
+              <li>У Telegram відкрийте бота і надішліть йому /connect.</li>
+              <li>Бот відповість шестизначним кодом.</li>
+              <li>Введіть код нижче і натисніть «Підключити».</li>
+            </ol>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Код підключення
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent tracking-widest"
+                placeholder="482 913"
+                autoFocus
+              />
+            </div>
+          </>
+        ) : null}
 
         <div
           className={`rounded-lg px-4 py-3 text-sm ${
@@ -131,12 +125,12 @@ function SyncSettingsModal() {
         </div>
 
         <div className="grid grid-flow-col auto-cols-fr gap-3 pt-1">
-          {enabled && (
+          {enabled && !pairing && (
             <button
               type="button"
               onClick={handleSyncNow}
-              disabled={saving}
-              className="px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              disabled={busy}
+              className={secondaryClass}
             >
               Синхронізувати зараз
             </button>
@@ -147,33 +141,35 @@ function SyncSettingsModal() {
               closeModal('syncSettings');
               openModal('syncHistory');
             }}
-            disabled={saving}
-            className="px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            disabled={busy}
+            className={secondaryClass}
           >
             Зміни з телефону
           </button>
           <button
             type="button"
             onClick={() => closeModal('syncSettings')}
-            disabled={saving}
-            className="px-4 py-2 whitespace-nowrap border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            disabled={busy}
+            className={secondaryClass}
           >
-            Скасувати
+            {pairing ? 'Скасувати' : 'Закрити'}
           </button>
         </div>
-        <button
-          type="submit"
-          disabled={saving}
-          className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
-        >
-          {saving ? 'Збереження...' : 'Зберегти'}
-        </button>
+        {pairing && (
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            {busy ? 'Підключення...' : 'Підключити'}
+          </button>
+        )}
 
         {enabled && (
           <button
             type="button"
             onClick={handleDisable}
-            disabled={saving}
+            disabled={busy}
             className="w-full text-sm text-red-600 hover:text-red-700 disabled:opacity-50"
           >
             Вимкнути синхронізацію

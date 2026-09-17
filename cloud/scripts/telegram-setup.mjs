@@ -36,12 +36,17 @@ async function call(method, body) {
 await call('setWebhook', {
   url: `${origin}/webhook/telegram`,
   secret_token: WEBHOOK_SECRET,
-  allowed_updates: ['message'],
+  allowed_updates: ['message', 'callback_query'],
   drop_pending_updates: true,
 });
 await call('setChatMenuButton', {
   menu_button: { type: 'web_app', text: 'Відкрити', web_app: { url: origin } },
 });
 await call('setMyCommands', {
-  commands: [{ command: 'start', description: 'Відкрити застосунок' }],
+  commands: [
+    { command: 'start', description: 'Відкрити застосунок' },
+    { command: 'connect', description: "Підключити комп'ютер: код для програми" },
+    { command: 'invite', description: 'Запросити ще один телефон до свого ПК' },
+    { command: 'leave', description: "Від'єднатися від ПК" },
+  ],
 });

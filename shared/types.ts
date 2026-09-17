@@ -82,4 +82,6 @@ export interface AppSnapshotResponse {
   intents: Intent[];
   /** When the desktop last pulled intents; null until it ever did. */
   deviceSeenAt: string | null;
+  /** False until this Telegram user's account has a desktop: nothing else is filled then. */
+  paired: boolean;
 }

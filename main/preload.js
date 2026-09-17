@@ -85,7 +85,8 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Cloud sync
   getSyncSettings: () => ipcRenderer.invoke('sync:get-settings'),
-  saveSyncSettings: (settings) => ipcRenderer.invoke('sync:save-settings', settings),
+  pairSync: (code) => ipcRenderer.invoke('sync:pair', code),
+  disableSync: () => ipcRenderer.invoke('sync:disable'),
   getSyncStatus: () => ipcRenderer.invoke('sync:get-status'),
   syncNow: () => ipcRenderer.invoke('sync:now'),
   takeSyncChanges: () => ipcRenderer.invoke('sync:take-changes'),

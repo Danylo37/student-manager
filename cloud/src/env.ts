@@ -2,7 +2,6 @@
 // set with `wrangler secret put` and are not in the generated file.
 export interface Env extends CloudflareBindings {
   BOT_TOKEN: string;
-  DEVICE_SECRET: string;
   WEBHOOK_SECRET: string;
   /** Comma-separated Telegram user ids that may use the bot and the Mini App. */
   ALLOWED_TG_IDS: string;

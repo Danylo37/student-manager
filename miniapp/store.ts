@@ -141,9 +141,11 @@ const useStore = create<State>((set, get) => ({
         ? 'немає зв’язку з хмарою'
         : error instanceof ApiError && error.status === 429
           ? 'забагато дій поспіль, зачекайте хвилину'
-          : error instanceof Error
-            ? error.message
-            : String(error);
+          : error instanceof ApiError && error.status === 409
+            ? 'ПК ще не підключено'
+            : error instanceof Error
+              ? error.message
+              : String(error);
       get().showToast(`Не вдалося надіслати: ${reason}`);
       return false;
     }

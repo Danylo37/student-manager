@@ -111,6 +111,12 @@ function lessonLabel(id, was) {
   return `${known.isTrial ? `${name} (пробний)` : name}: урок ${when(known.datetime)}`;
 }
 
+/** With several phones on the account, the line says whose tap it was. */
+function signed(summary, intent) {
+  const author = typeof intent.author === 'string' ? intent.author.trim() : '';
+  return author && intent.members > 1 ? `${summary} · ${author}` : summary;
+}
+
 // # GUARDS
 //
 // What has to be true right before an action runs, read inside the transaction.
@@ -278,6 +284,8 @@ function validateEnvelope(intent) {
   if (!intent.payload || typeof intent.payload !== 'object') return invalid('payload');
   if (!actions.isUtcIso(intent.createdAt)) return invalid('createdAt');
   if (intent.source != null && typeof intent.source !== 'string') return invalid('source');
+  if (intent.author != null && typeof intent.author !== 'string') return invalid('author');
+  if (intent.members != null && !Number.isInteger(intent.members)) return invalid('members');
   return null;
 }
 
@@ -305,7 +313,7 @@ function apply(intent) {
       const previous = db.getAppliedIntent(intent.id);
       if (previous) return { status: 'duplicate', previous };
 
-      summary = type.describe(payload);
+      summary = signed(type.describe(payload), intent);
       const reason = type.guard(payload);
       if (reason) {
         db.recordAppliedIntent(intent, 'rejected', null, reason, summary);
@@ -321,7 +329,7 @@ function apply(intent) {
         db.recordAppliedIntent(intent, 'rejected', null, error.message, summary);
         return { status: 'rejected', reason: error.message, summary };
       }
-      if (type.applied && result) summary = type.applied(payload, result);
+      if (type.applied && result) summary = signed(type.applied(payload, result), intent);
       db.recordAppliedIntent(intent, 'applied', result, null, summary);
       logger.info('Intent applied', { id: intent.id, type: intent.type, source: intent.source });
       return { status: 'applied', result, summary };
